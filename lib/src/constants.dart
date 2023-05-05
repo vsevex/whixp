@@ -55,7 +55,7 @@ const ns = <String, String>{
 /// list of recommended allowed tags and their attributes.
 
 const xhtml = <String, dynamic>{
-  'tags': [
+  'tags': <String>[
     'a',
     'blockquote',
     'br',
@@ -70,7 +70,7 @@ const xhtml = <String, dynamic>{
     'ul',
     'body'
   ],
-  'attributes': {
+  'attributes': <String, List<String>>{
     'a': ['href'],
     'blockquote': ['style'],
     'br': [],
@@ -85,7 +85,7 @@ const xhtml = <String, dynamic>{
     'ul': ['style'],
     'body': []
   },
-  'css': [
+  'css': <String>[
     'background-color',
     'color',
     'font-family',
