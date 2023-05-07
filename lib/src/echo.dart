@@ -41,8 +41,8 @@ void _handleError(dynamic e) {
   Log().fatal(e.toString());
 }
 
-class _Handler {
-  _Handler({
+class Handler {
+  Handler({
     this.handler,
     this.namespace,
     this.name,
