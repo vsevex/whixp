@@ -542,7 +542,7 @@ class Utils {
   /// See also:
   ///
   /// * [base64.encode], which encodes a list of bytes as a base64 string.
-  static List<int> base64ToArrayBuffer(String value) {
+  static Uint8List base64ToArrayBuffer(String value) {
     /// Create buffer for further writings.
     final buffer = StringBuffer();
 
@@ -553,7 +553,26 @@ class Utils {
     while (buffer.length % 4 != 0) {
       buffer.write('=');
     }
-    return base64.decode(buffer.toString()).toList();
+    return base64.decode(buffer.toString());
+  }
+
+  /// This method takes a [Uint8List] as input, representing an array of bytes,
+  /// and converts it to a Base64-encoded string. The method first converts
+  /// the [ByteBuffer] to a [Uint8List] using the `asUint8List` method.
+  static String arrayBufferToBase64(Uint8List buffer) {
+    final binary = StringBuffer();
+
+    /// Iterates over each byte in the list and converts it to a character using
+    /// the `String.fromCharCode` method.
+    for (int i = 0; i < buffer.length; i++) {
+      /// The resulting characters are concatenated together into a binary
+      /// string using a [StringBuffer].
+      binary.write(String.fromCharCode(buffer[i]));
+    }
+
+    /// The binary string is encoded into a Base64-encoded string using the
+    /// `base64.encode` method. The resulted Base64-encoded string is returned.
+    return base64.encode(stringToArrayBuffer(binary.toString()));
   }
 
   /// Converts a string to a buffer of bytes encoded in UTF-8.
@@ -571,5 +590,28 @@ class Utils {
   static Uint8List stringToArrayBuffer(String value) {
     final bytes = utf8.encode(value);
     return Uint8List.fromList(bytes);
+  }
+
+  /// Performs an XOR operation on two [Uint8List]s of the same length and
+  /// returns the result as a new [Uint8List].
+  ///
+  /// The [x] and [y] lists must have the same length. The resulting list
+  /// contains the XOR of the corresponding elements of [x] and [y].
+  ///
+  /// Example:
+  /// ```dart
+  /// final x = Uint8List.fromList([1, 2, 3]);
+  /// final y = Uint8List.fromList([4, 5, 6]);
+  /// final z = xorUint8Lists(x, y);
+  /// print(z); // prints [5, 7, 5]
+  /// ```
+  ///
+  /// Throws an [ArgumentError] if [x] and [y] have different lengths.
+  static Uint8List xorUint8Lists(Uint8List x, Uint8List y) {
+    final z = Uint8List(x.length);
+    for (var i = 0; i < x.length; i++) {
+      z[i] = x[i] ^ y[i];
+    }
+    return z;
   }
 }
