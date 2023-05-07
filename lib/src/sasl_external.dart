@@ -8,7 +8,7 @@ class SASLExternal extends SASL {
   /// values provided, default values will be used.
   SASLExternal({
     /// A [String] that represents the SASL mechanism. It defaults to `EXTERNAL`
-    super.mechanism = 'EXTERNAL',
+    super.name = 'EXTERNAL',
 
     /// A [bool] that indicates whether the client sends the initial message
     /// in the SASL negatiatino. It default to `true`.

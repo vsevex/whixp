@@ -7,7 +7,7 @@ class SASLPlain extends SASL {
   /// mechanism, client-first flag and priority.
   SASLPlain({
     /// Defaults to `PLAIN`. The name of the authentication mechanism.
-    super.mechanism = 'PLAIN',
+    super.name = 'PLAIN',
 
     /// Whether client sends the first message in the authentication exchange.
     super.isClientFirst = true,

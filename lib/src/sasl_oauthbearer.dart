@@ -10,7 +10,7 @@ class SASLOAuthBearer extends SASL {
   SASLOAuthBearer({
     /// A read-only property that represents the mechanism used for
     /// authentication, which is always set to `OAUTHBEARER`.
-    super.mechanism = 'OAUTHBEARER',
+    super.name = 'OAUTHBEARER',
 
     /// A read-only property that indicates whether the client should send its
     /// credentials to the server before receiving a challenge from it, which

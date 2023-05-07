@@ -6,10 +6,10 @@ import 'package:echo/src/connection.dart';
 /// subclass.
 abstract class SASL {
   /// Constructor that accepts defined variables.
-  SASL({this.mechanism, this.priority, this.isClientFirst});
+  SASL({required this.name, this.priority, this.isClientFirst});
 
   /// A [String] representing the name of the SASL mechanism.
-  final String? mechanism;
+  final String name;
 
   /// An [int] representing the priorityof the SASL mechanism.
   final int? priority;
@@ -33,7 +33,7 @@ abstract class SASL {
   /// A method that is called if the SASL mechanism is expected to send its
   /// response first without receiving a challenge from the server. This method
   /// should be overridden in concrete subclases if `isClientFirst` is `true`.
-  String clientChallenge() {
+  String clientChallenge({String? testCNonce}) {
     if (!isClientFirst!) {
       throw Exception(
         'clientChallenge shoud not be called if isClientFirst is false!',

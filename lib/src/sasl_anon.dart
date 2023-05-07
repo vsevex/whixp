@@ -9,7 +9,7 @@ class SASLAnonymous extends SASL {
   /// `mechanism`, `client-first` flag and `priority`.
   SASLAnonymous({
     /// Equals mechanism name to `ANONYMOUS`.
-    super.mechanism = 'ANONYMOUS',
+    super.name = 'ANONYMOUS',
 
     /// False flag indicates if the client should send its response first.
     super.isClientFirst = false,
