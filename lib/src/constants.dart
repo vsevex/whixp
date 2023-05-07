@@ -132,7 +132,7 @@ enum Status {
 /// * _status[ATTACHED]_ - The connection has been attached.
 /// * _status[REDIRECT]_ - The connection has been redirected.
 /// * _status[CONNTIMEOUT]_ - The connection has timed out.
-const status = {
+const status = <Status, int>{
   Status.error: 0,
   Status.connecting: 1,
   Status.connfail: 2,
