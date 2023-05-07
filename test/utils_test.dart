@@ -7,13 +7,13 @@ import 'package:xml/xml.dart' as xml;
 
 void main() {
   group('XHTML Attribute Validation Test', () {
-    test('Valid attribute must return true', () {
+    test('Must return valid attribute true', () {
       expect(Utils.isAttributeValid('a', 'href'), isTrue);
       expect(Utils.isAttributeValid('img', 'src'), isTrue);
       expect(Utils.isAttributeValid('cite', 'style'), isTrue);
     });
 
-    test('Invalid attribute must return false', () {
+    test('Must return invalid attribute false', () {
       expect(Utils.isAttributeValid('a', 'class'), isFalse);
       expect(Utils.isAttributeValid('img', 'href'), isFalse);
       expect(Utils.isAttributeValid('cite', 'value'), isFalse);
@@ -21,11 +21,11 @@ void main() {
   });
 
   group('XHTML CSS Validation Test', () {
-    test('valid CSS must return true', () {
+    test('Must return valid CSS true', () {
       final result = Utils.isCSSValid('color: red');
       expect(result, isTrue);
     });
-    test('invalid CSS style must return false', () {
+    test('Must return invalid CSS style false', () {
       final result = Utils.isCSSValid('foo: 100%');
       expect(result, isFalse);
     });
@@ -33,11 +33,11 @@ void main() {
   group(
     'XHTML Tag Validation Test',
     () => {
-      test('Valid Tag must return true', () {
+      test('Must return valid Tag true', () {
         final result = Utils.isTagValid('img');
         expect(result, isTrue);
       }),
-      test('Invalid Tag must return false', () {
+      test('Must return invalid Tag false', () {
         final result = Utils.isTagValid('style');
         expect(result, isFalse);
       })
@@ -45,7 +45,7 @@ void main() {
   );
 
   group('XHTML xmlEscape Test', () {
-    test('Valid replaced escape must return true', () {
+    test('Must return true while valid replace escape', () {
       const text = 'This is a test <test> & testing "XML" escaping';
       const expected =
           'This is a test &lt;test&gt; &amp; testing &quot;XML&quot; escaping';
@@ -311,6 +311,29 @@ void main() {
           [72, 101, 108, 108, 111, 44, 32, 119, 111, 114, 108, 100, 33],
         ),
       );
+    });
+  });
+
+  group('arrayBufferToBase64 Method Test', () {
+    test('must return base64 from array buffer', () {
+      final buffer = Uint8List.fromList([104, 101, 108, 108, 111]);
+      final result = Utils.arrayBufferToBase64(buffer);
+
+      expect(result, equals('aGVsbG8='));
+    });
+  });
+
+  group('xorUint8List Method Test', () {
+    test('Must return expected result', () {
+      final x = Uint8List.fromList([1, 2, 3]);
+      final y = Uint8List.fromList([4, 5, 6]);
+      final expected = Uint8List.fromList([5, 7, 5]);
+      expect(Utils.xorUint8Lists(x, y), equals(expected));
+    });
+    test('Must throw error for different-length lists', () {
+      final x = Uint8List.fromList([1, 2, 3]);
+      final y = Uint8List.fromList([4, 5]);
+      expect(() => Utils.xorUint8Lists(x, y), throwsArgumentError);
     });
   });
 }
