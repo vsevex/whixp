@@ -12,6 +12,7 @@ abstract class Protocol {
   void abortAllRequests();
   int connectCB(xml.XmlElement bodyWrap);
   void nonAuth([void Function(Echo)? function]);
+  void onIdle();
   xml.XmlElement? reqToData(xml.XmlElement? stanza);
   void sendRestart();
 }
