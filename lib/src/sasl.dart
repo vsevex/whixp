@@ -6,7 +6,7 @@ import 'package:echo/src/echo.dart';
 /// subclass.
 abstract class SASL {
   /// Constructor that accepts defined variables.
-  SASL(this.connection, {required this.name, this.priority, this.isClientFirst});
+  SASL({required this.name, this.priority, this.isClientFirst});
 
   /// A [String] representing the name of the SASL mechanism.
   final String name;
@@ -21,7 +21,7 @@ abstract class SASL {
   Echo? connection;
 
   /// A [bool] method indicating whether the SASL mechanism is able to run.
-  /// 
+  ///
   /// * @param connection An [Echo] object representing the XAMPP connection.
   bool test() => true;
 

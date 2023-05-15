@@ -7,7 +7,7 @@ import 'package:echo/src/scram.dart';
 class SASLSHA512 extends SASL {
   /// Constructs a new instance of the `SASLSHA512` class with the specified
   /// mechanism, client-first flag and priority.
-  SASLSHA512(super.constructor,{
+  SASLSHA512({
     /// The SASL mechanism name
     super.name = 'SCRAM-SHA-512',
 

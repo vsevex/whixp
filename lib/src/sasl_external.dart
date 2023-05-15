@@ -6,8 +6,7 @@ import 'package:echo/src/sasl.dart';
 class SASLExternal extends SASL {
   /// Creates a new instance with the given optional three parameters. If no
   /// values provided, default values will be used.
-  SASLExternal(
-    super.connection, {
+  SASLExternal({
     /// A [String] that represents the SASL mechanism. It defaults to `EXTERNAL`
     super.name = 'EXTERNAL',
 

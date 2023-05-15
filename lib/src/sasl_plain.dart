@@ -5,7 +5,7 @@ import 'package:echo/src/utils.dart';
 class SASLPlain extends SASL {
   /// Constructs a new instance of the `SASLPlain` class with the specified
   /// mechanism, client-first flag and priority.
-  SASLPlain(super.connection, {
+  SASLPlain({
     /// Defaults to `PLAIN`. The name of the authentication mechanism.
     super.name = 'PLAIN',
 

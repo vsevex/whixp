@@ -7,7 +7,7 @@ import 'package:echo/src/utils.dart';
 class SASLOAuthBearer extends SASL {
   /// Constructs an instance of `SASLOAuthBearer` with the given `mechanism`,
   /// `isClientFirst`, and `priority` parameters.
-  SASLOAuthBearer(super.connection,{
+  SASLOAuthBearer({
     /// A read-only property that represents the mechanism used for
     /// authentication, which is always set to `OAUTHBEARER`.
     super.name = 'OAUTHBEARER',
