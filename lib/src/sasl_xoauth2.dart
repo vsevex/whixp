@@ -5,7 +5,7 @@ import 'package:echo/src/utils.dart';
 class SASLXOAuth2 extends SASL {
   /// Constructs a new instance of the `SASLXOAuth2` class with the specified
   /// mechanism, client-first flag and priority.
-  SASLXOAuth2({
+  SASLXOAuth2(super.connection,{
     /// The SASL mechanism name
     super.name = 'X-OAUTH2',
 

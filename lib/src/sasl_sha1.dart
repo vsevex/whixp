@@ -9,7 +9,7 @@ import 'package:echo/src/scram.dart';
 class SASLSHA1 extends SASL {
   /// Constructs a new instance of the `SASLSHA1` class with the specified
   /// mechanism, client-first flag and priority.
-  SASLSHA1({
+  SASLSHA1(super.connection,{
     /// The SASL mechanism name
     super.name = 'SCRAM-SHA-1',
 

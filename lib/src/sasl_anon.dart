@@ -7,7 +7,8 @@ import 'package:echo/src/sasl.dart';
 class SASLAnonymous extends SASL {
   /// Constructs a new instance of the `SASLAnonymous` class with the specified
   /// `mechanism`, `client-first` flag and `priority`.
-  SASLAnonymous({
+  SASLAnonymous(
+    super.connection, {
     /// Equals mechanism name to `ANONYMOUS`.
     super.name = 'ANONYMOUS',
 
