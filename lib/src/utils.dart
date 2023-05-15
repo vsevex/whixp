@@ -108,20 +108,24 @@ class Utils {
   ///
   /// This method extracts the text content from an XML element, including any
   /// child.
-  /// <br /> @param element - The XML element from which to extract the text.
+  /// <br /> @param element - The XML node from which to extract the text.
   /// <br /> @return A [String] containing the text content of the element and
   /// its children.
-  static String getText(xml.XmlElement element) {
+  static String getText(xml.XmlNode element) {
     /// Define empty string buffer without [StringBuffer].
     String buffer = '';
 
     if (element.children.isEmpty && element.nodeType == xml.XmlNodeType.TEXT) {
-      buffer += element.innerText;
+      buffer += element.value!;
     }
 
     for (int i = 0; i < element.children.length; i++) {
       if (element.children[i].nodeType == xml.XmlNodeType.TEXT) {
-        buffer += element.children[i].toString();
+        buffer += element.children[i].value!;
+      } else if (element.children[i].nodeType == xml.XmlNodeType.ELEMENT) {
+        /// Recursively run the method for gathering if there is a text inside
+        /// of the passed element.
+        buffer += getText(element.children[i]);
       }
     }
 
@@ -180,7 +184,8 @@ class Utils {
     ///
     /// If the node is an element, it creates a new element with the same tag
     /// name and copies all attributes and child nodes of the original element.
-    if (element.nodeType == xml.XmlNodeType.ELEMENT) {
+    if (element is xml.XmlElement &&
+        element.nodeType == xml.XmlNodeType.ELEMENT) {
       final elem = element.copy();
 
       for (int i = 0; i < element.attributes.length; i++) {
@@ -200,7 +205,7 @@ class Utils {
     /// If the node is a text node, it creates a new text node with the same
     /// text content as the original node.
     else if (element.nodeType == xml.XmlNodeType.TEXT) {
-      return xml.XmlText(element.innerText);
+      return xml.XmlText(element.value!);
     }
 
     /// The method throws an [ArgumentError] if the input node is of an
@@ -216,7 +221,7 @@ class Utils {
   /// parameter, which can be either a list of attribute-value pairs or map of
   /// attribute keys and values. The `text` parameter is also optional and
   /// represents the nested text within the element.
-  static xml.XmlNode? xmlElement(
+  static xml.XmlElement? xmlElement(
     String name, {
     dynamic attributes,
     String? text,
@@ -268,7 +273,7 @@ class Utils {
     /// not a valid type, the method returns `null`.
     final builder = makeGenerator();
     builder.element(name, attributes: attrs, nest: text);
-    return builder.buildDocument();
+    return builder.buildDocument().rootElement.copy();
   }
 
   /// This method takes an XML DOM element and seralizes it into string
@@ -282,14 +287,15 @@ class Utils {
   static String? serialize(xml.XmlElement? element) {
     /// If element is null, then return null.
     if (element == null) return null;
-    final names = element.attributes
-        .map((attribute) => attribute.name.qualified)
-        .toList();
-    names.sort();
+    final names = List.generate(
+      element.attributes.length,
+      (i) => element.attributes[i].name,
+    );
+    names.sort((a, b) => a.qualified.compareTo(b.qualified));
     String result = names.fold(
-      '<${element.name.qualified}>',
+      '<${element.name.qualified}',
       (previous, node) =>
-          '$previous $node="${xmlEscape(element.getAttributeNode(node).toString())}"',
+          '$previous $node="${xmlEscape(element.getAttribute(node.qualified).toString())}"',
     );
 
     if (element.children.isNotEmpty) {
@@ -304,12 +310,12 @@ class Utils {
           case xml.XmlNodeType.TEXT:
 
             /// Text element to escape values
-            result += Utils.xmlEscape(child.root.innerText);
+            result += Utils.xmlEscape(child.innerText);
             break;
           case xml.XmlNodeType.CDATA:
 
             /// cdata section so do not escape values
-            result += '<![CDATA[${child.root.innerText}]]>';
+            result += '<![CDATA[${child.value}]]>';
             break;
           default:
             break;
@@ -406,34 +412,6 @@ class Utils {
     return resource.join('/');
   }
 
-  /// Unescapes a string that has been escaped according to the XMPP protocol
-  /// for node identifiers.
-  ///
-  /// This method replaces certain escape sequences in the `node` parameter with
-  /// their corresponding characters. The escape sequences are:
-  /// * `\\5c` with "\"
-  /// * `\\20` with a space character
-  /// * `\\22` with "
-  /// * `\\26` with "&"
-  /// * `\\27` with "'"
-  /// * `\\2f` with "/"
-  /// * `\\3a` with ":"
-  /// * `\\3c` with "<"
-  /// * `\\3e` with ">"
-  /// * `\\40` with "@"
-  /// <br /> @return The unescaped string.
-  static String unescapeNode(String node) => node
-      .replaceAll(RegExp(r"\\5c"), "\\")
-      .replaceAll(RegExp(r"\\20"), " ")
-      .replaceAll(RegExp(r'\\22'), '"')
-      .replaceAll(RegExp(r'\\26'), "&")
-      .replaceAll(RegExp(r"\\27"), "'")
-      .replaceAll(RegExp(r'\\2f'), "/")
-      .replaceAll(RegExp(r'\\3a'), ":")
-      .replaceAll(RegExp(r'\\3c'), "<")
-      .replaceAll(RegExp(r'\\3e'), ">")
-      .replaceAll(RegExp(r'\\40'), "@");
-
   /// This is a static method named `escapeNode` that takes a single argument
   /// `node`, a string to be escaped according to the rules of the XMPP nodeprep
   /// profile. The method returns the escaped string.
@@ -466,6 +444,34 @@ class Utils {
       .replaceAll(RegExp('>'), "\\3e")
       .replaceAll(RegExp('@'), "\\40");
 
+  /// Unescapes a string that has been escaped according to the XMPP protocol
+  /// for node identifiers.
+  ///
+  /// This method replaces certain escape sequences in the `node` parameter with
+  /// their corresponding characters. The escape sequences are:
+  /// * `\\5c` with "\"
+  /// * `\\20` with a space character
+  /// * `\\22` with "
+  /// * `\\26` with "&"
+  /// * `\\27` with "'"
+  /// * `\\2f` with "/"
+  /// * `\\3a` with ":"
+  /// * `\\3c` with "<"
+  /// * `\\3e` with ">"
+  /// * `\\40` with "@"
+  /// <br /> @return The unescaped string.
+  static String unescapeNode(String node) => node
+      .replaceAll(RegExp(r"\\5c"), "\\")
+      .replaceAll(RegExp(r"\\20"), " ")
+      .replaceAll(RegExp(r'\\22'), '"')
+      .replaceAll(RegExp(r'\\26'), "&")
+      .replaceAll(RegExp(r"\\27"), "'")
+      .replaceAll(RegExp(r'\\2f'), "/")
+      .replaceAll(RegExp(r'\\3a'), ":")
+      .replaceAll(RegExp(r'\\3c'), "<")
+      .replaceAll(RegExp(r'\\3e'), ">")
+      .replaceAll(RegExp(r'\\40'), "@");
+
   /// This method takes a string parameter `text` and returns a new [String]
   /// with the characters `<`, `>`, `&`, `""`, and `'` replaced with the
   /// corresponding XML entities.
@@ -474,12 +480,11 @@ class Utils {
   /// might be misinterpreted as XML markup. For instance, if a string contains
   /// the character `<`, it needs to be replaced with `&lt;` to prevent it from
   /// being interpreted as the start of a new XML element.
-  static String xmlEscape(String text) => text
-      .replaceAll(RegExp('&'), "&amp;")
-      .replaceAll(RegExp('<'), "&lt;")
-      .replaceAll(RegExp('>'), "&gt;")
-      .replaceAll(RegExp("'"), "&apos;")
-      .replaceAll(RegExp('"'), "&quot;");
+  static String xmlEscape(String text) => text.replaceAll('&', '&amp;');
+  // .replaceAll('<', '&lt;')
+  // .replaceAll('>', '&gt;')
+  // .replaceAll("'", '&apos;')
+  // .replaceAll('"', '&quot;');
 
   /// This method takes a [String] argument `value` and returns a [String]
   /// in UTF-8. It works by iterating through each character in the input string
