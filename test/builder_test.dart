@@ -1,7 +1,6 @@
 import 'package:echo/echo.dart';
 
 import 'package:test/test.dart';
-import 'package:xml/xml.dart' as xml;
 
 void main() {
   EchoBuilder? builder;
@@ -32,5 +31,14 @@ void main() {
         expect(generation, expected);
       },
     );
+  });
+
+  group('t Method Test', () {
+    test('Must return valid string when the text is not empty', () {
+      final generated = builder!.t('hello').toString();
+      const expected =
+          '<iq from="me" id="1" to="you" type="get" xmlns="jabber:client"><echo>hello</echo></iq>';
+      expect(generated, equals(expected));
+    });
   });
 }
