@@ -562,6 +562,7 @@ class Websocket extends Protocol {
   ///
   /// This method sends any pending data from the connection when the connection
   /// is idle.
+  @override
   void onIdle() {
     final data = connection.data;
 
