@@ -9,6 +9,15 @@ import 'package:echo/src/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
 
+/// Websocket connection handler class.
+///
+/// This class is used internally by [Echo] to encapsulate Websocket sessions.
+/// It is not meant to be used from user's code.
+///
+/// A library to enable XMPP over Websocket in [Echo].
+///
+/// This file implements XMPP over Websockets for [Echo], If a connection is
+/// established with a websocket url (ws://...) [Echo] will use Websockets.
 class Websocket extends Protocol {
   /// Factory method which returns private instance of this class.
   factory Websocket(Echo connection) => Websocket._instance(connection);
@@ -79,8 +88,8 @@ class Websocket extends Protocol {
   ///   - An exception if the necessary parameters, such as `xmlns`, `to`, or
   /// `version`, are missing or invalid.
   EchoBuilder _buildStream() => EchoBuilder('open', {
-        'xmlns': ns['FRAMING']!,
-        'to': connection.domain!,
+        'xmlns': ns['FRAMING'],
+        'to': connection.domain,
         'version': '1.0',
       });
 
@@ -210,8 +219,9 @@ class Websocket extends Protocol {
               /// Call the `onInitialMessage` callback if `onMessageCallback` is
               /// not set.
               _onInitialMessage(message as String);
+            } else {
+              _onMessageCallback!.call(message as String);
             }
-            _onMessageCallback!.call(message as String);
           },
 
           /// Invoke the `_onClose` callback when the socket is closed.
@@ -249,7 +259,7 @@ class Websocket extends Protocol {
   /// returns `status[Status.connfail]`.
   /// * - If there are no stream errors indicating a successful connection,
   /// returns `status[Status.connected]`.
-  ///
+  @override
   int connectCB(xml.XmlElement bodyWrap) {
     /// Calls `_checkStreamError` method inside, passes `bodyWrap` and the
     /// [Status] of connection failed as parameters. If any stream errors
@@ -287,10 +297,9 @@ class Websocket extends Protocol {
     // Check for errors in the <open /> tag.
     final namespace = message.getAttribute('xmlns');
 
-    /// If the "xmlns" attribute is missing or not a string, an error message
-    /// is set indicating that the "xmlns" attribute is missing in the
-    /// `<open />` tag.
-    if (namespace is String) {
+    /// If the "xmlns" attribute is missing, an error message is set indicating
+    /// that the "xmlns" attribute is missing in the `<open />` tag.
+    if (namespace == null) {
       error = 'Missing xmlns in <open />';
     }
 
@@ -308,7 +317,7 @@ class Websocket extends Protocol {
     /// If the "version" attribute is missing or not a string, an error message
     /// is set indicating that the "version" attribute is missing in the
     /// `<open />` tag.
-    if (version is String) {
+    if (version is! String) {
       error = 'Missing xmlns in <open />';
     }
 
@@ -441,8 +450,33 @@ class Websocket extends Protocol {
 
       /// Parses the wrapped message as an XML document.
       final element = xml.XmlDocument.parse(string);
-      connection.connectCb(element.rootElement, null, message);
+      connection.connectCB(element.rootElement, null, message);
     }
+  }
+
+  /// Called on stream start/restart when no `stream:features` has been
+  /// received.
+  ///
+  /// * @param callback The callback to be called when the authentication
+  /// is not supported.
+  @override
+  void nonAuth([void Function(Echo)? callback]) {
+    /// Log error message.
+    Log().error('Server did not offer a supported authentication mechanism');
+
+    /// Change the status to the not supported authentication mechanism.
+    connection.changeConnectStatus(
+      Status.connfail,
+      errorCondition['NO_AUTH_MECH'],
+    );
+
+    /// If the callback param is not null, then run this callback.
+    if (callback != null) {
+      callback.call(connection);
+    }
+
+    /// Lastly, disconnect from the current connection.
+    connection.doDisconnect();
   }
 
   /// Disconnects the socket connection and performs necessary cleanup actions.
@@ -460,7 +494,7 @@ class Websocket extends Protocol {
 
       /// Create a 'close' XML element using [EchoBuilder] with 'xlmns'
       /// attribute.
-      final close = EchoBuilder('close', {'xlmns': ns['FRAMING']!});
+      final close = EchoBuilder('close', {'xlmns': ns['FRAMING']});
 
       /// Send the XML tree representation of the 'close' element using
       /// connection's `xmlOutput`.
@@ -580,7 +614,7 @@ class Websocket extends Protocol {
   /// The first stanza will always fail to be parsed.
   void _onMessage(String message) {
     /// Decleration of [xml.XmlElement] for later use.
-    xml.XmlElement element;
+    xml.XmlElement? element;
 
     /// Check for closing stream.
     const close = '<close xmlns="urn:ietf:params:xml:ns:xmpp-framing" />';
@@ -601,9 +635,33 @@ class Websocket extends Protocol {
       if (connection.disconnecting!) {
         /// If yes, then disconnect from it.
         connection.doDisconnect();
+      } else if (message.contains('<open ')) {
+        element = xml.XmlDocument.parse(message).rootElement;
+        if (!_handleStreamStart(element)) {
+          return;
+        }
+      } else {
+        final data = _streamWrap(message);
+        element = xml.XmlDocument.parse(data).rootElement;
       }
 
-      return;
+      if (_checkStreamError(element!, Status.error)) {
+        return;
+      }
+
+      if (connection.disconnecting! &&
+          element.firstChild!.value == 'presence' &&
+          element.firstChild!.getAttribute('type') == 'unavailable') {
+        connection.xmlInput(element);
+        connection.rawInput(Utils.serialize(element));
+
+        /// If we are already disconnecting we will ignore the unavailable
+        /// stanza and wait for the </stream:stream> tag before we close the
+        /// connection,
+        return;
+      }
+
+      connection.dataRecv(element, message);
     }
 
     /// If the message starts with `<open`, it is parsed into an XML element
