@@ -52,6 +52,12 @@ void main() {
       final result = Utils.xmlEscape(text);
       expect(result, equals(expected));
     });
+
+    test('Must return valid output', () {
+      const text = 'This is a &lt;tag&gt;';
+      const expected = 'This is a &amp;lt;tag&amp;gt;';
+      expect(Utils.xmlEscape(text), expected);
+    });
   });
 
   group('XHTML isTagEqual Test', () {
@@ -68,13 +74,19 @@ void main() {
   });
 
   group('XHTML getText Test', () {
-    test('Valid text name must return true', () {
+    test('Must return valid text', () {
       final element =
           xml.XmlDocument.parse('<root>Text content</root>').rootElement;
-
       final result = Utils.getText(element);
-
       expect(result, equals('Text content'));
+    });
+
+    test('Must return valid text', () {
+      final element = xml.XmlDocument.parse(
+        '<description>This is <b>bold</b> text.</description>',
+      ).rootElement;
+      final result = Utils.getText(element);
+      expect(result, 'This is bold text.');
     });
   });
 
@@ -122,6 +134,28 @@ void main() {
       final result = Utils.serialize(null);
       expect(result, isNull);
     });
+    test('Must return correct serialization', () {
+      final result = Utils.serialize(xml.XmlElement(xml.XmlName('div')));
+      expect(result, '<div/>');
+    });
+
+    test('Must return correct serialization with two attributes set', () {
+      final element = xml.XmlElement(xml.XmlName('a'));
+      element.setAttribute('href', 'https://example.com');
+      element.setAttribute('target', '_blank');
+      final result = Utils.serialize(element);
+      const expected = '<a href="https://example.com" target="_blank"/>';
+      expect(result, expected);
+    });
+
+    test('Must return valid serialization when there is CDATA section', () {
+      final document = xml.XmlDocument.parse(
+        '<book><![CDATA[This is some <CDATA> content.]]></book>',
+      );
+      final result = Utils.serialize(document.rootElement);
+      const expected = '<book><![CDATA[This is some <CDATA> content.]]></book>';
+      expect(result, expected);
+    });
   });
 
   group('copyElement Method Test', () {
@@ -141,6 +175,17 @@ void main() {
       expect(copy.attributes.length, equals(2));
       expect(copy.getAttribute('attr2'), equals('value2'));
       expect((copy.children[0] as xml.XmlElement).name.local, equals('child1'));
+    });
+
+    test('Must return valid copy from provided xmlString', () {
+      const xmlString =
+          '<book id="123"><title>GPT-3.5</title><author>OpenAI</author></book>';
+      final document = xml.XmlDocument.parse(xmlString);
+      final originalElement = document.getElement('book');
+      final copy = Utils.copyElement(originalElement!);
+      const expected =
+          '<book id="123"><title>GPT-3.5</title><author>OpenAI</author></book>';
+      expect(copy.toString(), expected);
     });
 
     test('Must return copied text element type correctly', () {
@@ -182,6 +227,14 @@ void main() {
 
       final xmlNodeWithAttr = Utils.xmlElement('test', attributes: 'invalid');
       expect(xmlNodeWithAttr, null);
+    });
+
+    test('Must return valid output with element name and attributes', () {
+      final element = Utils.xmlElement(
+        'book',
+        attributes: {'author': 'Vsev', 'year': '2023'},
+      );
+      expect(Utils.serialize(element), '<book author="Vsev" year="2023"/>');
     });
   });
 
@@ -335,5 +388,20 @@ void main() {
       final y = Uint8List.fromList([4, 5]);
       expect(() => Utils.xorUint8Lists(x, y), throwsArgumentError);
     });
+  });
+
+  group('escapeNode Method Test', () {
+    test('Must return valid output when there is a space in the node', () {
+      const node = 'Salam brat!';
+      expect(Utils.escapeNode(node), equals('Salam\\20brat!'));
+    });
+
+    test(
+      'Must return valid output when there is a forward slash in the node',
+      () {
+        const node = 'Example / node';
+        expect(Utils.escapeNode(node), equals('Example\\20\\2f\\20node'));
+      },
+    );
   });
 }
