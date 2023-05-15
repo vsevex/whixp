@@ -60,7 +60,12 @@ class EchoBuilder {
   String toString() => Utils.serialize(nodeTree)!;
 
   /// Sets the current node to its parent node.
-  void up() => node = node!.parent;
+  ///
+  /// * @return [EchoBuilder] object;
+  EchoBuilder up() {
+    node = node!.parent;
+    return this;
+  }
 
   /// Sets the current node to the root node.
   void root() => node = nodeTree;
