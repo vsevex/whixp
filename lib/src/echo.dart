@@ -112,7 +112,7 @@ class Echo {
   Map<String, dynamic>? features;
   dynamic password;
   Map<String, dynamic>? saslData;
-  Map<String, dynamic>? mechanisms;
+  Map<String, SASL>? mechanisms;
 
   /// [Map] used to store protocol error handlers. It is structured as a nested
   /// map, where the outer map is indexed by the protocol name (e.g. `HTTP`),
@@ -157,13 +157,14 @@ class Echo {
   /// This variable represents a function that can be assigned to handle the
   /// connection status and related data after a connection attempt.
   Function(Status, [String?, xml.XmlElement?])? connectCallback;
-  Function? _saslSuccessHandler;
+  _Handler? _saslSuccessHandler;
   Function? _saslFailureHandler;
   Function? _saslChallengeHandler;
 
   /// `version` constant
   static const version = '0.0.1';
 
+  /// Select protocol based on `options` or `service`.
   void setProtocol() {
     final protocol = options['protocol'] ?? '';
     if (options['worker'] != null && options['worker'] as bool) {
@@ -361,7 +362,7 @@ class Echo {
     domain = Utils().getDomainFromJID(jid);
 
     /// Change the status of connection to `connecting`.
-    // changeConnectStatus(Status.connecting, null);
+    changeConnectStatus(Status.connecting, null);
 
     /// Build connection of the `protocol`.
     protocol!.connect();
@@ -384,16 +385,16 @@ class Echo {
     [
     xml.XmlElement? element,
   ]) {
-    for (final k in _connectionPlugins!.keys) {
-      final plugin = _connectionPlugins![k];
-      if (plugin!.status != status) {
-        try {
-          plugin.status = status;
-        } catch (error) {
-          Log().error('$k plugin caused an exception changing status: $error');
-        }
-      }
-    }
+    // for (final k in _connectionPlugins!.keys) {
+    //   final plugin = _connectionPlugins![k];
+    //   if (plugin!.status != status) {
+    //     try {
+    //       plugin.status = status;
+    //     } catch (error) {
+    //       Log().error('$k plugin caused an exception changing status: $error');
+    //     }
+    //   }
+    // }
     if (connectCallback != null) {
       try {
         connectCallback!.call(status, condition, element);
@@ -502,17 +503,37 @@ class Echo {
     _onIdle();
   }
 
+  /// Send a stanza.
+  ///
+  /// This method is called to push data onto the send queue to go out over
+  /// the wire. Whenever a request is send to the BOSH server, all pending data
+  /// is sent and the queue is flushed.
+  ///
+  /// The message type can be [xml.XmlElement], or list of [xml.XmlElement], or
+  /// just [EchoBuilder].
   void send(dynamic message) {
+    /// If the message is null or empty, exit from the function.
     if (message == null) return;
 
+    /// If the message is list, then queue all the elements inside of it.
     if (message is List<xml.XmlElement>) {
       for (int i = 0; i < message.length; i++) {
         _queueData(message[i]);
       }
-    } else {
+    }
+
+    /// If the message type is [EchoBuilder] then queue the node tree inside of
+    /// it.
+    else if (message.runtimeType == EchoBuilder) {
+      _queueData((message as EchoBuilder).nodeTree);
+    }
+
+    /// If the message type is [xml.XmlElement], then queue only it.
+    else {
       _queueData(message);
     }
 
+    /// Run the protocol send function to flush all the available data.
     protocol!.send();
   }
 
@@ -688,16 +709,16 @@ class Echo {
     mechanisms = {};
 
     /// The list of all available authentication mechanisms.
-    final mechanismList = <SASL>[
-      SASLAnonymous(),
-      SASLExternal(),
-      SASLOAuthBearer(),
-      SASLXOAuth2(),
-      SASLPlain(),
-      SASLSHA1(),
-      SASLSHA256(),
-      SASLSHA384(),
-      SASLSHA512(),
+    late final mechanismList = <SASL>[
+      SASLAnonymous(this),
+      SASLExternal(this),
+      SASLOAuthBearer(this),
+      SASLXOAuth2(this),
+      SASLPlain(this),
+      SASLSHA1(this),
+      SASLSHA256(this),
+      SASLSHA384(this),
+      SASLSHA512(this),
     ];
     mechanismList.map((mechanism) => registerSASL(mechanism));
   }
@@ -721,7 +742,7 @@ class Echo {
   /// * @param reason The reason the disconnect is occuring.
   void disconnect(String? reason) {
     /// Change the status of connection to disconnecting.
-    changeConnectStatus(Status.disconnecting, reason, null);
+    changeConnectStatus(Status.disconnecting, reason);
 
     /// Log according to the `reason` value.
     if (reason != null) {
@@ -741,11 +762,13 @@ class Echo {
       /// Proceed if user is authenticated.
       if (authenticated!) {
         presence = EchoBuilder.pres(
-          attributes: {'xmlns': ns['CLIENT']!, 'type': 'unavailable'},
+          attributes: {'xmlns': ns['CLIENT'], 'type': 'unavailable'},
         );
       }
       _disconnectTimeout = _addSystemTimedHandler(
-          disconnectionTimeout!, _onDisconnectTimeout.call);
+        disconnectionTimeout!,
+        _onDisconnectTimeout.call,
+      );
       protocol!.disconnect(presence!.nodeTree);
     }
 
@@ -891,14 +914,193 @@ class Echo {
     });
   }
 
-  void connectCb(
-    xml.XmlElement element,
-    void Function()? callback,
-    String raw,
-  ) {}
-  void sortMechanismsByPriority() {}
-  void authenticate() {}
-  void _attemptSASLAuth() {}
+  /// Sends an IQ to the XMPP server to bind a JID resource for this session.
+  ///
+  /// https://tools.ietf.org/html/rfc6120#section-7.5
+  ///
+  /// If `explicitResourceBinding` was set to a truthy value in the options
+  /// passed to the [Echo] consructor, then this function needs to be called
+  /// by the client author.
+  ///
+  /// Otherwise it will be called automatically as soon as the XMPP server
+  /// advertises the 'urn:ietf:params:xml:ns:xmpp-bind' stream feature.
+  void bind() {
+    if (!doBind!) {
+      Log().info('Echo bind called but "do_bind" is false');
+      return;
+    }
+    final resource = Utils().getResourceFromJID(jid!);
+    if (resource != null) {
+      send(
+        EchoBuilder.iq(
+          attributes: {'type': 'set', 'id': '_bind_auth_2'},
+        )
+            .c('bind', attributes: {'xmlns': ns['BIND']!})
+            .c('resource')
+            .t(resource)
+            .nodeTree,
+      );
+    } else {
+      send(
+        EchoBuilder.iq(
+          attributes: {'type': 'set', 'id': '_bind_auth_2'},
+        ).c('bind', attributes: {'xmlns': ns['BIND']!}).nodeTree,
+      );
+    }
+  }
+
+  /// Private handler for binding result and session start.
+  ///
+  /// * @param element XmlElement matching stanza.
+  /// * @return false to remove the handler.
+  bool? _onResourceBindResultIQ(xml.XmlElement element) {
+    if (element.getAttribute('type') == 'error') {
+      Log().warn('Resource binding failed.');
+      final conflict = element.getElement('conflict');
+      String? condition;
+      if (conflict != null) {
+        condition = errorCondition['CONFLICT'];
+      }
+      changeConnectStatus(Status.authFail, condition);
+      return false;
+    }
+    final bind = element.getElement('bind');
+    if (bind != null) {
+      final jidNode = bind.getElement('jid');
+      if (jidNode != null) {
+        authenticated = true;
+        jid = Utils.getText(element);
+        if (doSession!) {
+          _establishSession();
+        } else {
+          changeConnectStatus(Status.connected, null);
+        }
+      }
+    } else {
+      Log().warn('Resource binding failed.');
+      changeConnectStatus(Status.authFail, null, element);
+      return false;
+    }
+  }
+
+  /// SASL authentication will be attempted if available, otherwise the code
+  /// will fall back to legaacy authentication.
+  ///
+  /// * @param request The current request
+  /// * @param callback Low level (xmpp) connect callback function.
+  void connectCB(
+    xml.XmlElement request,
+    void Function(Echo)? callback, [
+    String? raw,
+  ]) {
+    Log().log('connectCB was called');
+    connected = true;
+
+    xml.XmlElement? bodyWrap;
+    try {
+      bodyWrap = protocol!.reqToData(request);
+    } catch (error) {
+      changeConnectStatus(Status.connfail, errorCondition['BAD_FORMAT']);
+      doDisconnect(errorCondition['BAD_FORMAT']);
+    }
+
+    if (bodyWrap == null) return;
+    if (bodyWrap.name.qualified == protocol!.strip &&
+        bodyWrap.children.isNotEmpty) {
+      xmlInput(bodyWrap.children.first);
+    } else {
+      xmlInput(bodyWrap);
+    }
+
+    if (raw != null) {
+      rawInput(raw);
+    } else {
+      rawInput(Utils.serialize(bodyWrap));
+    }
+
+    final connectectionCheck = protocol!.connectCB(bodyWrap);
+    if (connectectionCheck == status[Status.connfail]) {
+      return;
+    }
+
+    /// Check for the stream:features tag
+    bool hasFeatures;
+    hasFeatures =
+        bodyWrap.getElement(ns['STREAM']!, namespace: 'features') != null;
+    if (!hasFeatures) {
+      protocol!.nonAuth(callback);
+      return;
+    }
+
+    final matched = List.from(
+      bodyWrap.childElements
+          .where((element) => element.getElement('mechanism') != null),
+    )
+        .map(
+          (mechanism) =>
+              mechanisms![(mechanism as xml.XmlElement).name.qualified],
+        )
+        .where((element) => element != null)
+        .toList();
+
+    if (matched.isEmpty) {
+      if (bodyWrap.childElements
+          .map((element) => element.getElement('auth'))
+          .toList()
+          .isEmpty) {
+        /// There are no matching SASL mechanisms and also no legacy auth
+        /// available.
+        protocol!.nonAuth(callback);
+        return;
+      }
+    }
+    if (doAuthentication!) {
+      authenticate(matched);
+    }
+  }
+  void authenticate(List<SASL?> mechanisms) {
+    _attemptSASLAuth()
+  }
+
+
+  /// Sorts a list of objects with prototype SASLMechanism according to their
+  /// properties.
+  List<SASL> sortMechanismsByPriority(List<SASL?> mechanisms) {
+    final mechs  = <SASL>[];
+    /// Iterate over all the available mechanisms.
+    for (int i = 0 ; i < mechanisms.length - 1; i++) {
+      int higher = i;
+      for (int j = i  + 1 ; j < mechanisms.length; ++j) {
+        if (mechs[j].priority! > mechs[higher].priority!) {
+          higher = j;
+        }
+      }
+      if (higher != i) {
+        final swap = mechanisms[i];
+        mechs[i] = mechanisms[higher]!;
+mechs[higher] = swap!;
+      }
+    }
+    return mechs;
+  }
+  /// Iterate through an array of SASL mechanisms and attempt authentication
+  /// with the hightes priority (enabled) mechanism.
+  /// 
+  /// * @param mechanisms List of [SASL] mechanisms.
+  /// * @return [bool] true or false, depending on whether a valid SASL
+  /// mechanism was found with which authentication could be started.
+bool _attemptSASLAuth(List<SASL?> mechanisms) {
+  final mechs = sortMechanismsByPriority(mechanisms);
+  bool mechanismFound = false;
+  for (int i = 0 ; i < mechs.length; i++) {
+    if (mechs[i].test()) {
+      continue;
+    }
+    _saslSuccessHandler = _addSystemHandler(
+      
+    );
+  }
+}
   void _saslChallengeCb() {}
   void _attemptLegacyAuth() {}
   void _onLegacyAuthIQResult() {}
@@ -908,7 +1110,6 @@ class Echo {
   void _onSessionResultIQ() {}
   void _saslFailureCb() {}
   void _auth2Cb() {}
-  void _addSysHandler() {}
   void _onDisconnectTimeout() {}
 
   void _onIdle() {}
