@@ -46,7 +46,7 @@ class Echo {
       'websocket': {},
     };
 
-    doAuthentication = false;
+    doAuthentication = true;
     paused = false;
 
     maxRetries = 5;
@@ -60,7 +60,32 @@ class Echo {
     _idleTimeout =
         Timer.periodic(const Duration(milliseconds: 100), (_) => _onIdle);
     _disconnectTimeout = null;
+
+    /// Register all available [SASL] auth mechanisms.
     registerMechanisms();
+
+    /// A client must always respond to incoming IQ 'set' or 'get' stanzas.
+    ///
+    /// This is a fallback handler which gets called when no other handler was
+    /// called for a received IQ 'set' or 'get'.
+    _iqFallbackHandler = _Handler(
+      handler: ([xml.XmlElement? iq]) {
+        send(
+          EchoBuilder.iq(
+            attributes: {
+              'type': 'error',
+              'id': iq!.getAttribute('id'),
+            },
+          ).c('error', attributes: {'type': 'cancel'}).c(
+            'service-unavailable',
+            attributes: {'xmlns': ns['STANZAS']!},
+          ),
+        );
+        return true;
+      },
+      name: 'iq',
+      type: ['get', 'set'],
+    );
 
     /// TODO: implement plugin initialization method in this scope.
   }
@@ -125,7 +150,7 @@ class Echo {
   bool? authenticated;
   bool? connected;
   bool? disconnecting;
-  bool? doAuthentication = true;
+  bool? doAuthentication;
   bool? paused;
   bool? restored;
   bool? doBind;
@@ -141,7 +166,7 @@ class Echo {
   /// This variable appears to be alist used to store instance of the
   /// [_Handler] class which is meant to be removed.
   List<_Handler>? removeHandlers;
-  List<Function>? timedHandlers;
+  List<_TimedHandler>? timedHandlers;
   List<_Handler>? handlers;
 
   /// This variable appears to be a list used to store references to timed
@@ -157,9 +182,10 @@ class Echo {
   /// This variable represents a function that can be assigned to handle the
   /// connection status and related data after a connection attempt.
   Function(Status, [String?, xml.XmlElement?])? connectCallback;
+  _Handler? _iqFallbackHandler;
   _Handler? _saslSuccessHandler;
-  Function? _saslFailureHandler;
-  Function? _saslChallengeHandler;
+  _Handler? _saslFailureHandler;
+  _Handler? _saslChallengeHandler;
 
   /// `version` constant
   static const version = '0.0.1';
@@ -335,8 +361,11 @@ class Echo {
     /// Equal gathered `jid` to global one.
     this.jid = jid;
 
-    /// Authorization identity (username)
+    /// Authorization identity (username).
     authzid = Utils().getBareJIDFromJID(jid);
+
+    /// Authentication identity (user name).
+    this.authcid = authcid ?? Utils().getNodeFromJID(jid);
 
     /// Authentication identity. Equal gathered `password` to global password.
     this.password = password;
@@ -573,7 +602,7 @@ class Echo {
   /// * @param int period The period of the handler.
   /// * @param handler The callback function.
   /// * @return A reference to the handler that can be used to remove it.
-  _TimedHandler addTimedHandler(int period, void Function() handler) {
+  _TimedHandler addTimedHandler(int period, bool Function() handler) {
     /// Declare new [_TimedHandler] object using passed params.
     final timed = _TimedHandler(period: period, handler: handler);
 
@@ -710,17 +739,17 @@ class Echo {
 
     /// The list of all available authentication mechanisms.
     late final mechanismList = <SASL>[
-      SASLAnonymous(this),
-      SASLExternal(this),
-      SASLOAuthBearer(this),
-      SASLXOAuth2(this),
-      SASLPlain(this),
-      SASLSHA1(this),
-      SASLSHA256(this),
-      SASLSHA384(this),
-      SASLSHA512(this),
+      SASLAnonymous(),
+      SASLExternal(),
+      SASLOAuthBearer(),
+      SASLXOAuth2(),
+      SASLPlain(),
+      SASLSHA1(),
+      SASLSHA256(),
+      SASLSHA384(),
+      SASLSHA512(),
     ];
-    mechanismList.map((mechanism) => registerSASL(mechanism));
+    mechanismList.map((mechanism) => registerSASL(mechanism)).toList();
   }
 
   /// Register a single [SASL] mechanism, to be supported by this client.
@@ -832,6 +861,7 @@ class Echo {
   /// * @param request The request that has data ready
   /// * @param raw The stanza as a raw string (optional)
   void dataRecv(xml.XmlElement request, [String? raw]) {
+    print(request);
     final element = protocol!.reqToData(request);
     if (element == null) return;
 
@@ -849,7 +879,7 @@ class Echo {
 
     /// Remove handlers scheduled for deletion.
     while (removeHandlers!.isNotEmpty) {
-      final hand = removeHandlers!.last;
+      final hand = removeHandlers!.removeLast();
       final i = handlers!.indexOf(hand);
       if (i >= 0) {
         handlers!.removeAt(i);
@@ -858,7 +888,7 @@ class Echo {
 
     /// Add handlers scheduled for deletion.
     while (addHandlers!.isNotEmpty) {
-      handlers!.add(addHandlers!.last);
+      handlers!.add(addHandlers!.removeLast());
     }
 
     /// Handle graceful disconnect
@@ -894,23 +924,29 @@ class Echo {
     Utils.forEachChild(element, null, (child) {
       final matches = [];
       handlers = handlers!.fold<List<_Handler>>(<_Handler>[],
-          (List<_Handler> updatedHandlers, _Handler handler) {
+          (List<_Handler> handlers, _Handler handler) {
         try {
-          if (handler.isMatch(child as xml.XmlElement) &&
-              (authenticated! || !handler.user)) {
-            if (handler.run(child) != null) {
-              updatedHandlers.add(handler);
+          if (handler.isMatch(child) && (authenticated! || !handler.user)) {
+            if (handler.run(child)!) {
+              handlers.add(handler);
             }
             matches.add(handler);
           } else {
-            updatedHandlers.add(handler);
+            handlers.add(handler);
           }
         } catch (e) {
           // if the handler throws an exception, we consider it as false
-          Log().warn('Removing Strophe handlers due to uncaught exception: $e');
+          Log().warn('Removing Echo handlers due to uncaught exception: $e');
         }
-        return updatedHandlers;
+        return handlers;
       });
+
+      /// If no handler was fired for an incoming IQ with type='set', then we
+      /// return an IQ error stanza with `service-unavailable`.
+      if (matches.isEmpty && _iqFallbackHandler!.isMatch(child)) {
+        print('salam');
+        _iqFallbackHandler!.run(child);
+      }
     });
   }
 
@@ -929,6 +965,10 @@ class Echo {
       Log().info('Echo bind called but "do_bind" is false');
       return;
     }
+    _addSystemHandler(
+      handler: ([xml.XmlElement? element]) => _onResourceBindResultIQ(element!),
+      id: 'session_auth_2',
+    );
     final resource = Utils().getResourceFromJID(jid!);
     if (resource != null) {
       send(
@@ -953,7 +993,7 @@ class Echo {
   ///
   /// * @param element XmlElement matching stanza.
   /// * @return false to remove the handler.
-  bool? _onResourceBindResultIQ(xml.XmlElement element) {
+  bool _onResourceBindResultIQ(xml.XmlElement element) {
     if (element.getAttribute('type') == 'error') {
       Log().warn('Resource binding failed.');
       final conflict = element.getElement('conflict');
@@ -981,6 +1021,7 @@ class Echo {
       changeConnectStatus(Status.authFail, null, element);
       return false;
     }
+    return false;
   }
 
   /// SASL authentication will be attempted if available, otherwise the code
@@ -1018,27 +1059,25 @@ class Echo {
       rawInput(Utils.serialize(bodyWrap));
     }
 
-    final connectectionCheck = protocol!.connectCB(bodyWrap);
-    if (connectectionCheck == status[Status.connfail]) {
+    final connectionCheck = protocol!.connectCB(bodyWrap);
+    if (connectionCheck == status[Status.connfail]) {
       return;
     }
 
     /// Check for the stream:features tag
     bool hasFeatures;
     hasFeatures =
-        bodyWrap.getElement(ns['STREAM']!, namespace: 'features') != null;
+        bodyWrap.findAllElements('stream:features').toList().isNotEmpty ||
+            bodyWrap.findAllElements('features').toList().isNotEmpty;
+
     if (!hasFeatures) {
       protocol!.nonAuth(callback);
       return;
     }
 
-    final matched = List.from(
-      bodyWrap.childElements
-          .where((element) => element.getElement('mechanism') != null),
-    )
+    final matched = List.from(bodyWrap.findAllElements('mechanism'))
         .map(
-          (mechanism) =>
-              mechanisms![(mechanism as xml.XmlElement).name.qualified],
+          (mechanism) => mechanisms![(mechanism as xml.XmlElement).innerText],
         )
         .where((element) => element != null)
         .toList();
@@ -1054,65 +1093,217 @@ class Echo {
         return;
       }
     }
-    if (doAuthentication!) {
-      authenticate(matched);
-    }
-  }
-  void authenticate(List<SASL?> mechanisms) {
-    _attemptSASLAuth()
+    if (doAuthentication!) authenticate(matched);
   }
 
+  void authenticate(List<SASL?> mechanisms) {
+    if (!_attemptSASLAuth(mechanisms)) {
+      _attemptLegacyAuth();
+    }
+  }
 
   /// Sorts a list of objects with prototype SASLMechanism according to their
   /// properties.
-  List<SASL> sortMechanismsByPriority(List<SASL?> mechanisms) {
-    final mechs  = <SASL>[];
+  List<SASL?> sortMechanismsByPriority(List<SASL?> mechanisms) {
     /// Iterate over all the available mechanisms.
-    for (int i = 0 ; i < mechanisms.length - 1; i++) {
+    for (int i = 0; i < mechanisms.length - 1; i++) {
       int higher = i;
-      for (int j = i  + 1 ; j < mechanisms.length; ++j) {
-        if (mechs[j].priority! > mechs[higher].priority!) {
+      for (int j = i + 1; j < mechanisms.length; ++j) {
+        if (mechanisms[j]!.priority! > mechanisms[higher]!.priority!) {
           higher = j;
         }
       }
       if (higher != i) {
         final swap = mechanisms[i];
-        mechs[i] = mechanisms[higher]!;
-mechs[higher] = swap!;
+        mechanisms[i] = mechanisms[higher];
+        mechanisms[higher] = swap;
       }
     }
-    return mechs;
+    return mechanisms;
   }
+
   /// Iterate through an array of SASL mechanisms and attempt authentication
   /// with the hightes priority (enabled) mechanism.
-  /// 
+  ///
   /// * @param mechanisms List of [SASL] mechanisms.
   /// * @return [bool] true or false, depending on whether a valid SASL
   /// mechanism was found with which authentication could be started.
-bool _attemptSASLAuth(List<SASL?> mechanisms) {
-  final mechs = sortMechanismsByPriority(mechanisms);
-  bool mechanismFound = false;
-  for (int i = 0 ; i < mechs.length; i++) {
-    if (mechs[i].test()) {
-      continue;
+  bool _attemptSASLAuth(List<SASL?> mechanisms) {
+    final mechs = sortMechanismsByPriority(mechanisms);
+    bool mechanismFound = false;
+    SASL mechanism;
+    for (int i = 0; i < mechs.length; i++) {
+      mechanisms[i]!.connection = this;
+      if (mechs[i]!.test()) {
+        continue;
+      }
+      _saslSuccessHandler = _addSystemHandler(
+        name: 'success',
+        handler: ([xml.XmlElement? element]) => _saslSuccessCB(element),
+      );
+      _saslFailureHandler = _addSystemHandler(
+        name: 'failure',
+        handler: ([xml.XmlElement? element]) => _saslFailureCB(element!),
+      );
+      _saslChallengeHandler = _addSystemHandler(
+        name: 'challenge',
+        handler: ([xml.XmlElement? element]) => _saslChallengeCB(element!),
+      );
+
+      mechanism = mechanisms[i]!;
+
+      final requestAuthExchange = EchoBuilder('auth', {
+        'xmlns': ns['SASL'],
+        'mechanism': mechanism.name,
+      });
+      if (mechanism.isClientFirst!) {
+        final response = mechanism.clientChallenge();
+        requestAuthExchange.t(Utils.btoa(response));
+      }
+      send(requestAuthExchange);
+      mechanismFound = true;
+      break;
     }
-    _saslSuccessHandler = _addSystemHandler(
-      
-    );
+    return mechanismFound;
   }
-}
-  void _saslChallengeCb() {}
-  void _attemptLegacyAuth() {}
-  void _onLegacyAuthIQResult() {}
-  void _saslSuccessCb() {}
+
+  bool _saslChallengeCB(xml.XmlElement element) {
+    print('sasl challenge cb');
+
+    /// TODO: implement this function;
+    return false;
+  }
+
+  void _attemptLegacyAuth() {
+    if (Utils().getNodeFromJID(jid!) == null) {
+      changeConnectStatus(Status.connfail, errorCondition['MISSING_JID_NODE']);
+      disconnect(errorCondition['MISSING_JID_NODE']);
+    } else {
+      changeConnectStatus(Status.authenticating, null);
+      _addSystemHandler(
+        handler: ([xml.XmlElement? element]) => _onLegacyAuthIQResult(),
+        id: '_auth_1',
+      );
+
+      send(
+        EchoBuilder.iq(
+          attributes: {'type': 'get', 'to': domain, 'id': '_auth_1'},
+        )
+            .c('query', attributes: {'xmlns': ns['AUTH']!})
+            .c('username')
+            .t(Utils().getNodeFromJID(jid!)!),
+      );
+    }
+  }
+
+  /// This handler is called in response to the initial <iq type='get'/> for
+  /// legacy authentication. It builds an authentication <iq/> and sends it,
+  /// creating a handler to handle the result.
+  ///
+  /// * @param element The stanza that triggered the callback.
+  /// * @return false to remove the handler.
+  bool _onLegacyAuthIQResult() {
+    final iq = EchoBuilder.iq(
+      attributes: {'type': 'set', 'id': '_auth_2'},
+    )
+        .c('query', attributes: {'xmlns': ns['AUTH']!})
+        .c('username')
+        .t(Utils().getNodeFromJID(jid!)!)
+        .up()
+        .c('password')
+        .t(password as String);
+
+    if (Utils().getResourceFromJID(jid!) == null) {
+      /// Since the user has not supplied a resource, we pick a default one
+      /// here. Unlike other auth methods, the server cannot do this for us.
+      jid = '${Utils().getBareJIDFromJID(jid!)}/echo';
+    }
+    iq.up().c('resource').t(Utils().getResourceFromJID(jid!)!);
+
+    _addSystemHandler(
+      handler: ([xml.XmlElement? element]) => _auth2CB(element!),
+      id: '_auth_2',
+    );
+    send(iq);
+    return false;
+  }
+
+  bool _saslSuccessCB(xml.XmlElement? element) {
+    print('sasl success cb');
+
+    /// TODO: implement this function;
+    return false;
+  }
+
   void _onStreamFeaturesAfterSASL() {}
   void _establishSession() {}
   void _onSessionResultIQ() {}
-  void _saslFailureCb() {}
-  void _auth2Cb() {}
-  void _onDisconnectTimeout() {}
+  bool _saslFailureCB(xml.XmlElement element) {
+    print('sasl failure cb');
 
-  void _onIdle() {}
+    /// TODO: implement this function;
+    return false;
+  }
+
+  bool _auth2CB(xml.XmlElement element) {
+    if (element.getAttribute('type') == 'result') {
+      authenticated = true;
+      changeConnectStatus(Status.connected, null);
+    } else if (element.getAttribute('type') == 'error') {
+      changeConnectStatus(Status.authFail, null, element);
+      disconnect('Authenticated failed');
+    }
+    return false;
+  }
+
+  bool _onDisconnectTimeout() {
+    return false;
+  }
+
+  /// Private handler to process events during idle cycle.
+  ///
+  /// This handler is called in every 100ms to fire timed handlers that are
+  /// ready and keep poll request going.
+  void _onIdle() {
+    /// Add timed handlers scheduled for addition
+    while (addTimeds!.isNotEmpty) {
+      timedHandlers!.add(addTimeds!.removeLast());
+    }
+
+    /// Remove timed handlers that have been scheduled for removal.
+    while (removeTimeds!.isNotEmpty) {
+      final handler = removeTimeds!.removeLast();
+      final i = timedHandlers!.indexOf(handler);
+      if (i >= 0) {
+        timedHandlers!.removeAt(i);
+      }
+    }
+
+    /// Call ready timed handlers
+    final now = DateTime.now();
+    final newbie = <_TimedHandler>[];
+    for (int i = 0; i < timedHandlers!.length; i++) {
+      final timed = timedHandlers![i];
+      if (authenticated! || !timed.user) {
+        final since = timed.lastCalled!.millisecondsSinceEpoch + timed.period;
+        if (since - now.millisecondsSinceEpoch <= 0) {
+          if (timed.run()) {
+            newbie.add(timed);
+          }
+        } else {
+          newbie.add(timed);
+        }
+      }
+    }
+    timedHandlers = newbie;
+    _idleTimeout?.cancel();
+    protocol!.onIdle();
+
+    /// Reactivate the timer only if connected
+    if (connected!) {
+      _idleTimeout = Timer(const Duration(milliseconds: 100), () => _onIdle());
+    }
+  }
 
   /// Private function to add a system level timed handler.
   ///
@@ -1121,7 +1312,7 @@ bool _attemptSASLAuth(List<SASL?> mechanisms) {
   ///
   /// * @param period The period of the handler.
   /// * @param handler The callback function.
-  _TimedHandler _addSystemTimedHandler(int period, void Function() handler) {
+  _TimedHandler _addSystemTimedHandler(int period, bool Function() handler) {
     /// Create [_TimedHandler] first, for adding to the created handler list.
     final timed = _TimedHandler(period: period, handler: handler);
 
@@ -1233,14 +1424,14 @@ class _Handler {
               /// Default is false.
               'ignoreNamespaceFragment': false,
             } {
-    if (options!.containsKey('matchBare')) {
+    if (this.options!.containsKey('matchBare')) {
       Log().warn(
         'The "matchBare" option is deprecated, use "matchBareFromJid" instead.',
       );
-      this.options!['matchBareFromJid'] = options['matchBareFromJid']!;
-      options.remove('matchBare');
+      this.options!['matchBareFromJid'] = this.options!['matchBareFromJid']!;
+      this.options!.remove('matchBare');
     }
-    if (options.containsKey('matchBareFromJid')) {
+    if (this.options!.containsKey('matchBareFromJid')) {
       this.from = from != null ? Utils().getBareJIDFromJID(from) : null;
     } else {
       this.from = from;
@@ -1322,13 +1513,15 @@ class _Handler {
     final elementType = element.getAttribute('type');
     if (namespaceMatch(element) &&
         (name == null || Utils.isTagEqual(element, name!)) &&
-        (type == null || type is List
-            ? (type! as List).contains(elementType)
-            : elementType == type) &&
+        (type == null ||
+            (type is List
+                ? (type! as List).contains(elementType)
+                : elementType == type)) &&
         (id == null || element.getAttribute('id') == id) &&
         (from == null || from == this.from)) {
       return true;
     }
+
     return false;
   }
 
@@ -1374,7 +1567,7 @@ class _TimedHandler {
 
   /// The callback to run when the handler fires. This function should take no
   /// arguments.
-  final void Function() handler;
+  final bool Function() handler;
 
   bool user = true;
 
@@ -1385,7 +1578,7 @@ class _TimedHandler {
   ///
   /// * @return `true` if the [_TimedHandler] should be called again, otherwise
   /// false.
-  void run() {
+  bool run() {
     /// Equals last called time to now.
     lastCalled = DateTime.now();
 
