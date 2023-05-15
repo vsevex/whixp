@@ -144,31 +144,22 @@ class Utils {
   static void forEachChild(
     xml.XmlElement? element,
     String? name,
-    void Function(xml.XmlNode) function,
+    void Function(xml.XmlElement) function,
   ) {
-    /// Declare non-final `childNode` variable for later assign.
-    xml.XmlNode? childNode;
-
     /// If `element` is null, then exit the function.
     if (element == null) return;
 
     /// Loop all children in the `element` xml stanzas.
-    for (int i = 0; i < element.children.length; i++) {
-      if (element.children.elementAt(i) is xml.XmlElement) {
-        childNode = element.children.elementAt(i);
-      } else if (element.children.elementAt(i) is xml.XmlDocument) {
-        childNode = element.root.children.elementAt(i);
-      } else {
-        /// If `childNode` is null, then continue to iterate.
-        continue;
-      }
+    for (int i = 0; i < element.descendantElements.length; i++) {
+      /// Declare final `childNode` variable for the `i` element.
+      final childNode = element.descendantElements.toList()[i];
 
       /// Child element of the given `element`, the function checks whether it
       /// is an `XmlElement` and whether it matches the given `name` filter (if
       /// provided). If both of these conditions are true, the specified
       /// function func is called with the child element as the parameter.
       if (childNode.nodeType == xml.XmlNodeType.ELEMENT &&
-          (name == null || isTagEqual(childNode as xml.XmlElement, name))) {
+          (name == null || isTagEqual(childNode, name))) {
         function(childNode);
       }
     }
@@ -619,4 +610,6 @@ class Utils {
     }
     return z;
   }
+
+  static String btoa(String input) => base64.encode(stringToArrayBuffer(input));
 }
