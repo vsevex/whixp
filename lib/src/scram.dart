@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'dart:typed_data';
 
-import 'package:echo/src/connection.dart';
+import 'package:echo/src/echo.dart';
 import 'package:echo/src/log.dart';
 import 'package:echo/src/utils.dart';
 
@@ -247,7 +247,7 @@ class Scram {
   /// with information about the authentication process, including the client
   /// nonce (`cnonce`) and the client first message (`client-first-message-bare`).
   ///
-  static String clientChallenge(EchoConnection connection, String? testCNonce) {
+  static String clientChallenge(Echo connection, String? testCNonce) {
     /// The optional `test_cnonce` parameter is a string value that can be used
     /// for testing purposes instead of generating a random nonce. If it is not
     /// provided, a random nonce will be generated.
@@ -265,7 +265,7 @@ class Scram {
   /// Performs SCRAM authentication and generates a response string to be sent
   /// to the server.
   ///
-  /// * @param connection An instance of [EchoConnection] representing the
+  /// * @param connection An instance of [Echo] representing the
   /// connection to the server.
   /// * @param challenge A string representing the challenge received from the
   /// server
@@ -276,7 +276,7 @@ class Scram {
   /// * @return A string representing the SCRAM response to be sent to the
   /// server.
   String? scramResponse(
-    EchoConnection connection,
+    Echo connection,
     String challenge,
     String hashName,
     int hashBits,
