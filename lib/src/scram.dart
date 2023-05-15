@@ -251,7 +251,6 @@ class Scram {
     /// The optional `test_cnonce` parameter is a string value that can be used
     /// for testing purposes instead of generating a random nonce. If it is not
     /// provided, a random nonce will be generated.
-    ///
     final cnonce = testCNonce ?? generateCNonce;
     final clientFirstMessageBare = 'n=${connection.authcid},r=$cnonce';
     connection.saslData!['cnonce'] = cnonce;
