@@ -1,3 +1,4 @@
+import 'package:echo/echo.dart';
 import 'package:xml/xml.dart' as xml;
 
 abstract class Protocol {
@@ -9,6 +10,8 @@ abstract class Protocol {
   void doDisconnect();
   void send();
   void abortAllRequests();
+  int connectCB(xml.XmlElement bodyWrap);
+  void nonAuth([void Function(Echo)? function]);
   xml.XmlElement? reqToData(xml.XmlElement? stanza);
   void sendRestart();
 }
