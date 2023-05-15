@@ -1,4 +1,4 @@
-import 'package:echo/src/connection.dart';
+import 'package:echo/src/echo.dart';
 
 /// Represents a SASL authentication mechanism in XMPP, providing a common
 /// interface for SASL mechanisms to be implemented. This class has several
@@ -18,8 +18,8 @@ abstract class SASL {
   /// without receiving a challenge from the server.
   final bool? isClientFirst;
 
-  /// An [EchoConnection] object representing the XAMPP connection.
-  EchoConnection? connection;
+  /// An [Echo] object representing the XAMPP connection.
+  Echo? connection;
 
   /// A [bool] method indicating whether the SASL mechanism is able to run.
   bool test() => true;

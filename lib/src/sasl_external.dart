@@ -26,7 +26,7 @@ class SASLExternal extends SASL {
     /// authzid) with which the user wants to log in as.
     ///
     /// To NOT send the `authzid`, the user should therefore set the `authcid`
-    /// equal to the JID when instantiating a new [EchoConnection] object.
+    /// equal to the JID when instantiating a new [Echo] object.
     return connection!.authcid == connection!.authzid
         ? ''
         : connection!.authzid!;
