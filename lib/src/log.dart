@@ -27,5 +27,5 @@ class Log {
   void error(String message) => logger.e(message);
 
   /// Logs a message with a verbosity level of `fatal`.
-  void fatal(String message) => logger.wtf(fatal);
+  void fatal(String message) => logger.wtf(message);
 }
