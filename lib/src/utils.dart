@@ -310,7 +310,7 @@ class Utils {
           case xml.XmlNodeType.TEXT:
 
             /// Text element to escape values
-            result += Utils.xmlEscape(child.innerText);
+            result += Utils.xmlEscape(child.value!);
             break;
           case xml.XmlNodeType.CDATA:
 
@@ -343,7 +343,7 @@ class Utils {
 
     /// Finally, it builds the document using `buildDocument()` and returns the
     /// resulting `xml.XmlNode`.
-    return builder.buildDocument().rootElement;
+    return copyElement(builder.buildDocument().rootElement);
   }
 
   /// Returns bare JID from the original JID.
