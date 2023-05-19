@@ -16,7 +16,7 @@ include: package:lint/analysis_options.yaml
 
 linter:
   rules:
-    - unnecessary_null_aware_operator_on_extension_on_nullable: ignore
+    use_late_for_private_fields_and_variables: false
 # analyzer:
 #   exclude:
 #     - path/to/excluded/files/**
