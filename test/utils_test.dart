@@ -378,9 +378,9 @@ void main() {
 
   group('xorUint8List Method Test', () {
     test('Must return expected result', () {
-      final x = Uint8List.fromList([1, 2, 3]);
-      final y = Uint8List.fromList([4, 5, 6]);
-      final expected = Uint8List.fromList([5, 7, 5]);
+      final x = Uint8List.fromList([187, 23, 94, 77, 132]);
+      final y = Uint8List.fromList([49, 67, 90, 201, 15]);
+      final expected = Uint8List.fromList([138, 84, 4, 132, 139]);
       expect(Utils.xorUint8Lists(x, y), equals(expected));
     });
     test('Must throw error for different-length lists', () {
@@ -403,5 +403,22 @@ void main() {
         expect(Utils.escapeNode(node), equals('Example\\20\\2f\\20node'));
       },
     );
+  });
+
+  group('btoa Method Test', () {
+    test('Must return correct result based on input', () {
+      const input = '12345';
+      final result = Utils.btoa(input);
+      expect(result, 'MTIzNDU=');
+    });
+
+    test('Must return valid output when input is long text', () {
+      const input =
+          'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec a diam lectus. Sed sit amet ipsum mauris. Maecenas congue ligula ac quam viverra nec consectetur ante hendrerit.';
+      final result = Utils.btoa(input);
+      const expected =
+          'TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVyIGFkaXBpc2NpbmcgZWxpdC4gRG9uZWMgYSBkaWFtIGxlY3R1cy4gU2VkIHNpdCBhbWV0IGlwc3VtIG1hdXJpcy4gTWFlY2VuYXMgY29uZ3VlIGxpZ3VsYSBhYyBxdWFtIHZpdmVycmEgbmVjIGNvbnNlY3RldHVyIGFudGUgaGVuZHJlcml0Lg==';
+      expect(result, expected);
+    });
   });
 }
