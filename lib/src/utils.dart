@@ -329,12 +329,9 @@ class Utils {
   /// as creating a pure text node without the surrounding element, as it adds
   /// an extra `echo` element.
   static xml.XmlNode xmlTextNode(String text) {
-    final builder = makeGenerator();
-    builder.element('echo', nest: text);
-
     /// Finally, it builds the document using `buildDocument()` and returns the
     /// resulting `xml.XmlNode`.
-    return copyElement(builder.buildDocument().rootElement);
+    return copyElement(xml.XmlText(text));
   }
 
   /// Returns bare JID from the original JID.
@@ -604,12 +601,45 @@ class Utils {
   ///
   /// Throws an [ArgumentError] if [x] and [y] have different lengths.
   static Uint8List xorUint8Lists(Uint8List x, Uint8List y) {
-    final z = Uint8List(x.length);
-    for (var i = 0; i < x.length; i++) {
-      z[i] = x[i] ^ y[i];
+    final res = <int>[...x];
+
+    for (var i = 0; i < res.length; i++) {
+      res[i] ^= y[i];
     }
-    return z;
+    return Uint8List.fromList(res);
   }
 
+  /// Encodes a string using Base64 encoding.
+  ///
+  /// * @param input The input string to be encoded.
+  /// * @return The Base64 encoded string.
+  ///
+  /// This function encodes a string using Base64 encoding. It takes an input
+  /// string as a parameter and returns `Base64` encoded string.
+  ///
+  /// The `btoa` function internally uses `base64.encode` function to encode
+  /// the string. It first converts the input string to an array buffer using
+  /// the `stringToArrayBuffer` helper method.
+  ///
+  /// ### Example usage
+  /// ```dart
+  /// final encodedString = Utils.btoa('Hello, World!');
+  /// print(encodedString); /// Output: 'SGVsbG8sIFdvcmxkIQ=='
+  /// ```
   static String btoa(String input) => base64.encode(stringToArrayBuffer(input));
+
+  /// Decodes a `base64` encoded string.
+  ///
+  /// This function decodes a `Base64` encoded string. It takes a Base64
+  /// encoded string as a parameter and returns the decoded string.
+  ///
+  /// * @param input The base64 encoded string to be decoded.
+  /// * @return The decoded string.
+  ///
+  /// ### Example usage
+  /// ```dart
+  /// final decodedString = Utils.atob('SGVsbG8sIFdvcmxkIQ==');
+  /// print(decodedString); /// Output: 'Hello, World!'
+  /// ```
+  static String atob(String input) => utf8.decode(base64.decode(input));
 }
