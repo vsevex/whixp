@@ -1,57 +1,80 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io' as io;
 import 'dart:math' as math;
+import 'dart:typed_data';
+
+import 'package:convert/convert.dart' as convert;
+import 'package:crypto/crypto.dart' as crypto;
 
 import 'package:echo/src/builder.dart';
 import 'package:echo/src/constants.dart';
 import 'package:echo/src/log.dart';
 import 'package:echo/src/protocol.dart';
 import 'package:echo/src/sasl.dart';
-import 'package:echo/src/sasl_anon.dart';
-import 'package:echo/src/sasl_external.dart';
-import 'package:echo/src/sasl_oauthbearer.dart';
-import 'package:echo/src/sasl_plain.dart';
-import 'package:echo/src/sasl_sha1.dart';
-import 'package:echo/src/sasl_sha256.dart';
-import 'package:echo/src/sasl_sha384.dart';
-import 'package:echo/src/sasl_sha512.dart';
-import 'package:echo/src/sasl_xoauth2.dart';
 import 'package:echo/src/utils.dart';
-import 'package:echo/src/websocket.dart';
 
 import 'package:xml/xml.dart' as xml;
 
+part 'sasl_anon.dart';
+part 'sasl_external.dart';
+part 'sasl_oauthbearer.dart';
+part 'sasl_plain.dart';
+part 'sasl_sha1.dart';
+part 'sasl_sha256.dart';
+part 'sasl_sha384.dart';
+part 'sasl_sha512.dart';
+part 'sasl_xoauth2.dart';
+part 'scram.dart';
+part 'websocket.dart';
+
 class Echo {
+  /// The [Echo] class represents an XMPP client connection.
+  ///
+  /// It provides functionality for establishing a connection, handling
+  /// protocols, authentication and managing XMPP stanzas.
   Echo({
+    /// The XMPP service URL.
     required this.service,
+
+    /// Optional configuration options.
     this.options = const <String, dynamic>{},
   }) {
-    setProtocol();
+    /// Sets the communication protocol based on the provided options.
+    _setProtocol();
 
     /// The connected JID
-    jid = '';
+    _jid = '';
 
     /// The JIDs domain
-    domain = null;
+    _domain = null;
 
     /// stream:features
-    features = null;
+    // _features = null;
 
     /// SASL
-    saslData = {};
+    _saslData = {};
 
-    mechanisms = {};
+    /// Equals to null.
+    _disconnectTimeout = null;
 
-    protocolErrorHandlers = {
-      // 'HTTP': {},
-      'websocket': {},
-    };
+    /// Equal to empty map.
+    _mechanisms = {};
 
-    doAuthentication = true;
-    paused = false;
+    /// Supported protocol error handlers.
+    // _protocolErrorHandlers = {
+    //   'HTTP': {},
+    //   'websocket': {},
+    // };
 
-    maxRetries = 5;
+    /// Allows to make authentation.
+    _doAuthentication = true;
 
-    _connectionPlugins = {};
+    /// Initial value for `paused` is false.
+    _paused = false;
+
+    /// Supported connection plugins.
+    // _connectionPlugins = {};
 
     /// Initialize the start point.
     reset();
@@ -59,16 +82,15 @@ class Echo {
     /// Call onIdle callback every 1/10th of a second.
     _idleTimeout =
         Timer.periodic(const Duration(milliseconds: 100), (_) => _onIdle);
-    _disconnectTimeout = null;
 
     /// Register all available [SASL] auth mechanisms.
-    registerMechanisms();
+    _registerMechanisms();
 
     /// A client must always respond to incoming IQ 'set' or 'get' stanzas.
     ///
     /// This is a fallback handler which gets called when no other handler was
     /// called for a received IQ 'set' or 'get'.
-    _iqFallbackHandler = _Handler(
+    _iqFallbackHandler = Handler(
       handler: ([xml.XmlElement? iq]) {
         send(
           EchoBuilder.iq(
@@ -90,11 +112,170 @@ class Echo {
     /// TODO: implement plugin initialization method in this scope.
   }
 
-  /// The service URL
-  String service;
+  /// `version` constant.
+  static const version = '0.0.1';
 
-  /// Configuration options
+  /// The service URL.
+  late String service;
+
+  /// Configuration options.
   final Map<String, dynamic> options;
+
+  /// Jabber identifier of the user.
+  late String _jid;
+
+  /// Domain part of the given JID.
+  String? _domain;
+
+  /// [xml.XmlElement] type features for later assign.
+  // xml.XmlElement? _features;
+
+  /// [Protocol] which will be responsible for keeping the type of connection.
+  late Protocol _protocol;
+
+  /// Timeout for indicating when the service need to disconnect. Representing
+  /// in milliseconds.
+  late int _disconnectionTimeout;
+
+  /// Disconnect timeout in the type of [_TimedHandler].
+  _TimedHandler? _disconnectTimeout;
+
+  /// Authentication identifier of the connection.
+  late String? _authcid;
+
+  /// Authorization identity (username)
+  late String? _authzid;
+
+  // Handler? iqFallbackHandler;
+
+  /// dynamic type password. This can be either [String] or [Map].
+  dynamic _password;
+
+  /// Values can be either [String] or a [Map].
+  late final Map<String, dynamic>? _saslData;
+
+  /// Holds all available mechanisms that are supported by the server.
+  Map<String, SASL>? _mechanisms;
+
+  late bool _doAuthentication;
+  late bool _authenticated;
+  late bool _connected;
+  late bool _disconnecting;
+  late bool _paused;
+  late bool _doBind;
+  late bool _doSession;
+
+  /// Data holder for sending later on. The data it can hold is can be [String]
+  /// or [xml.XmlElement].
+  late final List _data = <dynamic>[];
+
+  /// The SASL SCRAM client and server keys. This variable will be populated
+  /// with a non-null object of the above described form after a successful
+  /// SCRAM connection.
+  // late List<String> _scramKeys = [];
+
+  /// This variable appears to be a list used to store instances of the
+  /// [Handler] class, representing XMPP stanza handlers.
+  late final List<Handler> _addHandlers = [];
+
+  /// This variable appears to be alist used to store instance of the
+  /// [Handler] class which is meant to be removed.
+  late final List<Handler> _removeHandlers = [];
+
+  /// List of [_TimedHandler]s.This list stores timed handlers. It is declared
+  /// using the `late` keyword, which means it is initialized lazily and can
+  /// be assigned a value later in the code. It is not declared as `final` due
+  /// it can be reassigned in the code later.
+  late List<_TimedHandler> _timedHandlers = [];
+
+  /// This variable is a list that stores instances of [_Handler] class. It is
+  /// declared using `late`, which means it is initialized lazily and can be
+  /// assigned a value later in code.
+  late List<Handler> _handlers = [];
+
+  /// This variable appears to be a list used to store references to timed
+  /// handlers that should be removed.
+  late final List<_TimedHandler> _removeTimeds = [];
+
+  /// The addTimeds variable appears to be a list that holds instances of
+  /// [_TimedHandler] objects. It is used to store and manage timed handlers
+  /// that have been added using the `addTimedHandler` method
+  late final List<_TimedHandler> _addTimeds = [];
+
+  /// The _idleTimeout variable is a Timer object that handles the idle timeout
+  /// functionality. The purpose of this timer is to invoke the `_onIdle`
+  /// method after a specific duration of idle time. Idle time refers to the
+  /// period during which no activity or interaction occurs.
+  late Timer _idleTimeout;
+
+  /// The selected mechanism to provide authentication.
+  late SASL? _mechanism;
+
+  /// This variable represents a function that can be assigned to handle the
+  /// connection status and related data after a connection attempt.
+  late final Function(Status, [String?, xml.XmlElement?])? _connectCallback;
+
+  /// This variable holds an instance of the [Handler] class that serves as a
+  /// fallback handler for IQ (Info/Query) stanzas.
+  ///
+  /// IQ stanzas are used for exchanging structured data between XMPP entities.
+  /// When an incoming IQ stanza is received and no other specific handler is
+  /// registered to handle it, the fallback handler is triggered.
+  ///
+  /// The purpose of the `_iqFallbackHandler` is to handle IQ stanzas that
+  /// don't have a dedicated handler assigned to them. It ensures that there is
+  /// always a response to incoming IQ stanzas, even if the specific handling
+  /// logic is not defined.
+  late final Handler _iqFallbackHandler;
+
+  /// This variable holds an instance of the [Handler] class that is responsible
+  /// for handling successful SASL (Simple Authentication and Security Layer)
+  /// authentication. It is initially set to `null`.
+  ///
+  /// SASL authentication is a mechanism used to securely authenticate clients
+  /// and servers in XMPP communication. When the SASL authentication process
+  /// succeeds, the `_saslSuccessHandler` is triggered.
+  ///
+  /// The purpose of the `_saslSuccessHandler` is to handle the successful
+  /// authentication event and perform any necessary actions or logic associated
+  /// with it, such as establishing a session or initializing further
+  /// communication.
+  late Handler? _saslSuccessHandler;
+
+  /// This variable holds an instance of the Handler class that is responsible
+  /// for handling failed SASL (Simple Authentication and Security Layer)
+  /// authentication. It is initially set to `null`.
+  ///
+  /// If the SASL authentication process fails, the `_saslFailureHandler` is
+  /// triggered. This handler allows for handling and reacting to authentication
+  /// failures, such as incorrect credentials or unsupported authentication
+  /// methods.
+  ///
+  /// The purpose of the `_saslFailureHandler` is to handle the failed
+  /// authentication event and perform any necessary actions or logic associated
+  /// with it, such as displaying an error message or taking corrective
+  /// measures.
+  late Handler? _saslFailureHandler;
+
+  /// This variable holds an instance of the Handler class that is responsible
+  /// for handling SASL (Simple Authentication and Security Layer)
+  /// authentication challenges. Defaults to `null`.
+  ///
+  /// During the SASL authentication process, challenges may be sent from the
+  /// server to the client, requiring additional information or responses. The
+  /// `_saslChallengeHandler` is triggered when such challenges are received.
+  late Handler? _saslChallengeHandler;
+
+  /// [Map] used to store protocol error handlers. It is structured as a nested
+  /// map, where the outer map is indexed by the protocol name (e.g. `HTTP`),
+  /// and the inner map is indexed by the status code associated with the error.
+  ///
+  /// Each status code is mapped to a callback function that will be invoked
+  /// when the corresponding error occurs.
+  // Map<String, dynamic>? _connectionPlugins;
+
+  /// Protocol map holder.
+  // Map<String, Map<int, Function>>? _protocolErrorHandlers;
 
   /// Handles an error by logging it as a fatal error.
   ///
@@ -124,108 +305,79 @@ class Echo {
     Log().fatal(e.toString());
   }
 
-  Protocol? protocol;
-  int? _uniqueId;
-  int? maxRetries;
-  int? disconnectionTimeout;
-  _TimedHandler? _disconnectTimeout;
-  String? jid;
-  String? domain;
-  String? authcid;
-  String? authzid;
-  // Handler? iqFallbackHandler;
-  Map<String, dynamic>? features;
-  dynamic password;
-  Map<String, dynamic>? saslData;
-  Map<String, SASL>? mechanisms;
-
-  /// [Map] used to store protocol error handlers. It is structured as a nested
-  /// map, where the outer map is indexed by the protocol name (e.g. `HTTP`),
-  /// and the inner map is indexed by the status code associated with the error.
-  ///
-  /// Each status code is mapped to a callback function that will be invoked
-  /// when the corresponding error occurs.
-  Map<String, Map<int, Function>>? protocolErrorHandlers;
-  Map<String, dynamic>? _connectionPlugins;
-  bool? authenticated;
-  bool? connected;
-  bool? disconnecting;
-  bool? doAuthentication;
-  bool? paused;
-  bool? restored;
-  bool? doBind;
-  bool? doSession;
-  List? data;
-  List? _requests;
-  List? scramKeys;
-
-  /// This variable appears to be a list used to store instances of the
-  /// [_Handler] class, representing XMPP stanza handlers.
-  List<_Handler>? addHandlers;
-
-  /// This variable appears to be alist used to store instance of the
-  /// [_Handler] class which is meant to be removed.
-  List<_Handler>? removeHandlers;
-  List<_TimedHandler>? timedHandlers;
-  List<_Handler>? handlers;
-
-  /// This variable appears to be a list used to store references to timed
-  /// handlers that should be removed.
-  List<_TimedHandler>? removeTimeds;
-
-  /// The addTimeds variable appears to be a list that holds instances of
-  /// [_TimedHandler] objects. It is used to store and manage timed handlers
-  /// that have been added using the `addTimedHandler` method
-  List<_TimedHandler>? addTimeds;
-  Timer? _idleTimeout;
-
-  /// This variable represents a function that can be assigned to handle the
-  /// connection status and related data after a connection attempt.
-  Function(Status, [String?, xml.XmlElement?])? connectCallback;
-  _Handler? _iqFallbackHandler;
-  _Handler? _saslSuccessHandler;
-  _Handler? _saslFailureHandler;
-  _Handler? _saslChallengeHandler;
-
-  /// `version` constant
-  static const version = '0.0.1';
-
   /// Select protocol based on `options` or `service`.
-  void setProtocol() {
-    final protocol = options['protocol'] ?? '';
+  ///
+  /// Sets the communication protocol based on the provided options. THis can
+  /// be `BOSH` connection (for later updates, not for now), `Websocket`, or
+  /// `WorkerWebsocket` connection.
+  void _setProtocol() {
+    /// Try to get protocol from `options`, else assign empty string.
+    final protocol = options['protocol'] as String? ?? '';
+
+    /// Check if worker Websocket implementation should be used.
     if (options['worker'] != null && options['worker'] as bool) {
-    } else if (service.startsWith('ws:') ||
+      /// TODO: implement worker web socket.
+    }
+
+    /// If not using a worker Websocket, check for websocket or secure Websocket
+    /// service.
+    else if (service.startsWith('ws:') ||
         service.startsWith('wss:') ||
-        (protocol as String).startsWith('ws')) {
-      this.protocol = Websocket(this);
+        protocol.startsWith('ws')) {
+      /// Set protocol to [Websocket].
+      _protocol = Websocket(this);
     }
   }
 
-  void addConnectionPlugin(String name, dynamic pluginType) {
-    _connectionPlugins![name] = pluginType;
-  }
+  // void addConnectionPlugin(String name, dynamic pluginType) {
+  //   _connectionPlugins![name] = pluginType;
+  // }
 
+  /// Resets the XMPP client to its initial state.
+  ///
+  /// It clears various lists, flags and data related to the client's
+  /// configuration, authentication status, connection status, and other
+  /// internal states.
   void reset() {
-    protocol!.reset();
-    doSession = false;
-    doBind = false;
+    /// Call the reset method to reset the underlying protocol implementation
+    /// (represented by _protocol) to its initial state.
+    _protocol.reset();
 
-    /// handler lists
-    timedHandlers = [];
-    handlers = [];
-    removeTimeds = [];
-    removeHandlers = [];
-    addTimeds = [];
-    addHandlers = [];
+    /// Clear [_Handler] holder list.
+    _handlers.clear();
 
-    data = [];
-    _requests = [];
-    _uniqueId = 0;
+    /// Clear the handler holder list.
+    _addHandlers.clear();
 
-    authenticated = false;
-    connected = false;
-    disconnecting = false;
-    restored = false;
+    /// Clear the handler list that need to be removed.
+    _removeHandlers.clear();
+
+    /// Clear the timed handler list.
+    _timedHandlers.clear();
+
+    /// Clear added timed handler list.
+    _addTimeds.clear();
+
+    /// Clear timed handler list which is assigned for removal later.
+    _removeTimeds.clear();
+
+    /// Clear _data list.
+    _data.clear();
+
+    /// Is authenticated or not holder. Resets to false.
+    _authenticated = false;
+
+    /// Is connected or not holder. Resets to false.
+    _connected = false;
+
+    /// Is disconnecting or not holder. Resets to false.
+    _disconnecting = false;
+
+    /// Is do bind enabled or not holder. Resets to false.
+    _doBind = false;
+
+    /// Is do session enabled or not holder. Resets to false.
+    _doSession = false;
   }
 
   /// Pause the request manager.
@@ -237,12 +389,12 @@ class Echo {
   ///
   /// This causes [Echo] to send the data in a single request, saving many
   /// request trips.
-  void pause() => paused = true;
+  void pause() => _paused = true;
 
   /// Resume the request manager.
   ///
   /// This resumes after `pause()` has been called.
-  void resume() => paused = false;
+  void resume() => _paused = false;
 
   /// Responsibility of this method is generating a unique ID for use in <iq />
   /// stanzas.
@@ -255,23 +407,23 @@ class Echo {
   ///
   /// * @param suffix A optional suffix to append to the unique id.
   /// * @return The generated unique ID.
-  String getUniqueId(dynamic suffix) {
-    /// It follows the format specified by the UUID version 4 standart.
-    final uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
-        .replaceAllMapped(RegExp('[xy]'), (match) {
-      final r = math.Random.secure().nextInt(16);
-      final v = match.group(0) == 'x' ? r : (r & 0x3 | 0x8);
-      return v.toRadixString(16);
-    });
+  // String _getUniqueId(dynamic suffix) {
+  //   /// It follows the format specified by the UUID version 4 standart.
+  //   final uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+  //       .replaceAllMapped(RegExp('[xy]'), (match) {
+  //     final r = math.Random.secure().nextInt(16);
+  //     final v = match.group(0) == 'x' ? r : (r & 0x3 | 0x8);
+  //     return v.toRadixString(16);
+  //   });
 
-    /// Check whether the provided suffix is [String] or [int], so if type is
-    /// one of them, proceed to concatting.
-    if (suffix is String || suffix is num) {
-      return '$uuid:$suffix';
-    } else {
-      return uuid;
-    }
-  }
+  //   /// Check whether the provided suffix is [String] or [int], so if type is
+  //   /// one of them, proceed to concatting.
+  //   if (suffix is String || suffix is num) {
+  //     return '$uuid:$suffix';
+  //   } else {
+  //     return uuid;
+  //   }
+  // }
 
   /// NOTE: Actually, this method does not have any meaning at the moment due the
   /// [Echo] only supports messaging through Websockets, so if there will be
@@ -292,17 +444,17 @@ class Echo {
   /// /// Triggers HTTP 500 error and onError handler will be called.
   /// connection.connect('jid@incorrect_jabber', 'secret', onConnect);
   /// ```
-  void addProtocolErrorHandler(
-    /// Dedicated protocol for handling errors. For now only can accept `HTTP`.
-    String protocol,
+  // void addProtocolErrorHandler(
+  //   /// Dedicated protocol for handling errors. For now only can accept `HTTP`.
+  //   String protocol,
 
-    /// Status code of the error.
-    int statusCode,
+  //   /// Status code of the error.
+  //   int statusCode,
 
-    /// The callback that will be executed when the error occured.
-    void Function() callback,
-  ) =>
-      protocolErrorHandlers![protocol]![statusCode] = callback;
+  //   /// The callback that will be executed when the error occured.
+  //   void Function() callback,
+  // ) =>
+  //     _protocolErrorHandlers![protocol]![statusCode] = callback;
 
   /// The main function of this class.
   ///
@@ -343,7 +495,7 @@ class Echo {
   /// * @param disconnectionTimeout The optional disconnection timeout in
   /// milliseconds before `doDisconnect` will be called.
   void connect({
-    /// User's Jabber identifier.
+    /// User's `Jabber` identifier.
     required String jid,
 
     /// The user's password.
@@ -359,42 +511,45 @@ class Echo {
     int disconnectionTimeout = 3000,
   }) {
     /// Equal gathered `jid` to global one.
-    this.jid = jid;
+    ///
+    /// Authorization identity.
+    _jid = jid;
 
     /// Authorization identity (username).
-    authzid = Utils().getBareJIDFromJID(jid);
+    // _authzid = Utils().getBareJIDFromJID(jid);
+    _authzid = 'user@xmpp.org';
 
     /// Authentication identity (user name).
-    this.authcid = authcid ?? Utils().getNodeFromJID(jid);
+    // _authcid = authcid ?? Utils().getNodeFromJID(jid);
+    _authcid = 'user';
 
     /// Authentication identity. Equal gathered `password` to global password.
-    this.password = password;
-
-    /// The SASL SCRAM client and server keys. This variable will be populated
-    /// with a non-null object of the above described form after a successful
-    /// SCRAM connection.
-    scramKeys = null;
+    // _password = password;
+    _password = 'pencil';
 
     /// Connection callback will be equal if there is one.
-    connectCallback = (status, [condition, element]) => callback!.call(status);
+    _connectCallback = (status, [condition, element]) => callback!.call(status);
 
-    /// Restore all initial values for connection.
-    disconnecting = false;
-    connected = false;
-    authenticated = false;
-    restored = false;
+    /// Make `disconnectin` false.
+    _disconnecting = false;
+
+    /// Make `authentication` false.
+    _authenticated = false;
+
+    /// Make `connected` false.
+    _connected = false;
 
     /// Make global `disconnectionTimeout` value to be equal to passed one.
-    this.disconnectionTimeout = disconnectionTimeout;
+    _disconnectionTimeout = disconnectionTimeout;
 
     /// Parse `jid` for domain.
-    domain = Utils().getDomainFromJID(jid);
+    _domain = Utils().getDomainFromJID(jid);
 
     /// Change the status of connection to `connecting`.
-    changeConnectStatus(Status.connecting, null);
+    _changeConnectStatus(Status.connecting, null);
 
     /// Build connection of the `protocol`.
-    protocol!.connect();
+    _protocol.connect();
   }
 
   /// Helper function that makes sure plugins and the user's callback are
@@ -403,7 +558,7 @@ class Echo {
   /// * @param status New connection status, one of the values of [Status] enum.
   /// * @param condition The error condition or null.
   /// * @param element The triggering stanza.
-  void changeConnectStatus(
+  void _changeConnectStatus(
     /// Status of the connection.
     Status status,
 
@@ -424,9 +579,9 @@ class Echo {
     //     }
     //   }
     // }
-    if (connectCallback != null) {
+    if (_connectCallback != null) {
       try {
-        connectCallback!.call(status, condition, element);
+        _connectCallback!.call(status, condition, element);
       } catch (error) {
         _handleError(error);
         Log().error('User connection callback caused an exception: $error');
@@ -563,7 +718,7 @@ class Echo {
     }
 
     /// Run the protocol send function to flush all the available data.
-    protocol!.send();
+    _protocol.send();
   }
 
   void _queueData(dynamic element) {
@@ -575,13 +730,13 @@ class Echo {
         throw Exception('Cannot queue empty element.');
       }
     }
-    data!.add(element);
+    _data.add(element);
   }
 
   /// Send an xmpp:restart stanza.
   void sendRestart() {
-    data!.add('restart');
-    protocol!.sendRestart();
+    _data.add('restart');
+    _protocol.sendRestart();
 
     /// Set idle timeout to 100 `milliseconds` for invocation of `_onIdle`.
     _idleTimeout = Timer(const Duration(milliseconds: 100), _onIdle);
@@ -607,7 +762,7 @@ class Echo {
     final timed = _TimedHandler(period: period, handler: handler);
 
     /// Add created [_TimedHandler] to `addTimeds` list.
-    addTimeds!.add(timed);
+    _addTimeds.add(timed);
     return timed;
   }
 
@@ -621,7 +776,7 @@ class Echo {
   void deleteTimedHandler(_TimedHandler reference) {
     /// This must be done in the Idle loop so that we do not change the handlers
     /// during iteration.
-    removeTimeds!.add(reference);
+    _removeTimeds.add(reference);
   }
 
   /// Add a stanza handler for the connection.
@@ -669,7 +824,7 @@ class Echo {
   /// * @param from The stanza from attribute to match.
   /// * @param options The handler options
   /// * @return A reference to the handler that can be used to remove it.
-  _Handler addHandler({
+  Handler addHandler({
     /// The user callback.
     String? namespace,
 
@@ -691,8 +846,8 @@ class Echo {
     /// The user callback.
     bool Function([xml.XmlElement])? handler,
   }) {
-    /// Create new [_Handler] object.
-    final hand = _Handler(
+    /// Create new [Handler] object.
+    final hand = Handler(
       handler: handler,
       name: name,
       namespace: namespace,
@@ -703,7 +858,7 @@ class Echo {
     );
 
     /// Add handlers to the list.
-    addHandlers!.add(hand);
+    _addHandlers.add(hand);
     return hand;
   }
 
@@ -714,28 +869,30 @@ class Echo {
   /// but is the reference returned from `addHandler()`.
   ///
   /// * @param reference The handler reference.
-  void deleteHandler(_Handler reference) {
-    /// Add [_Handler] reference to the list of to be removed handlers.
+  void deleteHandler(Handler reference) {
+    /// Add [Handler] reference to the list of to be removed handlers.
     ///
     /// This must be done in the Idle loop so that we do not change the
     /// handlers during iteration.
-    removeHandlers!.add(reference);
+    _removeHandlers.add(reference);
 
     /// Get the index of handler from the handler list.
-    final i = addHandlers!.indexOf(reference);
+    final i = _addHandlers.indexOf(reference);
     if (i >= 0) {
       /// Remove the dedicated handler.
-      addHandlers!.removeAt(i);
+      _addHandlers.removeAt(i);
     }
+
+    return;
   }
 
   /// Register the SASL mechanisms which will be supported by this instance of
   /// [Echo] (i.e. which this XMPP client will support).
   ///
   /// * @param mechanisms Array of objects which extend [SASL] concrete class.
-  void registerMechanisms() {
+  void _registerMechanisms() {
     /// Register variable as empty beforehand.
-    mechanisms = {};
+    _mechanisms = {};
 
     /// The list of all available authentication mechanisms.
     late final mechanismList = <SASL>[
@@ -749,13 +906,14 @@ class Echo {
       SASLSHA384(),
       SASLSHA512(),
     ];
-    mechanismList.map((mechanism) => registerSASL(mechanism)).toList();
+    mechanismList.map((mechanism) => _registerSASL(mechanism)).toList();
   }
 
   /// Register a single [SASL] mechanism, to be supported by this client.
   ///
   /// * @param mechanism SASL type auth object.
-  void registerSASL(SASL mechanism) => mechanisms![mechanism.name] = mechanism;
+  void _registerSASL(SASL mechanism) =>
+      _mechanisms![mechanism.name] = mechanism;
 
   /// Start the graceful disconnection process.
   ///
@@ -771,7 +929,7 @@ class Echo {
   /// * @param reason The reason the disconnect is occuring.
   void disconnect(String? reason) {
     /// Change the status of connection to disconnecting.
-    changeConnectStatus(Status.disconnecting, reason);
+    _changeConnectStatus(Status.disconnecting, reason);
 
     /// Log according to the `reason` value.
     if (reason != null) {
@@ -781,31 +939,35 @@ class Echo {
     }
 
     /// Proceed if [Echo] is connected to the server.
-    if (connected!) {
+    if (_connected) {
       /// Nullable `presence` decleration of the [EchoBuilder] object.
       EchoBuilder? presence;
 
-      /// Change disconnecting flag to true.
-      disconnecting = true;
+      /// Change disconnecting flag to `true`.
+      _disconnecting = true;
 
       /// Proceed if user is authenticated.
-      if (authenticated!) {
+      if (_authenticated) {
         presence = EchoBuilder.pres(
           attributes: {'xmlns': ns['CLIENT'], 'type': 'unavailable'},
         );
       }
       _disconnectTimeout = _addSystemTimedHandler(
-        disconnectionTimeout!,
+        _disconnectionTimeout,
         _onDisconnectTimeout.call,
       );
-      protocol!.disconnect(presence!.nodeTree);
+      if (presence != null) {
+        _protocol.disconnect(presence.nodeTree);
+      } else {
+        _protocol.disconnect();
+      }
     }
 
     /// Else proceed to this scope.
     else {
       Log().warn('Disconnect was called before Echo connected to the server.');
-      protocol!.abortAllRequests();
-      doDisconnect();
+      _protocol.abortAllRequests();
+      _doDisconnect();
     }
   }
 
@@ -816,11 +978,13 @@ class Echo {
   ///
   /// It takes an optional [condition] parameter which represents the reason or
   /// condition for disconnecting.
-  void doDisconnect([String? condition]) {
+  void _doDisconnect([String? condition]) {
     /// If the [_disconnectTimeout] is set, it will be canceled by calling the
     /// [deleteTimedHandler] method with the [_disconnectTimeout] as the argument.
     if (_disconnectTimeout != null) {
       deleteTimedHandler(_disconnectTimeout!);
+
+      /// After removal, make it null like the constructor do in the beginning.
       _disconnectTimeout = null;
     }
 
@@ -829,27 +993,36 @@ class Echo {
 
     /// Invokes `doDisconnect` method which is declared as [Protocol] object
     /// method.
-    protocol!.doDisconnect();
+    _protocol.doDisconnect();
 
     /// Resetting internal flags and variables.
-    authenticated = false;
-    disconnecting = false;
-    restored = false;
+    _authenticated = false;
+    _disconnecting = false;
 
-    /// Clearing lists.
-    handlers = [];
-    timedHandlers = [];
-    removeTimeds = [];
-    removeHandlers = [];
-    addTimeds = [];
-    addHandlers = [];
+    /// Clear Handler holder list.
+    _handlers.clear();
+
+    /// Clear handlers list.
+    _addHandlers.clear();
+
+    /// Clear handlers list which need to be removed.
+    _removeHandlers.clear();
+
+    /// Clear timed handler stored list.
+    _timedHandlers.clear();
+
+    /// Clear added timed handlers list.
+    _addTimeds.clear();
+
+    /// Clear timed handler stored list for removal.
+    _removeTimeds.clear();
 
     /// Change connection status of the server to disconnecting to indicate that
     /// the process is in the state of disconnecting.
-    changeConnectStatus(Status.disconnected, condition);
+    _changeConnectStatus(Status.disconnected, condition);
 
     /// Finally, make connected property false.
-    connected = false;
+    _connected = false;
   }
 
   /// Handler to processes incoming data from the connection.
@@ -860,12 +1033,12 @@ class Echo {
   ///
   /// * @param request The request that has data ready
   /// * @param raw The stanza as a raw string (optional)
-  void dataRecv(xml.XmlElement request, [String? raw]) {
+  void _dataReceived(xml.XmlElement request, [String? raw]) {
     print(request);
-    final element = protocol!.reqToData(request);
+    final element = _protocol.reqToData(request);
     if (element == null) return;
 
-    if (element.name.local == protocol!.strip && element.children.isNotEmpty) {
+    if (element.name.local == _protocol.strip && element.children.isNotEmpty) {
       xmlInput(element.children[0]);
     } else {
       xmlInput(element);
@@ -878,29 +1051,29 @@ class Echo {
     }
 
     /// Remove handlers scheduled for deletion.
-    while (removeHandlers!.isNotEmpty) {
-      final hand = removeHandlers!.removeLast();
-      final i = handlers!.indexOf(hand);
+    while (_removeHandlers.isNotEmpty) {
+      final hand = _removeHandlers.removeLast();
+      final i = _handlers.indexOf(hand);
       if (i >= 0) {
-        handlers!.removeAt(i);
+        _handlers.removeAt(i);
       }
     }
 
     /// Add handlers scheduled for deletion.
-    while (addHandlers!.isNotEmpty) {
-      handlers!.add(addHandlers!.removeLast());
+    while (_addHandlers.isNotEmpty) {
+      _handlers.add(_addHandlers.removeLast());
     }
 
     /// Handle graceful disconnect
-    if (disconnecting!) {
-      doDisconnect();
+    if (_disconnecting) {
+      _doDisconnect();
       return;
     }
 
     final type = element.getAttribute('type');
     if (type != null && type == 'terminate') {
       /// Do not process stanzas that come in after disconnect.
-      if (disconnecting!) {
+      if (_disconnecting) {
         return;
       }
 
@@ -912,44 +1085,47 @@ class Echo {
             conflict!.childElements.isNotEmpty) {
           condition = 'conflict';
         }
-        changeConnectStatus(Status.connfail, condition);
+        _changeConnectStatus(Status.connfail, condition);
       } else {
-        changeConnectStatus(Status.connfail, errorCondition['UNKNOWN_REASON']);
+        _changeConnectStatus(Status.connfail, errorCondition['UNKNOWN_REASON']);
       }
-      doDisconnect(condition);
+      _doDisconnect(condition);
       return;
     }
 
     /// Send each incoming stanza through the handler chain.
     Utils.forEachChild(element, null, (child) {
       final matches = [];
-      handlers = handlers!.fold<List<_Handler>>(<_Handler>[],
-          (List<_Handler> handlers, _Handler handler) {
+      _handlers = _handlers.where((handler) {
         try {
-          if (handler.isMatch(child) && (authenticated! || !handler.user)) {
+          if (handler.isMatch(child) && (_authenticated || !handler.user)) {
             if (handler.run(child)!) {
-              handlers.add(handler);
+              return true;
             }
             matches.add(handler);
           } else {
-            handlers.add(handler);
+            return true;
           }
-        } catch (e) {
+        } catch (error) {
+          /// If the handler throws an exception, we consider it as false.
+          ///
           // if the handler throws an exception, we consider it as false
-          Log().warn('Removing Echo handlers due to uncaught exception: $e');
+          Log()
+              .warn('Removing Echo handlers due to uncaught exception: $error');
         }
-        return handlers;
-      });
+        return false;
+      }).toList();
 
       /// If no handler was fired for an incoming IQ with type='set', then we
       /// return an IQ error stanza with `service-unavailable`.
-      if (matches.isEmpty && _iqFallbackHandler!.isMatch(child)) {
-        print('salam');
-        _iqFallbackHandler!.run(child);
+      if (matches.isEmpty && _iqFallbackHandler.isMatch(child)) {
+        _iqFallbackHandler.run(child);
       }
     });
   }
 
+  /// Private binding method.
+  ///
   /// Sends an IQ to the XMPP server to bind a JID resource for this session.
   ///
   /// https://tools.ietf.org/html/rfc6120#section-7.5
@@ -960,8 +1136,8 @@ class Echo {
   ///
   /// Otherwise it will be called automatically as soon as the XMPP server
   /// advertises the 'urn:ietf:params:xml:ns:xmpp-bind' stream feature.
-  void bind() {
-    if (!doBind!) {
+  void _bind() {
+    if (_doBind) {
       Log().info('Echo bind called but "do_bind" is false');
       return;
     }
@@ -969,7 +1145,7 @@ class Echo {
       handler: ([xml.XmlElement? element]) => _onResourceBindResultIQ(element!),
       id: 'session_auth_2',
     );
-    final resource = Utils().getResourceFromJID(jid!);
+    final resource = Utils().getResourceFromJID(_jid);
     if (resource != null) {
       send(
         EchoBuilder.iq(
@@ -1001,52 +1177,54 @@ class Echo {
       if (conflict != null) {
         condition = errorCondition['CONFLICT'];
       }
-      changeConnectStatus(Status.authFail, condition);
+      _changeConnectStatus(Status.authFail, condition);
       return false;
     }
     final bind = element.getElement('bind');
     if (bind != null) {
       final jidNode = bind.getElement('jid');
       if (jidNode != null) {
-        authenticated = true;
-        jid = Utils.getText(element);
-        if (doSession!) {
+        _authenticated = true;
+        _jid = Utils.getText(element);
+        if (_doSession) {
           _establishSession();
         } else {
-          changeConnectStatus(Status.connected, null);
+          _changeConnectStatus(Status.connected, null);
         }
       }
     } else {
       Log().warn('Resource binding failed.');
-      changeConnectStatus(Status.authFail, null, element);
+      _changeConnectStatus(Status.authFail, null, element);
       return false;
     }
     return false;
   }
 
+  /// Private `connectCB` method.
+  ///
   /// SASL authentication will be attempted if available, otherwise the code
   /// will fall back to legaacy authentication.
   ///
   /// * @param request The current request
   /// * @param callback Low level (xmpp) connect callback function.
-  void connectCB(
+  void _connectCB(
     xml.XmlElement request,
     void Function(Echo)? callback, [
     String? raw,
   ]) {
     Log().log('connectCB was called');
-    connected = true;
+    _connected = true;
 
     xml.XmlElement? bodyWrap;
     try {
-      bodyWrap = protocol!.reqToData(request);
+      bodyWrap = _protocol.reqToData(request);
     } catch (error) {
-      changeConnectStatus(Status.connfail, errorCondition['BAD_FORMAT']);
-      doDisconnect(errorCondition['BAD_FORMAT']);
+      _changeConnectStatus(Status.connfail, errorCondition['BAD_FORMAT']);
+      _doDisconnect(errorCondition['BAD_FORMAT']);
     }
 
     if (bodyWrap == null) return;
-    if (bodyWrap.name.qualified == protocol!.strip &&
+    if (bodyWrap.name.qualified == _protocol.strip &&
         bodyWrap.children.isNotEmpty) {
       xmlInput(bodyWrap.children.first);
     } else {
@@ -1059,7 +1237,7 @@ class Echo {
       rawInput(Utils.serialize(bodyWrap));
     }
 
-    final connectionCheck = protocol!.connectCB(bodyWrap);
+    final connectionCheck = _protocol.connectCB(bodyWrap);
     if (connectionCheck == status[Status.connfail]) {
       return;
     }
@@ -1071,13 +1249,13 @@ class Echo {
             bodyWrap.findAllElements('features').toList().isNotEmpty;
 
     if (!hasFeatures) {
-      protocol!.nonAuth(callback);
+      _protocol.nonAuth(callback);
       return;
     }
 
     final matched = List.from(bodyWrap.findAllElements('mechanism'))
         .map(
-          (mechanism) => mechanisms![(mechanism as xml.XmlElement).innerText],
+          (mechanism) => _mechanisms![(mechanism as xml.XmlElement).innerText],
         )
         .where((element) => element != null)
         .toList();
@@ -1089,14 +1267,14 @@ class Echo {
           .isEmpty) {
         /// There are no matching SASL mechanisms and also no legacy auth
         /// available.
-        protocol!.nonAuth(callback);
+        _protocol.nonAuth(callback);
         return;
       }
     }
-    if (doAuthentication!) authenticate(matched);
+    if (_doAuthentication) _authenticate(matched);
   }
 
-  void authenticate(List<SASL?> mechanisms) {
+  void _authenticate(List<SASL?> mechanisms) {
     if (!_attemptSASLAuth(mechanisms)) {
       _attemptLegacyAuth();
     }
@@ -1104,7 +1282,7 @@ class Echo {
 
   /// Sorts a list of objects with prototype SASLMechanism according to their
   /// properties.
-  List<SASL?> sortMechanismsByPriority(List<SASL?> mechanisms) {
+  List<SASL?> _sortMechanismsByPriority(List<SASL?> mechanisms) {
     /// Iterate over all the available mechanisms.
     for (int i = 0; i < mechanisms.length - 1; i++) {
       int higher = i;
@@ -1129,12 +1307,11 @@ class Echo {
   /// * @return [bool] true or false, depending on whether a valid SASL
   /// mechanism was found with which authentication could be started.
   bool _attemptSASLAuth(List<SASL?> mechanisms) {
-    final mechs = sortMechanismsByPriority(mechanisms);
+    final mechs = _sortMechanismsByPriority(mechanisms);
     bool mechanismFound = false;
-    SASL mechanism;
     for (int i = 0; i < mechs.length; i++) {
       mechanisms[i]!.connection = this;
-      if (mechs[i]!.test()) {
+      if (!mechs[i]!.test()) {
         continue;
       }
       _saslSuccessHandler = _addSystemHandler(
@@ -1143,21 +1320,22 @@ class Echo {
       );
       _saslFailureHandler = _addSystemHandler(
         name: 'failure',
-        handler: ([xml.XmlElement? element]) => _saslFailureCB(element!),
+        handler: ([xml.XmlElement? element]) => _saslFailureCB(element),
       );
       _saslChallengeHandler = _addSystemHandler(
         name: 'challenge',
         handler: ([xml.XmlElement? element]) => _saslChallengeCB(element!),
       );
 
-      mechanism = mechanisms[i]!;
+      _mechanism = mechanisms[i];
 
       final requestAuthExchange = EchoBuilder('auth', {
         'xmlns': ns['SASL'],
-        'mechanism': mechanism.name,
+        'mechanism': _mechanism!.name,
       });
-      if (mechanism.isClientFirst!) {
-        final response = mechanism.clientChallenge();
+      if (_mechanism!.isClientFirst!) {
+        final response =
+            _mechanism!.clientChallenge(testCNonce: 'fyko+d2lbbFgONRv9qkxdawL');
         requestAuthExchange.t(Utils.btoa(response));
       }
       send(requestAuthExchange);
@@ -1168,18 +1346,27 @@ class Echo {
   }
 
   bool _saslChallengeCB(xml.XmlElement element) {
-    print('sasl challenge cb');
+    final challenge = Utils.atob(Utils.getText(element));
+    final response = _mechanism?.onChallenge(
+        challenge:
+            'r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j,s=QSXCR+Q6sek8bf92,i=4096');
+    print(response);
+    final stanza = EchoBuilder('response', {'xmlns': ns['SASL']});
+    if (response!.isNotEmpty) {
+      stanza.t(Utils.btoa(response));
+    }
+    print(stanza);
+    send(stanza.nodeTree);
 
-    /// TODO: implement this function;
-    return false;
+    return true;
   }
 
   void _attemptLegacyAuth() {
-    if (Utils().getNodeFromJID(jid!) == null) {
-      changeConnectStatus(Status.connfail, errorCondition['MISSING_JID_NODE']);
+    if (Utils().getNodeFromJID(_jid) == null) {
+      _changeConnectStatus(Status.connfail, errorCondition['MISSING_JID_NODE']);
       disconnect(errorCondition['MISSING_JID_NODE']);
     } else {
-      changeConnectStatus(Status.authenticating, null);
+      _changeConnectStatus(Status.authenticating, null);
       _addSystemHandler(
         handler: ([xml.XmlElement? element]) => _onLegacyAuthIQResult(),
         id: '_auth_1',
@@ -1187,11 +1374,15 @@ class Echo {
 
       send(
         EchoBuilder.iq(
-          attributes: {'type': 'get', 'to': domain, 'id': '_auth_1'},
+          attributes: {'type': 'get', 'to': _domain, 'id': '_auth_1'},
         )
             .c('query', attributes: {'xmlns': ns['AUTH']!})
-            .c('username')
-            .t(Utils().getNodeFromJID(jid!)!),
+            .c(
+              'username',
+              attributes: {},
+            )
+            .t(Utils().getNodeFromJID(_jid)!)
+            .nodeTree,
       );
     }
   }
@@ -1203,23 +1394,23 @@ class Echo {
   /// * @param element The stanza that triggered the callback.
   /// * @return false to remove the handler.
   bool _onLegacyAuthIQResult() {
+    /// Generate IQ stanza with the id of `_auth_2`.
     final iq = EchoBuilder.iq(
       attributes: {'type': 'set', 'id': '_auth_2'},
     )
         .c('query', attributes: {'xmlns': ns['AUTH']!})
         .c('username')
-        .t(Utils().getNodeFromJID(jid!)!)
+        .t(Utils().getNodeFromJID(_jid)!)
         .up()
         .c('password')
-        .t(password as String);
+        .t(_password as String);
 
-    if (Utils().getResourceFromJID(jid!) == null) {
+    if (Utils().getResourceFromJID(_jid) == null) {
       /// Since the user has not supplied a resource, we pick a default one
       /// here. Unlike other auth methods, the server cannot do this for us.
-      jid = '${Utils().getBareJIDFromJID(jid!)}/echo';
+      _jid = '${Utils().getBareJIDFromJID(_jid)}/echo';
     }
-    iq.up().c('resource').t(Utils().getResourceFromJID(jid!)!);
-
+    iq.up().c('resource', attributes: {}).t(Utils().getResourceFromJID(_jid)!);
     _addSystemHandler(
       handler: ([xml.XmlElement? element]) => _auth2CB(element!),
       id: '_auth_2',
@@ -1228,29 +1419,153 @@ class Echo {
     return false;
   }
 
+  /// Private handler for successful SASL authentication.
+  ///
+  /// This function is invoked when the SASL authentication process succeeds.
+  /// It performs additional checks on the server signature (if available) and
+  /// handles the necessary cleanup and further steps after successful
+  /// authentication.
+  ///
+  /// * @param element The matching stanza.
+  /// * @return false to remove the handler.
   bool _saslSuccessCB(xml.XmlElement? element) {
-    print('sasl success cb');
+    print('success');
 
-    /// TODO: implement this function;
+    /// Check server signature (if available). By decoding the success message
+    /// and extracting the server signature attribute. If the server signature
+    /// is invalid, it invokes the SASL failure callback, cleans up the relevant
+    /// handlers, and returns false.
+    if (_saslData!['server-signature'] != null) {
+      String? serverSignature;
+      final success = Utils.btoa(Utils.getText(element!));
+      final attribute = RegExp(r'([a-z]+)=([^,]+)(,|$)');
+      final matches = attribute.allMatches(success);
+      for (final match in matches) {
+        if (match.group(1) == 'v') {
+          serverSignature = match.group(2);
+        }
+      }
+
+      /// Check if server signature is valid.
+      if (serverSignature != null &&
+          serverSignature != _saslData!['server-signature']) {
+        /// Remove old handlers
+        deleteHandler(_saslFailureHandler!);
+
+        /// Make failure handler null.
+        _saslFailureHandler = null;
+
+        /// Cleanup challenge handler.
+        if (_saslChallengeHandler != null) {
+          deleteHandler(_saslChallengeHandler!);
+          _saslChallengeHandler = null;
+        }
+
+        /// Clear sasl data.
+        _saslData!.clear();
+        return _saslFailureCB();
+      }
+    }
+
+    /// If the server signature is valid, it logs the successful SASL
+    /// authentication and invokes the onSuccess callback for the specific SASL
+    /// mechanism.
+    Log().info('SASL authentication succeed');
+
+    /// Invoke onSuccess callback for the specific mechanism.
+    if (_mechanism != null) {
+      _mechanism?.onSuccess();
+    }
+
+    /// Remove old handlers
+    deleteHandler(_saslFailureHandler!);
+    _saslFailureHandler = null;
+    if (_saslChallengeHandler != null) {
+      deleteHandler(_saslChallengeHandler!);
+      _saslChallengeHandler = null;
+    }
+    final streamFeatureHandlers = <Handler>[];
+
+    /// Wrapper function to handle stream features after SASL authentication.
+    bool wrapper(List<Handler> handlers, xml.XmlElement element) {
+      while (handlers.isNotEmpty) {
+        deleteHandler(handlers.removeLast());
+      }
+      _onStreamFeaturesAfterSASL(element);
+      return false;
+    }
+
+    /// Add system handlers for stream:features.
+    streamFeatureHandlers.add(
+      _addSystemHandler(
+        handler: ([xml.XmlElement? element]) =>
+            wrapper(streamFeatureHandlers, element!),
+        name: 'stream:features',
+      ),
+    );
+
+    /// Add system handlers for features.
+    streamFeatureHandlers.add(
+      _addSystemHandler(
+        handler: ([xml.XmlElement? element]) =>
+            wrapper(streamFeatureHandlers, element!),
+        namespace: ns['STREAM'],
+        name: 'features',
+      ),
+    );
+
+    /// In the end, must send xmpp:restart
+    sendRestart();
     return false;
   }
 
-  void _onStreamFeaturesAfterSASL() {}
+  bool _onStreamFeaturesAfterSASL(xml.XmlElement element) {
+    // _features = element;
+    for (int i = 0; i < element.descendantElements.length; i++) {
+      final child = element.descendantElements.toList()[i];
+      if (child.name.local == 'bind') {
+        _doBind = true;
+      }
+      if (child.name.local == 'session') {
+        _doSession = true;
+      }
+    }
+    if (_doBind) {
+      _changeConnectStatus(Status.authFail, null);
+      return false;
+    } else if ((options['explicitResourceBinding'] as bool) != true) {
+      _bind();
+    } else {
+      _changeConnectStatus(Status.bindRequired, null);
+    }
+    return false;
+  }
+
   void _establishSession() {}
   void _onSessionResultIQ() {}
-  bool _saslFailureCB(xml.XmlElement element) {
-    print('sasl failure cb');
 
-    /// TODO: implement this function;
+  bool _saslFailureCB([xml.XmlElement? element]) {
+    if (_saslChallengeHandler != null) {
+      deleteHandler(_saslChallengeHandler!);
+      _saslChallengeHandler = null;
+    }
+    if (_saslSuccessHandler != null) {
+      deleteHandler(_saslSuccessHandler!);
+      _saslSuccessHandler = null;
+    }
+    if (_mechanism != null) {
+      _mechanism?.onFailure();
+    }
+    _changeConnectStatus(Status.authFail, null, element);
     return false;
   }
 
   bool _auth2CB(xml.XmlElement element) {
     if (element.getAttribute('type') == 'result') {
-      authenticated = true;
-      changeConnectStatus(Status.connected, null);
+      _authenticated = true;
+      _changeConnectStatus(Status.connected, null);
     } else if (element.getAttribute('type') == 'error') {
-      changeConnectStatus(Status.authFail, null, element);
+      _changeConnectStatus(Status.authFail, null, element);
       disconnect('Authenticated failed');
     }
     return false;
@@ -1266,25 +1581,25 @@ class Echo {
   /// ready and keep poll request going.
   void _onIdle() {
     /// Add timed handlers scheduled for addition
-    while (addTimeds!.isNotEmpty) {
-      timedHandlers!.add(addTimeds!.removeLast());
+    while (_addTimeds.isNotEmpty) {
+      _timedHandlers.add(_addTimeds.removeLast());
     }
 
     /// Remove timed handlers that have been scheduled for removal.
-    while (removeTimeds!.isNotEmpty) {
-      final handler = removeTimeds!.removeLast();
-      final i = timedHandlers!.indexOf(handler);
+    while (_removeTimeds.isNotEmpty) {
+      final handler = _removeTimeds.removeLast();
+      final i = _timedHandlers.indexOf(handler);
       if (i >= 0) {
-        timedHandlers!.removeAt(i);
+        _timedHandlers.removeAt(i);
       }
     }
 
     /// Call ready timed handlers
     final now = DateTime.now();
     final newbie = <_TimedHandler>[];
-    for (int i = 0; i < timedHandlers!.length; i++) {
-      final timed = timedHandlers![i];
-      if (authenticated! || !timed.user) {
+    for (int i = 0; i < _timedHandlers.length; i++) {
+      final timed = _timedHandlers[i];
+      if (_authenticated || !timed.user) {
         final since = timed.lastCalled!.millisecondsSinceEpoch + timed.period;
         if (since - now.millisecondsSinceEpoch <= 0) {
           if (timed.run()) {
@@ -1295,12 +1610,12 @@ class Echo {
         }
       }
     }
-    timedHandlers = newbie;
-    _idleTimeout?.cancel();
-    protocol!.onIdle();
+    _timedHandlers = newbie;
+    _idleTimeout.cancel();
+    _protocol.onIdle();
 
     /// Reactivate the timer only if connected
-    if (connected!) {
+    if (_connected) {
       _idleTimeout = Timer(const Duration(milliseconds: 100), () => _onIdle());
     }
   }
@@ -1320,13 +1635,13 @@ class Echo {
     timed.user = false;
 
     /// Add created handler to the list of timed handlers.
-    addTimeds!.add(timed);
+    _addTimeds.add(timed);
     return timed;
   }
 
   /// Private method to add a system level stanza handler.
   ///
-  /// This function is used to add [_Handler] for the library code. System
+  /// This function is used to add [Handler] for the library code. System
   /// stanza handlers are allowed to run before authentication is complete.
   ///
   /// * @param handler The callback function.
@@ -1334,7 +1649,7 @@ class Echo {
   /// * @param name The stanza name to match.
   /// * @param type The stanza type attribute to match.
   /// * @param id The stanza id attribute to match.
-  _Handler _addSystemHandler({
+  Handler _addSystemHandler({
     /// The user callback.
     String? namespace,
 
@@ -1350,8 +1665,8 @@ class Echo {
     /// The user callback.
     bool Function([xml.XmlElement])? handler,
   }) {
-    /// Create [_Handler] for passing to the system handler list.
-    final hand = _Handler(
+    /// Create [Handler] for passing to the system handler list.
+    final hand = Handler(
       handler: handler,
       namespace: namespace,
       name: name,
@@ -1362,8 +1677,8 @@ class Echo {
     /// Equal to false for indicating that this is system handler.
     hand.user = false;
 
-    /// Add created [_Handler] to the list.
-    addHandlers!.add(hand);
+    /// Add created [Handler] to the list.
+    _addHandlers.add(hand);
 
     return hand;
   }
@@ -1380,8 +1695,8 @@ class Echo {
 ///
 /// Users will not use Handlers directly, instead they will use
 /// `Echo.addHandler()` or `Echo.deleteHandler()` method.
-class _Handler {
-  _Handler({
+class Handler {
+  Handler({
     /// The function to handle the XMPP stanzas.
     this.handler,
 
@@ -1469,7 +1784,7 @@ class _Handler {
   /// Retrieves the namespacce of an XML element.
   String? getNamespace(xml.XmlElement element) {
     /// Defaults to the attribute of `xlmns`.
-    String? namespace = element.getAttribute('xlmns');
+    String? namespace = element.getAttribute('xmlns');
 
     /// If not null and the options contain dedicated param, then split `#` sign
     /// from `namespace`.
@@ -1491,7 +1806,7 @@ class _Handler {
     /// If null then return true that namespace matches.
     if (namespace == null) return true;
     Utils.forEachChild(element, null, (node) {
-      if (getNamespace(element) == namespace) {
+      if (getNamespace(node) == namespace) {
         isNamespaceMatches = true;
       }
     });
@@ -1534,14 +1849,15 @@ class _Handler {
     bool? result;
     try {
       result = handler!.call(element);
-    } catch (e) {
-      Echo._handleError(e);
+    } catch (error) {
+      return false;
     }
     return result;
   }
 
   @override
-  String toString() => '{Handler: $handler ($name, $id, $namespace)}';
+  String toString() =>
+      '{Handler: $handler (name: $name, id: $id, namespace: $namespace type: $type options: $options)}';
 }
 
 /// Private helper class for managing timed handlers.
