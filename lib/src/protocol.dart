@@ -1,4 +1,5 @@
-import 'package:echo/echo.dart';
+import 'package:echo/src/echo.dart';
+
 import 'package:xml/xml.dart' as xml;
 
 abstract class Protocol {
