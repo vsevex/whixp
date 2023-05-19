@@ -1,5 +1,4 @@
-import 'package:echo/src/sasl.dart';
-import 'package:echo/src/scram.dart';
+part of 'echo.dart';
 
 /// The [SASLSHA384] class is a concrete implementation of the [SASL] abstract
 /// class, which provides a framework for implementing different SASL
@@ -24,7 +23,7 @@ class SASLSHA384 extends SASL {
   /// identity) is not null. If it is null, it returns false, indicating that
   /// this SASL mechanism cannot be used for authentication.
   @override
-  bool test() => connection!.authcid != null;
+  bool test() => connection!._authcid != null;
 
   /// The `onChallenge` method is called when the server sends a challenge to
   /// the client. This method uses the [Scram] utility class to generate a
@@ -33,7 +32,7 @@ class SASLSHA384 extends SASL {
   /// length (384 bits).
   @override
   String onChallenge({String? challenge}) =>
-      Scram().scramResponse(connection!, challenge!, 'SHA-384', 384)!;
+      Scram().scramResponse(connection!, challenge, 'SHA-384', 384)!;
 
   /// This method generates and returns the client's first message. It uses the
   /// [Scram] utility class to generate the message using the `clientChallenge`

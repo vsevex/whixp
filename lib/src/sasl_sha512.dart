@@ -1,5 +1,4 @@
-import 'package:echo/src/sasl.dart';
-import 'package:echo/src/scram.dart';
+part of 'echo.dart';
 
 /// This class is a sub-class of the [SASL] class and provides a `Secure
 /// Challenge Response Authentication Mechanism` (SCRAM) implementation for the
@@ -20,12 +19,12 @@ class SASLSHA512 extends SASL {
 
   /// Checks whether the SASL mechanism can be used for authentication.
   @override
-  bool test() => connection!.authcid != null;
+  bool test() => connection!._authcid != null;
 
   /// Generates a SCRAM response to the server's challenge.
   @override
   String onChallenge({String? challenge}) =>
-      Scram().scramResponse(connection!, challenge!, 'SHA-512', 512)!;
+      Scram().scramResponse(connection!, challenge, 'SHA-512', 512)!;
 
   /// Generates the client's first message in the authentication process.
   @override

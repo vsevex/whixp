@@ -1,5 +1,4 @@
-import 'package:echo/src/sasl.dart';
-import 'package:echo/src/utils.dart';
+part of 'echo.dart';
 
 /// This class represents the implementation of the SASL OAuthBearer
 /// authentication mechanism. It extend sthe `SASL` class and overrides its
@@ -26,7 +25,7 @@ class SASLOAuthBearer extends SASL {
   /// the `password` property of the `connection` object is not null, indicating
   /// that the client has provided its credentials.
   @override
-  bool test() => connection!.password != null;
+  bool test() => connection!._password != null;
 
   /// Returns a string containing the authentication information to be sent to
   /// the server. The authentication information is in the format of an OAUTH2
@@ -36,13 +35,13 @@ class SASLOAuthBearer extends SASL {
   @override
   String onChallenge({String? challenge}) {
     String auth = 'n,';
-    if (connection!.authcid != null) {
-      auth = '${auth}a=${connection!.authzid}';
+    if (connection!._authcid != null) {
+      auth = '${auth}a=${connection!._authzid}';
     }
     auth = '$auth,';
     auth = '$auth\u0001';
     auth = '${auth}auth=Bearer';
-    auth = '$auth${connection!.password}';
+    auth = '$auth${connection!._password}';
     auth = '$auth\u0001';
     auth = '$auth\u0001';
 

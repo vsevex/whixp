@@ -1,5 +1,4 @@
-import 'package:echo/src/sasl.dart';
-import 'package:echo/src/utils.dart';
+part of 'echo.dart';
 
 /// Provides authentication using an OAuth2 token.
 class SASLXOAuth2 extends SASL {
@@ -20,7 +19,7 @@ class SASLXOAuth2 extends SASL {
   /// credentials have been set. In this case, it returns true if the password
   /// property of the connection object is not null.
   @override
-  bool test() => connection!.password != null;
+  bool test() => connection!._password != null;
 
   /// A method that generates the response for a given challenge. In this case,
   /// it constructs a string that contains the authorization identity (if set),
@@ -29,11 +28,11 @@ class SASLXOAuth2 extends SASL {
   @override
   String onChallenge({String? challenge}) {
     String auth = '\u0000';
-    if (connection!.authcid != null) {
-      auth += connection!.authzid!;
+    if (connection!._authcid != null) {
+      auth += connection!._authzid!;
     }
     auth += '\u0000';
-    auth += connection!.password.toString();
+    auth += connection!._password.toString();
 
     /// The string is then converted from UTF-16 to UTF-8 format and returned
     /// as the response.

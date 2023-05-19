@@ -18,7 +18,8 @@ abstract class SASL {
   /// without receiving a challenge from the server.
   final bool? isClientFirst;
 
-  Echo? connection;
+  /// Connection late initializer.
+  late Echo? connection;
 
   /// A [bool] method indicating whether the SASL mechanism is able to run.
   ///

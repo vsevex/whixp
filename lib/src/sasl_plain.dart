@@ -1,5 +1,4 @@
-import 'package:echo/src/sasl.dart';
-import 'package:echo/src/utils.dart';
+part of 'echo.dart';
 
 /// Implements the PLAIN SASL authentication mechanism.
 class SASLPlain extends SASL {
@@ -21,7 +20,7 @@ class SASLPlain extends SASL {
   /// Returns `true` if the client credentials are available for authentication,
   /// `false` otherwise.
   @override
-  bool test() => connection!.authcid != null;
+  bool test() => connection!._authcid != null;
 
   /// Generates a response to a SASL challenge.
   ///
@@ -29,17 +28,17 @@ class SASLPlain extends SASL {
   /// `challenge` - The challenge from the server.
   @override
   String onChallenge({String? challenge}) {
-    if (connection!.domain == null) {
+    if (connection!._domain == null) {
       throw Exception('SASLPlain onChallenge: domain is not defined!');
     }
-    String auth =
-        (connection!.authzid != '${connection!.authcid}@${connection!.domain}')
-            ? connection!.authzid!
-            : '';
+    String auth = (connection!._authzid !=
+            '${connection!._authcid}@${connection!._domain}')
+        ? connection!._authzid!
+        : '';
     auth = '$auth\u0000';
-    auth = '$auth${connection!.authcid}';
+    auth = '$auth${connection!._authcid}';
     auth = '$auth\u0000';
-    auth = '$auth${connection!.password}';
+    auth = '$auth${connection!._password}';
     return Utils.utf16to8(auth);
   }
 }

@@ -1,4 +1,4 @@
-import 'package:echo/src/sasl.dart';
+part of 'echo.dart';
 
 /// The `EXTERNAL` mechanism allows a client to request the server to use
 /// credentials established by means external to the mechanism to authenticate
@@ -27,8 +27,8 @@ class SASLExternal extends SASL {
     ///
     /// To NOT send the `authzid`, the user should therefore set the `authcid`
     /// equal to the JID when instantiating a new [Echo] object.
-    return connection!.authcid == connection!.authzid
+    return connection!._authcid == connection!._authzid
         ? ''
-        : connection!.authzid!;
+        : connection!._authzid!;
   }
 }

@@ -1,4 +1,4 @@
-import 'package:echo/src/sasl.dart';
+part of 'echo.dart';
 
 /// This class extends the `SASL` and implements test method to check if
 /// authentication mechanism is able to run. This class implements `SASL
@@ -7,7 +7,7 @@ import 'package:echo/src/sasl.dart';
 class SASLAnonymous extends SASL {
   /// Constructs a new instance of the `SASLAnonymous` class with the specified
   /// `mechanism`, `client-first` flag and `priority`.
-  SASLAnonymous( {
+  SASLAnonymous({
     /// Equals mechanism name to `ANONYMOUS`.
     super.name = 'ANONYMOUS',
 
@@ -24,7 +24,7 @@ class SASLAnonymous extends SASL {
   /// is able to run.
   @override
   bool test() {
-    connection!.authcid = null;
+    connection!._authcid = null;
     return super.test();
   }
 }
