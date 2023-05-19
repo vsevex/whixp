@@ -1,12 +1,4 @@
-import 'dart:math' as math;
-
-import 'dart:typed_data';
-
-import 'package:echo/src/echo.dart';
-import 'package:echo/src/log.dart';
-import 'package:echo/src/utils.dart';
-
-import 'package:pointycastle/export.dart';
+part of 'echo.dart';
 
 /// [Scram] is a singleton class used for the SCRAM (Saited Challenge Response
 /// Authentication Mechanism) authentication in the XMPP protocol. It has a
@@ -35,10 +27,8 @@ class Scram {
     /// The key to be used in the HMAC operation
     Uint8List clientKey,
   ) {
-    final storedKey = HMac(_getDigest(hashName), clientKey.length)
-      ..init(KeyParameter(clientKey));
-
-    final signature = storedKey.process(Utils.stringToArrayBuffer(message));
+    final storedKey = convert.hex.encode(clientKey);
+    final signature = _hmacSha1(storedKey, message);
 
     return Utils.xorUint8Lists(clientKey, signature);
   }
@@ -95,7 +85,7 @@ class Scram {
     /// return `null`.
     if (iter == null || iter < 4096) {
       Log().warn(
-        'Failing SCRAM autnentication because server supplied iteration count < 4096.',
+        'Failing SCRAM authentication because server supplied iteration count < 4096.',
       );
       return null;
     }
@@ -126,48 +116,119 @@ class Scram {
   /// [Uint8List]s.
   Map<String, Uint8List> deriveKeys({
     required String password,
-    required int iterations,
-    required int hashBits,
     required String hashName,
     required Uint8List salt,
+    required int iterations,
+    required int hashBits,
   }) {
     final hash = _getDigest(hashName);
 
+    /// Derive key using PBKDF2 algorithm.
+    ///
     /// Convert the password string to a byte array.
-    final passwordBytes = Utils.stringToArrayBuffer(password);
-
-    /// Create PBKDF2 parameters and key derivation function
-    final pbkdf2Params = Pbkdf2Parameters(salt, iterations, hashBits ~/ 8);
-    final pbkdf2 = PBKDF2KeyDerivator(HMac.withDigest(hash))
-      ..init(pbkdf2Params);
-
-    /// Derive key using PBKDF2 algorithm
-    final keyBytes = pbkdf2.process(Uint8List.fromList(passwordBytes));
+    final saltedPasswordBites =
+        hmacIteration(key: password, salt: salt, iterations: iterations);
 
     /// Sign the derived keys using the HMAC algorithm
     return <String, Uint8List>{
-      'ck': _sign(HMac(hash, keyBytes.length), 'Client Key'),
-      'sk': _sign(HMac(hash, keyBytes.length), 'Server Key'),
+      'ck': _hmacSha1(
+        convert.hex.encode(saltedPasswordBites),
+        'Client Key',
+        hash,
+      ),
+      'sk': _hmacSha1(
+        convert.hex.encode(saltedPasswordBites),
+        'Server Key',
+        hash,
+      ),
     };
+  }
+
+  /// Performs an HMAC iteration operation using the provided parameters.
+  ///
+  /// This method applies the HMAC (Hash-based Message Authentication Code)
+  /// iteration process to derive a cryptographic key from the given inputs. It
+  /// uses a specific `key`, `salt`, `number of iterations`, `hash algorithm`,
+  /// and `block number` to generate the resulting key material.
+  ///
+  /// * @param key The key used for HMAC computation.
+  /// * @param salt The salt value used in the HMAC iteration.
+  /// * @param iterations The number of iterations to perform.
+  /// * @param hashName The name of hash algorithm to use (defaults to 'SHA-1').
+  /// * @param blockNr The block number used in the HMAC iteration (defaults to
+  /// 1).
+  /// * @return The derived cryptographic key as Uint8List.
+  static Uint8List hmacIteration({
+    required String key,
+    required Uint8List salt,
+    required int iterations,
+
+    /// Default to `SHA-1` hash.
+    String hashName = 'SHA-1',
+
+    /// Defaults to 1.
+    int blockNr = 1,
+  }) {
+    /// Convert the block number to a [ByteData] object.
+    final blockNrBytes = _packIntToBytes(blockNr);
+
+    /// Create a Uint8List by concatenating the salt and block number bytes.
+    final dataWithBlock =
+        Uint8List.fromList([...salt, ...blockNrBytes.buffer.asUint8List()]);
+
+    /// Generate the initial key material.
+    Uint8List u = _sign(
+      crypto.Hmac(_getDigest(hashName), Utils.stringToArrayBuffer(key)),
+      dataWithBlock,
+    );
+    final res = u;
+    int i = 1;
+
+    /// Perform the remaining iterations.
+    while (i < iterations) {
+      /// Generate the next key material using HMAC.
+      u = _sign(
+        crypto.Hmac(_getDigest(hashName), Utils.stringToArrayBuffer(key)),
+        u,
+      );
+      for (int j = 0; j < res.length; j++) {
+        res[j] = res[j] ^ u[j];
+      }
+      i += 1;
+    }
+    return res;
+  }
+
+  /// Packs an integer value into a [ByteData] object.
+  ///
+  /// This method takes an integer value and converts it into a [ByteData]
+  /// object with a length of 4 bytes.
+  ///
+  /// * @param value The [int] value to be packed into the [ByteData] object.
+  /// * @return The [ByteData] object containing the packed integer value.
+  static ByteData _packIntToBytes(int value) {
+    /// Set the value of the Uint32 at the beginning of the [ByteData] object.
+    final list = ByteData.view(Uint8List(4).buffer)..setUint32(0, value);
+
+    /// Return the [ByteData] object.
+    return list;
   }
 
   /// Determine the hash function to use based on the provided `hashName`
   /// parameter.
-  static Digest _getDigest(String hashName) {
+  static crypto.Hash _getDigest(String hashName) {
     /// If the `hashName` is not supported, then throw an [ArgumentError].
     switch (hashName) {
       case 'SHA-1':
-        return SHA1Digest();
+        return crypto.sha1;
       case 'SHA-256':
-        return SHA256Digest();
+        return crypto.sha256;
       case 'SHA-384':
-        return SHA384Digest();
+        return crypto.sha384;
       case 'SHA-512':
-        return SHA512Digest();
+        return crypto.sha512;
       case 'SHA3-256':
-        return SHA3Digest(256);
-      case 'SHA3-512':
-        return SHA3Digest(512);
+        return crypto.sha512256;
       default:
         throw ArgumentError('Invalid hash algorithm: $hashName');
     }
@@ -175,44 +236,40 @@ class Scram {
 
   /// A helper function that signs a given string using the HMAC algorithm with
   /// a given hash function and key length.
-  /// * @param hmac The HMAC object to use for signing.
+  /// * @param hmac The Hmac object to use for signing.
   /// * @param data The string to sign.
   /// * @return The signed data, encoded as a Uint8List.
-  static Uint8List _sign(HMac hmac, String data) =>
-      hmac.process(Utils.stringToArrayBuffer(data));
+  static Uint8List _sign(crypto.Hmac hmac, Uint8List data) {
+    final digest = hmac.convert(data);
+
+    return Uint8List.fromList(convert.hex.decode(digest.toString()));
+  }
+
+  static Uint8List _hmacSha1(
+    String key,
+    String data, [
+    crypto.Hash hash = crypto.sha1,
+  ]) {
+    final digest =
+        crypto.Hmac(hash, utf8.encode(key)).convert(utf8.encode(data));
+    return Uint8List.fromList(digest.bytes);
+  }
 
   /// The purpose ofthis method is to sign the given `message` using the
   /// `serverKey` and the specified `hashName` algorithm. It returns the signed
   /// message as a [Uint8List].
   Uint8List serverSign(String message, Uint8List serverKey, String hashName) {
     /// Initialize [Digest] beforehand.
-    Digest hash;
+    final hash = _getDigest(hashName);
 
-    /// If the `hashName` parameter is not one of the supported algorithms
-    /// (`SHA-256`, `SHA-1` or `SHA-512`), it will throw an [ArgumentError].
-    if (hashName == 'SHA-256') {
-      hash = SHA256Digest();
-    } else if (hashName == 'SHA-1') {
-      hash = SHA1Digest();
-    } else if (hashName == 'SHA-512') {
-      hash = SHA512Digest();
-    } else {
-      throw ArgumentError(
-        'Provided hashing algorithm is not supported: $hashName',
-      );
-    }
-
-    /// The `serverKey` is used to initialize an HMAC (Hash-based Message
+    /// The `key` is used to initialize an HMAC (Hash-based Message
     /// Authentication Code) instance with the specified hash algorithm, and
     /// then `auth` is processed using this HMAC instance to generate the signed
     /// message.
-    final hmac = HMac(hash, serverKey.length * 8);
-
-    /// Initialize created `hmac`.
-    hmac.init(KeyParameter(serverKey));
+    final key = convert.hex.encode(serverKey);
 
     /// The signed message is then returns as [Uint8List].
-    return _sign(hmac, message);
+    return _hmacSha1(key, message, hash);
   }
 
   /// This method generates a client nonce, which is used as part of the SCRAM
@@ -221,17 +278,10 @@ class Scram {
   /// * @return A [String] representing the generated client nonce.
   static String get generateCNonce {
     /// Generate 16 random bytes of nonce.
-    final bytes = Uint8List(16);
-    final random = math.Random.secure();
-    for (int i = 0; i < bytes.length; i++) {
-      bytes[i] = random.nextInt(256);
-    }
+    final bytes = List<int>.generate(16, (index) => math.Random().nextInt(256));
 
     /// Base64-encode the nonce
-    final base64Nonce = Utils.arrayBufferToBase64(bytes);
-
-    /// Remove ',' character.
-    return base64Nonce.replaceAll(',', '');
+    return base64.encode(bytes);
   }
 
   /// Returns a string containing the client first message.
@@ -252,9 +302,9 @@ class Scram {
     /// for testing purposes instead of generating a random nonce. If it is not
     /// provided, a random nonce will be generated.
     final cnonce = testCNonce ?? generateCNonce;
-    final clientFirstMessageBare = 'n=${connection.authcid},r=$cnonce';
-    connection.saslData!['cnonce'] = cnonce;
-    connection.saslData!['client-first-message-bare'] = clientFirstMessageBare;
+    final clientFirstMessageBare = 'n=${connection._authcid},r=$cnonce';
+    connection._saslData!['cnonce'] = cnonce;
+    connection._saslData!['client-first-message-bare'] = clientFirstMessageBare;
 
     /// The method returns a string value containing the client first message in
     /// the following format: "n,,n=<authentication identity>,r=<nonce>".
@@ -276,13 +326,13 @@ class Scram {
   /// server.
   String? scramResponse(
     Echo connection,
-    String challenge,
+    String? challenge,
     String hashName,
     int hashBits,
   ) {
     /// Check if the `cnonce` key is present in `saslData` object of
     /// `connection`.
-    final cnonce = connection.saslData!['cnonce'] as String;
+    final cnonce = connection._saslData!['cnonce'] as String;
 
     /// Parse the received challenge string.
     final challengeData = parseChallenge(challenge);
@@ -297,43 +347,47 @@ class Scram {
       Log().warn(
         'Failing SCRAM authentication because server supplied incorrect nonce.',
       );
-      connection.saslData = {};
-
-      /// TODO: add return _sasl.failure.cb() in return type;
+      connection._saslData = {};
+      connection._saslFailureCB();
       return null;
     }
 
     Uint8List? clientKey;
     Uint8List? serverKey;
 
-    /// Check if the password matches with the challenge.
-    if (connection.password!['name'] == hashName &&
-        connection.password!['salt'] ==
-            Utils.arrayBufferToBase64(challengeData['salt'] as Uint8List) &&
-        connection.password!['iteration'] == challengeData['iteration']) {
-      clientKey =
-          Utils.base64ToArrayBuffer(connection.password!['ck'] as String);
-      serverKey =
-          Utils.base64ToArrayBuffer(connection.password!['sk'] as String);
-    }
+    if (connection._password is Map) {
+      final password = connection._password as Map<String, dynamic>;
 
-    /// If not, derive keys using the provided password.
-    else if (connection.password is String) {
-      final keys = deriveKeys(
-        password: connection.password!['password'] as String,
-        iterations: challengeData['iteration'] as int,
-        hashBits: hashBits,
-        hashName: hashName,
-        salt: challengeData['salt'] as Uint8List,
-      );
-      clientKey = keys['ck'];
-      clientKey = keys['sk'];
-    } else {
-      return null;
+      /// Check if the password matches with the challenge.
+      if (password['name'] == hashName &&
+          password['salt'] ==
+              Utils.arrayBufferToBase64(challengeData['salt'] as Uint8List) &&
+          password['iter'] == challengeData['iteration']) {
+        clientKey = Utils.base64ToArrayBuffer(password['ck'] as String);
+        serverKey = Utils.base64ToArrayBuffer(password['sk'] as String);
+      }
+    } else if (connection._password is String) {
+      final password = connection._password as String?;
+
+      /// If not, derive keys using the provided password.
+      if (password != null) {
+        final keys = deriveKeys(
+          password: password,
+          iterations: challengeData['iter'] as int,
+          hashBits: hashBits,
+          hashName: hashName,
+          salt: challengeData['salt'] as Uint8List,
+        );
+        clientKey = keys['ck'];
+        serverKey = keys['sk'];
+      } else {
+        connection._saslFailureCB();
+        return null;
+      }
     }
 
     final clientFirstMessageBare =
-        connection.saslData!['client-first-message-bare'];
+        connection._saslData!['client-first-message-bare'];
     final serverFirstMessage = challenge;
     final clientFinalMessageBare = 'c=biws,r=${challengeData['nonce']}';
 
@@ -343,9 +397,8 @@ class Scram {
     final proof = clientProof(message, hashName, clientKey!);
     final serverSignature = serverSign(message, serverKey!, hashName);
 
-    connection.saslData!['server-signature'] =
-        Utils.arrayBufferToBase64(serverSignature);
-    connection.saslData!['keys'] = {
+    connection._saslData!['server-signature'] = base64.encode(serverSignature);
+    connection._saslData!['keys'] = {
       'name': hashName,
       'iter': challengeData['iter'],
       'salt': Utils.arrayBufferToBase64(
