@@ -1,13 +1,4 @@
-import 'dart:async';
-import 'dart:io' as io;
-
-import 'package:echo/echo.dart';
-import 'package:echo/src/constants.dart';
-import 'package:echo/src/log.dart';
-import 'package:echo/src/protocol.dart';
-import 'package:echo/src/utils.dart';
-
-import 'package:xml/xml.dart' as xml;
+part of 'echo.dart';
 
 /// Websocket connection handler class.
 ///
@@ -89,7 +80,7 @@ class Websocket extends Protocol {
   /// `version`, are missing or invalid.
   EchoBuilder _buildStream() => EchoBuilder('open', {
         'xmlns': ns['FRAMING'],
-        'to': connection.domain,
+        'to': connection._domain,
         'version': '1.0',
       });
 
@@ -170,12 +161,12 @@ class Websocket extends Protocol {
 
     /// The connection status is changed to the specified `status` and the
     /// error condition is passed as the reason using the
-    /// `connection.changeConnectStatus` method.
-    connection.changeConnectStatus(status, condition);
+    /// `connection._changeConnectStatus` method.
+    connection._changeConnectStatus(status, condition);
 
     /// The connection is then disconnected using the `connection.doDisconnect`
     /// method.
-    connection.doDisconnect();
+    connection._doDisconnect();
 
     /// The method returns `true`, indicting that stream errors were encountered
     /// and handled.
@@ -331,12 +322,12 @@ class Websocket extends Protocol {
     if (error != null) {
       /// If any error is detected, the connection status is changed to a
       /// connection failure status `Status.connfail` with the corresponding
-      /// error message using the `connection.changeConnectStatus` method.
-      connection.changeConnectStatus(Status.connfail, error);
+      /// error message using the `connection._changeConnectStatus` method.
+      connection._changeConnectStatus(Status.connfail, error);
 
       /// The connection is then disconnected by calling the
       /// `connection.doDisconnect` method, and the method returns `false`.
-      connection.doDisconnect();
+      connection._doDisconnect();
 
       /// Returns `false` if there is not any error.
       return false;
@@ -418,7 +409,7 @@ class Websocket extends Protocol {
         /// service with the 'see-other-uri' value, and initiates a new
         /// connection.
         if (isSecureRedirect) {
-          connection.changeConnectStatus(
+          connection._changeConnectStatus(
             Status.redirect,
             'Received see-other-uri, resetting connection',
           );
@@ -432,13 +423,13 @@ class Websocket extends Protocol {
       ///connection status to `Status.connfail` with the message
       ///'Received closing stream' and performs a disconnection.
       else {
-        connection.changeConnectStatus(
+        connection._changeConnectStatus(
           Status.connfail,
           'Received closing stream',
         );
 
         /// Disconnects from the connection.
-        connection.doDisconnect();
+        connection._doDisconnect();
       }
     } else {
       /// Replaces the current message handler callback with the default
@@ -450,7 +441,7 @@ class Websocket extends Protocol {
 
       /// Parses the wrapped message as an XML document.
       final element = xml.XmlDocument.parse(string);
-      connection.connectCB(element.rootElement, null, message);
+      connection._connectCB(element.rootElement, null, message);
     }
   }
 
@@ -465,7 +456,7 @@ class Websocket extends Protocol {
     Log().error('Server did not offer a supported authentication mechanism');
 
     /// Change the status to the not supported authentication mechanism.
-    connection.changeConnectStatus(
+    connection._changeConnectStatus(
       Status.connfail,
       errorCondition['NO_AUTH_MECH'],
     );
@@ -476,7 +467,7 @@ class Websocket extends Protocol {
     }
 
     /// Lastly, disconnect from the current connection.
-    connection.doDisconnect();
+    connection._doDisconnect();
   }
 
   /// Disconnects the socket connection and performs necessary cleanup actions.
@@ -513,7 +504,7 @@ class Websocket extends Protocol {
         Log().warn('Could not send <close /> tag.');
       }
     }
-    return connection.doDisconnect();
+    return connection._doDisconnect();
   }
 
   /// Just closes the Socket.
@@ -564,10 +555,10 @@ class Websocket extends Protocol {
   /// is idle.
   @override
   void onIdle() {
-    final data = connection.data;
+    final data = connection._data;
 
     /// Check if there is pending data and the connection is not paused.
-    if (data!.isNotEmpty && !connection.paused!) {
+    if (data.isNotEmpty && !connection._paused) {
       for (int i = 0; i < data.length; i++) {
         if (data[i] != null) {
           xml.XmlElement stanza;
@@ -594,7 +585,7 @@ class Websocket extends Protocol {
       }
 
       /// Clear the connection's data list after sending all the pending data.
-      connection.data = [];
+      connection._data.clear();
     }
   }
 
@@ -633,9 +624,9 @@ class Websocket extends Protocol {
       connection.xmlInput(message);
 
       /// Check if connection is in the `disconnecting` state.
-      if (connection.disconnecting!) {
+      if (connection._disconnecting) {
         /// If yes, then disconnect from it.
-        connection.doDisconnect();
+        connection._doDisconnect();
       } else if (message.contains('<open ')) {
         element = xml.XmlDocument.parse(message).rootElement;
         if (!_handleStreamStart(element)) {
@@ -650,7 +641,7 @@ class Websocket extends Protocol {
         return;
       }
 
-      if (connection.disconnecting! &&
+      if (connection._disconnecting &&
           element.firstChild!.value == 'presence' &&
           element.firstChild!.getAttribute('type') == 'unavailable') {
         connection.xmlInput(element);
@@ -662,7 +653,7 @@ class Websocket extends Protocol {
         return;
       }
 
-      connection.dataRecv(element, message);
+      connection._dataReceived(element, message);
     }
 
     /// If the message starts with `<open`, it is parsed into an XML element
@@ -693,7 +684,7 @@ class Websocket extends Protocol {
     /// If connection is in disconnecting state, node type is `ELEMENT` and type
     /// is unavailable, then log the last gathered element and exit from the
     /// function.
-    if (connection.disconnecting! &&
+    if (connection._disconnecting &&
         element.firstChild!.nodeType == xml.XmlNodeType.ELEMENT &&
         element.firstChild!.getAttribute('type') == 'unavailable') {
       connection.xmlInput(element);
@@ -703,7 +694,7 @@ class Websocket extends Protocol {
       return;
     }
 
-    connection.dataRecv(element, message);
+    connection._dataReceived(element, message);
   }
 
   /// Event handler called when the WebSocket connection is successfully opened.
@@ -741,8 +732,8 @@ class Websocket extends Protocol {
   void _onClose({int? code}) {
     /// If the connection is currently connected and not in the process of
     /// disconnecting,
-    if (connection.connected! && !connection.disconnecting!) {
-      connection.doDisconnect();
+    if (connection._connected && !connection._disconnecting) {
+      connection._doDisconnect();
     }
 
     /// If the connection is not currently connected, an error message is
@@ -755,13 +746,13 @@ class Websocket extends Protocol {
     else if (socket != null &&
         code != null &&
         code == 1006 &&
-        !connection.connected!) {
+        !connection._connected) {
       Log().error('Websocket closed unexpectedly.');
 
       /// The connection status is updated to a connection failure status with
       /// an appropriate error message using the
-      /// `connection.changeConnectStatus` method.
-      connection.changeConnectStatus(
+      /// `connection._changeConnectStatus` method.
+      connection._changeConnectStatus(
         Status.connfail,
         'Websocket connection could not be established or was disconnected.',
       );
@@ -780,7 +771,7 @@ class Websocket extends Protocol {
   /// This method logs an error message indicating that a `WebSocket` error
   /// occurred.
   ///
-  /// It then calls the `connection.changeConnectStatus` method to update the
+  /// It then calls the `connection._changeConnectStatus` method to update the
   /// connection status with a connection failure status and an appropriate
   /// error message.
   void _onError(dynamic error, dynamic trace) {
@@ -788,7 +779,7 @@ class Websocket extends Protocol {
     Log().error('Websocket error occured');
 
     /// Changes the status of the connection.
-    connection.changeConnectStatus(
+    connection._changeConnectStatus(
       Status.connfail,
       'The websocket connection could not be established or was disconnected.',
     );
