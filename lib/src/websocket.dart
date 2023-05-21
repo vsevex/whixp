@@ -81,7 +81,7 @@ class Websocket extends Protocol {
   EchoBuilder _buildStream() => EchoBuilder('open', {
         'xmlns': ns['FRAMING'],
         'to': connection._domain,
-        'version': '1.0',
+        'version': connection.version,
       });
 
   /// Checks for stream errors in the XML document received during the XMPP
@@ -89,7 +89,7 @@ class Websocket extends Protocol {
   ///
   /// This method searches for stream error elements within the XML document,
   /// `bodyWrap`, and performs necessary error handling if any errors are found.
-  bool _checkStreamError(xml.XmlElement bodyWrap, Status status) {
+  bool _checkStreamError(xml.XmlElement bodyWrap, EchoStatus status) {
     /// The method begins by declaring a `List<xml.XmlElement>` variable named
     /// `errors` to store the stream error elements found in the XML document.
     ///
@@ -99,7 +99,7 @@ class Websocket extends Protocol {
     /// method of the `bodyWrap` XML document. It looks for elements with the
     /// XML namespace specified by `ns['STREAM']` and the namespace "error".
     errors = bodyWrap
-        .findElements(
+        .findAllElements(
           ns['STREAM']!,
           namespace: 'error',
         )
@@ -107,7 +107,7 @@ class Websocket extends Protocol {
 
     /// If no elements are found, it falls back to searching for elements
     /// with the name "error" without a specific namespace.
-    if (errors.isEmpty) errors = bodyWrap.findElements('error').toList();
+    if (errors.isEmpty) errors = bodyWrap.findAllElements('error').toList();
 
     /// If no stream error elements are found, the method returns `false`,
     /// indicating that no errors were encountered.
@@ -247,21 +247,21 @@ class Websocket extends Protocol {
   /// representing the XML element received during the XMPP connection.
   /// Returns the connection status code as an integer:
   /// * - If there are stream errors indicating a failed connection,
-  /// returns `status[Status.connfail]`.
+  /// * @return `status[Status.connfail]`.
   /// * - If there are no stream errors indicating a successful connection,
-  /// returns `status[Status.connected]`.
+  /// * @return `status[Status.connected]`.
   @override
   int connectCB(xml.XmlElement bodyWrap) {
     /// Calls `_checkStreamError` method inside, passes `bodyWrap` and the
-    /// [Status] of connection failed as parameters. If any stream errors
+    /// [EchoStatus] of connection failed as parameters. If any stream errors
     /// are detected, then the method returns corresponding failure status
     /// code.
-    final error = _checkStreamError(bodyWrap, Status.connfail);
-    if (error) return status[Status.connfail]!;
+    final error = _checkStreamError(bodyWrap, EchoStatus.connectionFailed);
+    if (error) return status[EchoStatus.connectionFailed]!;
 
     /// If no stream errors are found, indicating a successful connection, the
     /// method returns connection status code.
-    return status[Status.connected]!;
+    return status[EchoStatus.connected]!;
   }
 
   /// Handles the stream start node of an XML message received during the XMPP
@@ -321,9 +321,10 @@ class Websocket extends Protocol {
 
     if (error != null) {
       /// If any error is detected, the connection status is changed to a
-      /// connection failure status `Status.connfail` with the corresponding
-      /// error message using the `connection._changeConnectStatus` method.
-      connection._changeConnectStatus(Status.connfail, error);
+      /// connection failure status `EchoStatus.connectionFailed` with the
+      /// corresponding error message using the
+      /// `connection._changeConnectStatus` method.
+      connection._changeConnectStatus(EchoStatus.connectionFailed, error);
 
       /// The connection is then disconnected by calling the
       /// `connection.doDisconnect` method, and the method returns `false`.
@@ -359,13 +360,13 @@ class Websocket extends Protocol {
       /// Parses the remaining data as an XML element.
       final streamStart = xml.XmlDocument.parse(data).rootElement;
 
-      /// Calls the `connection.xmlInput` method, passing the root element of
+      /// Calls the `connection._xmlInput` method, passing the root element of
       /// the parsed XML element, to handle the XML input.
-      connection.xmlInput(streamStart);
+      connection._xmlInput(streamStart);
 
-      /// Calls the `connection.rawInput` method, passing the original message,
+      /// Calls the `connection._rawInput` method, passing the original message,
       /// to handle the raw input.
-      connection.rawInput(message);
+      connection._rawInput(message);
 
       /// Calls the `_handleStreamStart` method, passing the parsed XML element,
       /// to check for errors in the <open /> tag and handle the stream start.
@@ -383,13 +384,13 @@ class Websocket extends Protocol {
       /// Parses the message as an XML document.
       final parsed = xml.XmlDocument.parse(message);
 
-      /// Calls the `connection.xmlInput` method, passing the root element of
+      /// Calls the `connection._xmlInput` method, passing the root element of
       /// the parsed XML document, to handle the XML input.
-      connection.xmlInput(parsed.rootElement);
+      connection._xmlInput(parsed.rootElement);
 
-      /// Calls the `connection.rawInput` method, passing the original message,
+      /// Calls the `connection._rawInput` method, passing the original message,
       /// to handle the raw input.
-      connection.rawInput(message);
+      connection._rawInput(message);
 
       /// Retrieves the value of the 'see-other-uri' attribute from the parsed
       /// XML document.
@@ -405,12 +406,12 @@ class Websocket extends Protocol {
                 service.contains('ws:');
 
         /// If the redirect is secure, changes the connection status to
-        /// Status.redirect`, resets the connection, updates the connection
+        /// EchoStatus.redirect`, resets the connection, updates the connection
         /// service with the 'see-other-uri' value, and initiates a new
         /// connection.
         if (isSecureRedirect) {
           connection._changeConnectStatus(
-            Status.redirect,
+            EchoStatus.redirect,
             'Received see-other-uri, resetting connection',
           );
           connection.reset();
@@ -424,7 +425,7 @@ class Websocket extends Protocol {
       ///'Received closing stream' and performs a disconnection.
       else {
         connection._changeConnectStatus(
-          Status.connfail,
+          EchoStatus.connectionFailed,
           'Received closing stream',
         );
 
@@ -457,7 +458,7 @@ class Websocket extends Protocol {
 
     /// Change the status to the not supported authentication mechanism.
     connection._changeConnectStatus(
-      Status.connfail,
+      EchoStatus.connectionFailed,
       errorCondition['NO_AUTH_MECH'],
     );
 
@@ -479,23 +480,23 @@ class Websocket extends Protocol {
     /// Check if the socket is not null and its state is not equal to 3 (closed).
     if (socket != null && socket!.readyState != 3) {
       /// If presence is provided, send the presence using the connection.
-      // if (presence != null) {
-      //   connection.send(presence: presence);
-      // }
+      if (presence != null) {
+        connection.send(presence);
+      }
 
       /// Create a 'close' XML element using [EchoBuilder] with 'xlmns'
       /// attribute.
       final close = EchoBuilder('close', {'xlmns': ns['FRAMING']});
 
       /// Send the XML tree representation of the 'close' element using
-      /// connection's `xmlOutput`.
-      connection.xmlOutput(close.nodeTree);
+      /// connection's `_xmlOutput`.
+      connection._xmlOutput(close.nodeTree);
 
       /// Serialize the 'close' node tree to a string.
       final closeString = Utils.serialize(close.nodeTree);
 
-      /// Send the serialized 'close' string using connection's `rawOutput`.
-      connection.rawOutput(closeString);
+      /// Send the serialized 'close' string using connection's `_rawOutput`.
+      connection._rawOutput(closeString);
       try {
         /// Add the 'close' string to the socket.
         socket!.add(closeString);
@@ -536,9 +537,7 @@ class Websocket extends Protocol {
   /// Function to check if the message queue is empty.
   ///
   /// True, because WebSocket messages are send immediately after queueing.
-  bool emptyQueue() {
-    return true;
-  }
+  bool emptyQueue() => true;
 
   /// Timeout handler for handling non-graceful disconnecting.
   ///
@@ -574,10 +573,10 @@ class Websocket extends Protocol {
           /// Serialize the stanza to a raw string.
           final rawStanza = Utils.serialize(stanza);
 
-          /// Send the stanza using the connection's `xmlOutput` and `rawOutput`
-          /// methods.
-          connection.xmlOutput(stanza);
-          connection.rawOutput(rawStanza);
+          /// Send the stanza using the connection's `_xmlOutput` and
+          /// `_rawOutput` methods.
+          connection._xmlOutput(stanza);
+          connection._rawOutput(rawStanza);
 
           /// Add the raw stanza to the socket.
           socket!.add(rawStanza);
@@ -617,11 +616,11 @@ class Websocket extends Protocol {
     /// updates the input logs, and disconnects if the connection is in the
     /// disconnecting state.
     if (message == close) {
-      /// Update raw input logs
-      connection.rawInput(close);
+      /// Update raw input logs.
+      connection._rawInput(close);
 
       /// Update xml input log.
-      connection.xmlInput(message);
+      connection._xmlInput(message);
 
       /// Check if connection is in the `disconnecting` state.
       if (connection._disconnecting) {
@@ -637,15 +636,15 @@ class Websocket extends Protocol {
         element = xml.XmlDocument.parse(data).rootElement;
       }
 
-      if (_checkStreamError(element!, Status.error)) {
+      if (_checkStreamError(element!, EchoStatus.error)) {
         return;
       }
 
       if (connection._disconnecting &&
           element.firstChild!.value == 'presence' &&
           element.firstChild!.getAttribute('type') == 'unavailable') {
-        connection.xmlInput(element);
-        connection.rawInput(Utils.serialize(element));
+        connection._xmlInput(element);
+        connection._rawInput(Utils.serialize(element));
 
         /// If we are already disconnecting we will ignore the unavailable
         /// stanza and wait for the </stream:stream> tag before we close the
@@ -677,7 +676,7 @@ class Websocket extends Protocol {
 
     /// The method checks if there is a stream error by calling
     /// `_checkStreamError`.
-    if (_checkStreamError(element, Status.error)) {
+    if (_checkStreamError(element, EchoStatus.error)) {
       return;
     }
 
@@ -687,8 +686,8 @@ class Websocket extends Protocol {
     if (connection._disconnecting &&
         element.firstChild!.nodeType == xml.XmlNodeType.ELEMENT &&
         element.firstChild!.getAttribute('type') == 'unavailable') {
-      connection.xmlInput(element);
-      connection.rawInput(Utils.serialize(element));
+      connection._xmlInput(element);
+      connection._rawInput(Utils.serialize(element));
       // if we are already disconnecting we will ignore the unavailable stanza and
       // wait for the </stream:stream> tag before we close the connection
       return;
@@ -710,15 +709,15 @@ class Websocket extends Protocol {
     final start = _buildStream();
 
     /// The XML representation of the stream is logged using the
-    /// `connection.xmlOutput` method.
-    connection.xmlOutput(start.nodeTree);
+    /// `connection._xmlOutput` method.
+    connection._xmlOutput(start.nodeTree);
 
     /// The node tree serialized using [Utils]'s serialize method.
     final startString = Utils.serialize(start.nodeTree);
 
     /// the serialized string representation is logged using the
     /// `connection.rawOutput` method.
-    connection.rawOutput(startString);
+    connection._rawOutput(startString);
 
     /// Finally, the stream string is sent over the WebSocket connection by
     /// adding it to the socket's buffer.
@@ -753,7 +752,7 @@ class Websocket extends Protocol {
       /// an appropriate error message using the
       /// `connection._changeConnectStatus` method.
       connection._changeConnectStatus(
-        Status.connfail,
+        EchoStatus.connectionFailed,
         'Websocket connection could not be established or was disconnected.',
       );
     } else {
@@ -780,7 +779,7 @@ class Websocket extends Protocol {
 
     /// Changes the status of the connection.
     connection._changeConnectStatus(
-      Status.connfail,
+      EchoStatus.connectionFailed,
       'The websocket connection could not be established or was disconnected.',
     );
   }
