@@ -28,7 +28,7 @@ class EchoBuilder {
     nodeTree = Utils.xmlElement(name, attributes: attributes);
 
     /// Points to the current operation node.
-    node = nodeTree;
+    _node = nodeTree;
   }
 
   /// Creates an [EchoBuilder] with a <message/> element as the root.
@@ -52,7 +52,7 @@ class EchoBuilder {
   final Map<String, dynamic> attributes;
 
   xml.XmlElement? nodeTree;
-  xml.XmlNode? node;
+  xml.XmlNode? _node;
 
   /// This function returns a String serialiation of the current DOM tree. It is
   /// often used internally to pass data to a Request object.
@@ -63,12 +63,12 @@ class EchoBuilder {
   ///
   /// * @return [EchoBuilder] object;
   EchoBuilder up() {
-    node = node!.parent;
+    _node = _node!.parent;
     return this;
   }
 
   /// Sets the current node to the root node.
-  void root() => node = nodeTree;
+  void root() => _node = nodeTree;
 
   /// Allows for adding or modifying the attributes of the current element.
   /// It takes a [Map] of key-value pairs as an argument, which are iterated
@@ -83,9 +83,9 @@ class EchoBuilder {
       if (attributes.containsKey(attributes)) {
         if (attributes[attribute] == null) {
           /// If null, then remove attribute from node.
-          node!.removeAttribute(attribute);
+          _node!.removeAttribute(attribute);
         } else {
-          node!.setAttribute(attribute, attributes[attribute].toString());
+          _node!.setAttribute(attribute, attributes[attribute].toString());
         }
       }
     }
@@ -106,9 +106,9 @@ class EchoBuilder {
     final child = Utils.xmlElement(name, attributes: attributes, text: text);
 
     /// Add created child to nodes.
-    node!.children.add(child!);
+    _node!.children.add(child!);
     if (text.runtimeType != String) {
-      node = child;
+      _node = child;
     }
     return this;
   }
@@ -120,8 +120,8 @@ class EchoBuilder {
   /// * @return [EchoBuilder] object.
   EchoBuilder cnode(xml.XmlElement element) {
     final node = Utils.copyElement(element);
-    this.node!.children.add(node);
-    this.node = node;
+    _node!.children.add(node);
+    _node = node;
     return this;
   }
 
@@ -136,7 +136,7 @@ class EchoBuilder {
     final child = Utils.xmlTextNode(text);
 
     /// Add created text node to current nodes.
-    node!.children.add(child);
+    _node!.children.add(child);
     return this;
   }
 }
