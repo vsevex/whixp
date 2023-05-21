@@ -136,7 +136,6 @@ void main() {
       final result = handler.isMatch(element!);
       expect(result, isTrue);
     });
-
     test('Must return false with mismatched namespace', () {
       final handler = Handler(namespace: 'http://example.com');
       element!.setAttribute('xmlns', 'http://blin.com');

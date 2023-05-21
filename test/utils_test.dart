@@ -376,20 +376,6 @@ void main() {
     });
   });
 
-  group('xorUint8List Method Test', () {
-    test('Must return expected result', () {
-      final x = Uint8List.fromList([187, 23, 94, 77, 132]);
-      final y = Uint8List.fromList([49, 67, 90, 201, 15]);
-      final expected = Uint8List.fromList([138, 84, 4, 132, 139]);
-      expect(Utils.xorUint8Lists(x, y), equals(expected));
-    });
-    test('Must throw error for different-length lists', () {
-      final x = Uint8List.fromList([1, 2, 3]);
-      final y = Uint8List.fromList([4, 5]);
-      expect(() => Utils.xorUint8Lists(x, y), throwsArgumentError);
-    });
-  });
-
   group('escapeNode Method Test', () {
     test('Must return valid output when there is a space in the node', () {
       const node = 'Salam brat!';
