@@ -17,20 +17,41 @@ class Scram {
   /// This method is used to generate the proof of the client's identity to the
   /// server, which is required for the SCRAM authentication mechanism. Without
   /// this method, the authentication process cannot be completed successfully.
-  static Uint8List clientProof(
+  static String clientProof(
     /// The message to be signed by the client
     String message,
 
+    /// The key to be used in the HMAC operation
+    String clientKey,
+
     /// The name of the hash function to be used in the HMAC operation
     String hashName,
-
-    /// The key to be used in the HMAC operation
-    Uint8List clientKey,
   ) {
-    final storedKey = convert.hex.encode(clientKey);
-    final signature = _hmacSha1(storedKey, message);
+    /// Declare the hashing algorithm.
+    final hash = _getDigest(hashName);
+    final storedKey = hashShaConvert(clientKey, hash);
+    final signature = hmacShaConvert(
+      storedKey,
+      Uint8List.fromList(message.codeUnits),
+      hash,
+    );
 
     return Utils.xorUint8Lists(clientKey, signature);
+  }
+
+  /// The purpose ofthis method is to sign the given `message` using the
+  /// `serverKey` and the specified `hashName` algorithm. It returns the signed
+  /// message as a [Uint8List].
+  String serverSign(String message, String serverKey, String hashName) {
+    /// Initialize [Digest] beforehand.
+    final hash = _getDigest(hashName);
+
+    /// The signed message is then returns as [Uint8List].
+    return hmacShaConvert(
+      serverKey,
+      Uint8List.fromList(message.codeUnits),
+      hash,
+    );
   }
 
   /// Parses SCRAM challenge string and returns a [Map] of three values,
@@ -112,33 +133,35 @@ class Scram {
   /// * @param hashName The name of the hash function to use for key derivation.
   /// * @param salt The salt to use for key derivation.
   ///
-  /// * @return A map containing the derived client and server keys, encoded as
-  /// [Uint8List]s.
-  Map<String, Uint8List> deriveKeys({
+  /// * @return A map containing the derived client and server keys, as [String].
+  Map<String, String> deriveKeys({
     required String password,
     required String hashName,
-    required Uint8List salt,
+    required String salt,
     required int iterations,
-    required int hashBits,
   }) {
     final hash = _getDigest(hashName);
 
     /// Derive key using PBKDF2 algorithm.
     ///
     /// Convert the password string to a byte array.
-    final saltedPasswordBites =
-        hmacIteration(key: password, salt: salt, iterations: iterations);
+    final saltedPasswordBites = hmacIteration(
+      key: password,
+      salt: salt,
+      iterations: iterations,
+      hashName: hashName,
+    );
 
     /// Sign the derived keys using the HMAC algorithm
-    return <String, Uint8List>{
-      'ck': _hmacSha1(
-        convert.hex.encode(saltedPasswordBites),
-        'Client Key',
+    return <String, String>{
+      'ck': hmacShaConvert(
+        saltedPasswordBites,
+        Uint8List.fromList(utf8.encode('Client Key')),
         hash,
       ),
-      'sk': _hmacSha1(
-        convert.hex.encode(saltedPasswordBites),
-        'Server Key',
+      'sk': hmacShaConvert(
+        saltedPasswordBites,
+        Uint8List.fromList('Server Key'.codeUnits),
         hash,
       ),
     };
@@ -157,10 +180,10 @@ class Scram {
   /// * @param hashName The name of hash algorithm to use (defaults to 'SHA-1').
   /// * @param blockNr The block number used in the HMAC iteration (defaults to
   /// 1).
-  /// * @return The derived cryptographic key as Uint8List.
-  static Uint8List hmacIteration({
+  /// * @return The derived cryptographic key as String.
+  static String hmacIteration({
     required String key,
-    required Uint8List salt,
+    required String salt,
     required int iterations,
 
     /// Default to `SHA-1` hash.
@@ -169,34 +192,34 @@ class Scram {
     /// Defaults to 1.
     int blockNr = 1,
   }) {
+    /// Get the hashing algorithm
+    final hash = _getDigest(hashName);
+
     /// Convert the block number to a [ByteData] object.
     final blockNrBytes = _packIntToBytes(blockNr);
 
     /// Create a Uint8List by concatenating the salt and block number bytes.
-    final dataWithBlock =
-        Uint8List.fromList([...salt, ...blockNrBytes.buffer.asUint8List()]);
+    final dataWithBlock = Uint8List.fromList([
+      ...salt.codeUnits,
+      ...blockNrBytes.buffer.asUint8List(),
+    ]);
 
     /// Generate the initial key material.
-    Uint8List u = _sign(
-      crypto.Hmac(_getDigest(hashName), Utils.stringToArrayBuffer(key)),
-      dataWithBlock,
-    );
+    Uint8List u =
+        Uint8List.fromList(hmacShaConvert(key, dataWithBlock, hash).codeUnits);
     final res = u;
     int i = 1;
 
     /// Perform the remaining iterations.
     while (i < iterations) {
       /// Generate the next key material using HMAC.
-      u = _sign(
-        crypto.Hmac(_getDigest(hashName), Utils.stringToArrayBuffer(key)),
-        u,
-      );
+      u = Uint8List.fromList(hmacShaConvert(key, u, hash).codeUnits);
       for (int j = 0; j < res.length; j++) {
         res[j] = res[j] ^ u[j];
       }
       i += 1;
     }
-    return res;
+    return String.fromCharCodes(res);
   }
 
   /// Packs an integer value into a [ByteData] object.
@@ -234,43 +257,29 @@ class Scram {
     }
   }
 
-  /// A helper function that signs a given string using the HMAC algorithm with
-  /// a given hash function and key length.
-  /// * @param hmac The Hmac object to use for signing.
-  /// * @param data The string to sign.
-  /// * @return The signed data, encoded as a Uint8List.
-  static Uint8List _sign(crypto.Hmac hmac, Uint8List data) {
-    final digest = hmac.convert(data);
+  /// Computes the SHA-1 hash of the input string.
+  /// * @param data The input string to compute the SHA-1 hash for.
+  /// * @return The SHA-1 hash of the input string, encoded as a hexadecimal
+  /// string.
+  static String hashShaConvert(String data, [crypto.Hash hash = crypto.sha1]) =>
+      String.fromCharCodes(
+        hash.convert(Uint8List.fromList(data.codeUnits)).bytes,
+      );
 
-    return Uint8List.fromList(convert.hex.decode(digest.toString()));
-  }
-
-  static Uint8List _hmacSha1(
+  /// Computes the HMAC-SHA1 hash of the input data using the provided key.
+  ///
+  /// Takes an input string key and a Uint8List data, and computes the HMAC-SHA1
+  /// hash of the data using the provided key. The key is expected to be in
+  /// UTF-8 encoding, while the data is expected to be a Uint8List representing
+  /// binary data.
+  static String hmacShaConvert(
     String key,
-    String data, [
+    Uint8List data, [
     crypto.Hash hash = crypto.sha1,
-  ]) {
-    final digest =
-        crypto.Hmac(hash, utf8.encode(key)).convert(utf8.encode(data));
-    return Uint8List.fromList(digest.bytes);
-  }
-
-  /// The purpose ofthis method is to sign the given `message` using the
-  /// `serverKey` and the specified `hashName` algorithm. It returns the signed
-  /// message as a [Uint8List].
-  Uint8List serverSign(String message, Uint8List serverKey, String hashName) {
-    /// Initialize [Digest] beforehand.
-    final hash = _getDigest(hashName);
-
-    /// The `key` is used to initialize an HMAC (Hash-based Message
-    /// Authentication Code) instance with the specified hash algorithm, and
-    /// then `auth` is processed using this HMAC instance to generate the signed
-    /// message.
-    final key = convert.hex.encode(serverKey);
-
-    /// The signed message is then returns as [Uint8List].
-    return _hmacSha1(key, message, hash);
-  }
+  ]) =>
+      String.fromCharCodes(
+        crypto.Hmac(hash, key.codeUnits).convert(data).bytes,
+      );
 
   /// This method generates a client nonce, which is used as part of the SCRAM
   /// authentication protocol. It generates 16 random bytes, encodes them them
@@ -352,8 +361,8 @@ class Scram {
       return null;
     }
 
-    Uint8List? clientKey;
-    Uint8List? serverKey;
+    String? clientKey;
+    String? serverKey;
 
     if (connection._password is Map) {
       final password = connection._password as Map<String, dynamic>;
@@ -363,8 +372,8 @@ class Scram {
           password['salt'] ==
               Utils.arrayBufferToBase64(challengeData['salt'] as Uint8List) &&
           password['iter'] == challengeData['iteration']) {
-        clientKey = Utils.base64ToArrayBuffer(password['ck'] as String);
-        serverKey = Utils.base64ToArrayBuffer(password['sk'] as String);
+        clientKey = Utils.atob(password['ck'] as String);
+        serverKey = Utils.atob(password['sk'] as String);
       }
     } else if (connection._password is String) {
       final password = connection._password as String?;
@@ -374,9 +383,8 @@ class Scram {
         final keys = deriveKeys(
           password: password,
           iterations: challengeData['iter'] as int,
-          hashBits: hashBits,
           hashName: hashName,
-          salt: challengeData['salt'] as Uint8List,
+          salt: String.fromCharCodes(challengeData['salt'] as Uint8List),
         );
         clientKey = keys['ck'];
         serverKey = keys['sk'];
@@ -394,20 +402,20 @@ class Scram {
     final message =
         '$clientFirstMessageBare,$serverFirstMessage,$clientFinalMessageBare';
 
-    final proof = clientProof(message, hashName, clientKey!);
+    final proof = clientProof(message, clientKey!, hashName);
     final serverSignature = serverSign(message, serverKey!, hashName);
 
-    connection._saslData!['server-signature'] = base64.encode(serverSignature);
+    connection._saslData!['server-signature'] = Utils.btoa(serverSignature);
     connection._saslData!['keys'] = {
       'name': hashName,
       'iter': challengeData['iter'],
       'salt': Utils.arrayBufferToBase64(
         challengeData['salt'] as Uint8List,
       ),
-      'ck': Utils.arrayBufferToBase64(clientKey),
-      'sk': Utils.arrayBufferToBase64(serverKey),
+      'ck': Utils.btoa(clientKey),
+      'sk': Utils.btoa(serverKey),
     };
 
-    return '$clientFinalMessageBare,p=${Utils.arrayBufferToBase64(proof)}';
+    return '$clientFinalMessageBare,p=${Utils.btoa(proof)}';
   }
 }
