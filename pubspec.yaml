@@ -16,4 +16,5 @@ dependencies:
   crypto: ^3.0.3
   lint: ^2.0.1
   logger: ^1.3.0
+  meta: ^1.9.1
   xml: ^6.3.0
