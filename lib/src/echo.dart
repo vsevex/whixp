@@ -4,7 +4,6 @@ import 'dart:io' as io;
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:convert/convert.dart' as convert;
 import 'package:crypto/crypto.dart' as crypto;
 
 import 'package:echo/src/builder.dart';
@@ -13,6 +12,7 @@ import 'package:echo/src/log.dart';
 import 'package:echo/src/protocol.dart';
 import 'package:echo/src/sasl.dart';
 import 'package:echo/src/utils.dart';
+import 'package:meta/meta.dart';
 
 import 'package:xml/xml.dart' as xml;
 
@@ -28,6 +28,10 @@ part 'sasl_xoauth2.dart';
 part 'scram.dart';
 part 'websocket.dart';
 
+/// Defines void Function callback for assigning methods like `_xmlInput`,
+/// `_rawInput`.
+typedef ExternalFunction = void Function(dynamic element);
+
 class Echo {
   /// The [Echo] class represents an XMPP client connection.
   ///
@@ -40,11 +44,8 @@ class Echo {
     /// Optional configuration options.
     this.options = const <String, dynamic>{},
   }) {
-    /// Sets the communication protocol based on the provided options.
-    _setProtocol();
-
     /// The connected JID
-    _jid = '';
+    jid = '';
 
     /// The JIDs domain
     _domain = null;
@@ -73,15 +74,18 @@ class Echo {
     /// Initial value for `paused` is false.
     _paused = false;
 
+    /// Call onIdle callback every 1/10th of a second.
+    _idleTimeout =
+        Timer.periodic(const Duration(milliseconds: 100), (_) => _onIdle);
+
+    /// Sets the communication protocol based on the provided options.
+    _setProtocol();
+
     /// Supported connection plugins.
     // _connectionPlugins = {};
 
     /// Initialize the start point.
     reset();
-
-    /// Call onIdle callback every 1/10th of a second.
-    _idleTimeout =
-        Timer.periodic(const Duration(milliseconds: 100), (_) => _onIdle);
 
     /// Register all available [SASL] auth mechanisms.
     _registerMechanisms();
@@ -91,7 +95,7 @@ class Echo {
     /// This is a fallback handler which gets called when no other handler was
     /// called for a received IQ 'set' or 'get'.
     _iqFallbackHandler = Handler(
-      handler: ([xml.XmlElement? iq]) {
+      handler: ([iq]) {
         send(
           EchoBuilder.iq(
             attributes: {
@@ -113,7 +117,7 @@ class Echo {
   }
 
   /// `version` constant.
-  static const version = '0.0.1';
+  final String version = '1.0.0';
 
   /// The service URL.
   late String service;
@@ -122,7 +126,7 @@ class Echo {
   final Map<String, dynamic> options;
 
   /// Jabber identifier of the user.
-  late String _jid;
+  late String jid;
 
   /// Domain part of the given JID.
   String? _domain;
@@ -211,9 +215,21 @@ class Echo {
   /// The selected mechanism to provide authentication.
   late SASL? _mechanism;
 
+  /// External executer for `_xmlInput`.
+  ExternalFunction? xmlInput;
+
+  /// External executer for `_xmlOutput`.
+  ExternalFunction? xmlOutput;
+
+  /// External executer for `_rawInput`.
+  ExternalFunction? rawInput;
+
+  /// External executer for `_rawOutput`.
+  ExternalFunction? rawOutput;
+
   /// This variable represents a function that can be assigned to handle the
   /// connection status and related data after a connection attempt.
-  late final Function(Status, [String?, xml.XmlElement?])? _connectCallback;
+  late final Function(EchoStatus, [String?, xml.XmlElement?])? _connectCallback;
 
   /// This variable holds an instance of the [Handler] class that serves as a
   /// fallback handler for IQ (Info/Query) stanzas.
@@ -314,18 +330,22 @@ class Echo {
     /// Try to get protocol from `options`, else assign empty string.
     final protocol = options['protocol'] as String? ?? '';
 
-    /// Check if worker Websocket implementation should be used.
-    if (options['worker'] != null && options['worker'] as bool) {
-      /// TODO: implement worker web socket.
-    }
-
-    /// If not using a worker Websocket, check for websocket or secure Websocket
-    /// service.
-    else if (service.startsWith('ws:') ||
+    /// Check if Websocket implementation should be used.
+    if (service.startsWith('ws:') ||
         service.startsWith('wss:') ||
         protocol.startsWith('ws')) {
       /// Set protocol to [Websocket].
       _protocol = Websocket(this);
+    }
+
+    /// If not using a Websocket, check for websocket worker or secure Websocket
+    /// worker service.
+    else if (options['worker'] != null && options['worker'] as bool) {
+      /// TODO: implement worker web socket.
+    } else {
+      Log().warn('No service was found under: $service');
+      _doDisconnect();
+      return;
     }
   }
 
@@ -502,7 +522,7 @@ class Echo {
     dynamic password,
 
     /// The connection callback function.
-    void Function(Status)? callback,
+    void Function(EchoStatus)? callback,
 
     /// Optional alternative authentication identifier.
     String? authcid,
@@ -513,19 +533,16 @@ class Echo {
     /// Equal gathered `jid` to global one.
     ///
     /// Authorization identity.
-    _jid = jid;
+    this.jid = jid;
 
     /// Authorization identity (username).
-    // _authzid = Utils().getBareJIDFromJID(jid);
-    _authzid = 'user@xmpp.org';
+    _authzid = Utils().getBareJIDFromJID(jid);
 
     /// Authentication identity (user name).
-    // _authcid = authcid ?? Utils().getNodeFromJID(jid);
-    _authcid = 'user';
+    _authcid = authcid ?? Utils().getNodeFromJID(jid);
 
     /// Authentication identity. Equal gathered `password` to global password.
-    // _password = password;
-    _password = 'pencil';
+    _password = password;
 
     /// Connection callback will be equal if there is one.
     _connectCallback = (status, [condition, element]) => callback!.call(status);
@@ -546,7 +563,7 @@ class Echo {
     _domain = Utils().getDomainFromJID(jid);
 
     /// Change the status of connection to `connecting`.
-    _changeConnectStatus(Status.connecting, null);
+    _changeConnectStatus(EchoStatus.connecting, null);
 
     /// Build connection of the `protocol`.
     _protocol.connect();
@@ -560,7 +577,7 @@ class Echo {
   /// * @param element The triggering stanza.
   void _changeConnectStatus(
     /// Status of the connection.
-    Status status,
+    EchoStatus status,
 
     /// Error condition map value.
     String? condition,
@@ -611,7 +628,13 @@ class Echo {
   /// ```
   ///
   /// * @param element The XML data received by the connection.
-  void xmlInput(dynamic element) {}
+  @protected
+  void _xmlInput(dynamic element) {
+    if (xmlInput != null) {
+      xmlInput?.call(element);
+    }
+    return;
+  }
 
   /// User overrideable function that receives XML data sent to the connection.
   ///
@@ -622,7 +645,10 @@ class Echo {
   /// }
   /// ```
   /// * @param element The XMLdata sent by the connection.
-  void xmlOutput(dynamic element) {
+  void _xmlOutput(dynamic element) {
+    if (xmlOutput != null) {
+      xmlOutput?.call(element);
+    }
     return;
   }
 
@@ -636,7 +662,10 @@ class Echo {
   /// }
   /// ```
   /// * @param data The data received by the connection.
-  void rawInput(dynamic data) {
+  void _rawInput(dynamic data) {
+    if (rawInput != null) {
+      rawInput?.call(data);
+    }
     return;
   }
 
@@ -648,7 +677,10 @@ class Echo {
   ///   /// ...user code
   /// }
   /// ```
-  void rawOutput(dynamic data) {
+  void _rawOutput(dynamic data) {
+    if (rawOutput != null) {
+      rawOutput?.call(data);
+    }
     return;
   }
 
@@ -665,17 +697,6 @@ class Echo {
     return;
   }
 
-  /// Send a stanza.
-  ///
-  /// This function is called to push data onto the send queue to go out over
-  /// the wire. Whenever a request is sent to the BOSH server, all pending data
-  /// is sent and the queue is flushed.
-  ///
-  /// * @param presence The stanza to send
-  // void send({xml.XmlElement? presence}) {
-  //   if (presence == null) return;
-  // }
-
   /// Immediately send any pending outgoing data.
   ///
   /// Normally send() queues outgoing data until the next idle period (100ms),
@@ -683,6 +704,9 @@ class Echo {
   /// called in succession. flush() can be used to immediately send all pending
   /// data.
   void flush() {
+    /// Cancel current idle timeout.
+    _idleTimeout.cancel();
+
     /// Cancel pending idle period and run the idle function immediately.
     _onIdle();
   }
@@ -714,21 +738,23 @@ class Echo {
 
     /// If the message type is [xml.XmlElement], then queue only it.
     else {
-      _queueData(message);
+      _queueData(message as xml.XmlElement);
     }
 
     /// Run the protocol send function to flush all the available data.
     _protocol.send();
   }
 
-  void _queueData(dynamic element) {
-    if (element == null) {
+  /// Queue outgoing data for later sending.
+  ///
+  /// * @param element dynamic, this can be one
+  void _queueData(xml.XmlElement? element) {
+    /// Check whether `element` is not null and local name is not empty.
+    if (element == null ||
+        element.children.isEmpty ||
+        element.name.local.isEmpty) {
+      /// If one of above conditions are met, then throw an [Exception].
       throw Exception('Cannot queue empty element.');
-    }
-    if (element is xml.XmlElement) {
-      if (element.children.isEmpty || element.name.local.isEmpty) {
-        throw Exception('Cannot queue empty element.');
-      }
     }
     _data.add(element);
   }
@@ -844,7 +870,7 @@ class Echo {
     Map<String, bool>? options,
 
     /// The user callback.
-    bool Function([xml.XmlElement])? handler,
+    bool Function([xml.XmlElement?])? handler,
   }) {
     /// Create new [Handler] object.
     final hand = Handler(
@@ -929,7 +955,7 @@ class Echo {
   /// * @param reason The reason the disconnect is occuring.
   void disconnect(String? reason) {
     /// Change the status of connection to disconnecting.
-    _changeConnectStatus(Status.disconnecting, reason);
+    _changeConnectStatus(EchoStatus.disconnecting, reason);
 
     /// Log according to the `reason` value.
     if (reason != null) {
@@ -952,10 +978,13 @@ class Echo {
           attributes: {'xmlns': ns['CLIENT'], 'type': 'unavailable'},
         );
       }
+
+      /// Set timeout handler.
       _disconnectTimeout = _addSystemTimedHandler(
         _disconnectionTimeout,
         _onDisconnectTimeout.call,
       );
+      _protocol.abortAllRequests();
       if (presence != null) {
         _protocol.disconnect(presence.nodeTree);
       } else {
@@ -979,6 +1008,8 @@ class Echo {
   /// It takes an optional [condition] parameter which represents the reason or
   /// condition for disconnecting.
   void _doDisconnect([String? condition]) {
+    _idleTimeout.cancel();
+
     /// If the [_disconnectTimeout] is set, it will be canceled by calling the
     /// [deleteTimedHandler] method with the [_disconnectTimeout] as the argument.
     if (_disconnectTimeout != null) {
@@ -1019,7 +1050,7 @@ class Echo {
 
     /// Change connection status of the server to disconnecting to indicate that
     /// the process is in the state of disconnecting.
-    _changeConnectStatus(Status.disconnected, condition);
+    _changeConnectStatus(EchoStatus.disconnected, condition);
 
     /// Finally, make connected property false.
     _connected = false;
@@ -1031,23 +1062,22 @@ class Echo {
   /// this function handles the incoming data for all requests. This function
   /// also fires stanza handlers that match each incoming stanza.
   ///
-  /// * @param request The request that has data ready
+  /// * @param response The response that has data ready
   /// * @param raw The stanza as a raw string (optional)
-  void _dataReceived(xml.XmlElement request, [String? raw]) {
-    print(request);
-    final element = _protocol.reqToData(request);
+  void _dataReceived(xml.XmlElement response, [String? raw]) {
+    final element = _protocol.reqToData(response);
     if (element == null) return;
 
     if (element.name.local == _protocol.strip && element.children.isNotEmpty) {
-      xmlInput(element.children[0]);
+      _xmlInput(element.children[0]);
     } else {
-      xmlInput(element);
+      _xmlInput(element);
     }
 
     if (raw != null) {
-      rawInput(raw);
+      _rawInput(raw);
     } else {
-      rawInput(Utils.serialize(element));
+      _rawInput(Utils.serialize(element));
     }
 
     /// Remove handlers scheduled for deletion.
@@ -1085,9 +1115,12 @@ class Echo {
             conflict!.childElements.isNotEmpty) {
           condition = 'conflict';
         }
-        _changeConnectStatus(Status.connfail, condition);
+        _changeConnectStatus(EchoStatus.connectionFailed, condition);
       } else {
-        _changeConnectStatus(Status.connfail, errorCondition['UNKNOWN_REASON']);
+        _changeConnectStatus(
+          EchoStatus.connectionFailed,
+          errorCondition['UNKNOWN_REASON'],
+        );
       }
       _doDisconnect(condition);
       return;
@@ -1137,15 +1170,15 @@ class Echo {
   /// Otherwise it will be called automatically as soon as the XMPP server
   /// advertises the 'urn:ietf:params:xml:ns:xmpp-bind' stream feature.
   void _bind() {
-    if (_doBind) {
+    if (!_doBind) {
       Log().info('Echo bind called but "do_bind" is false');
       return;
     }
     _addSystemHandler(
-      handler: ([xml.XmlElement? element]) => _onResourceBindResultIQ(element!),
-      id: 'session_auth_2',
+      handler: ([element]) => _onResourceBindResultIQ(element!),
+      id: '_bind_auth_2',
     );
-    final resource = Utils().getResourceFromJID(_jid);
+    final resource = Utils().getResourceFromJID(jid);
     if (resource != null) {
       send(
         EchoBuilder.iq(
@@ -1177,24 +1210,24 @@ class Echo {
       if (conflict != null) {
         condition = errorCondition['CONFLICT'];
       }
-      _changeConnectStatus(Status.authFail, condition);
+      _changeConnectStatus(EchoStatus.authenticationFailed, condition, element);
       return false;
     }
-    final bind = element.getElement('bind');
-    if (bind != null) {
-      final jidNode = bind.getElement('jid');
-      if (jidNode != null) {
+    final bind = element.findAllElements('bind').toList();
+    if (bind.isNotEmpty) {
+      final jidNode = bind[0].findAllElements('jid').toList();
+      if (jidNode.isNotEmpty) {
         _authenticated = true;
-        _jid = Utils.getText(element);
+        jid = Utils.getText(jidNode[0]);
         if (_doSession) {
           _establishSession();
         } else {
-          _changeConnectStatus(Status.connected, null);
+          _changeConnectStatus(EchoStatus.connected, null);
         }
       }
     } else {
       Log().warn('Resource binding failed.');
-      _changeConnectStatus(Status.authFail, null, element);
+      _changeConnectStatus(EchoStatus.authenticationFailed, null, element);
       return false;
     }
     return false;
@@ -1219,26 +1252,29 @@ class Echo {
     try {
       bodyWrap = _protocol.reqToData(request);
     } catch (error) {
-      _changeConnectStatus(Status.connfail, errorCondition['BAD_FORMAT']);
+      _changeConnectStatus(
+        EchoStatus.connectionFailed,
+        errorCondition['BAD_FORMAT'],
+      );
       _doDisconnect(errorCondition['BAD_FORMAT']);
     }
 
     if (bodyWrap == null) return;
     if (bodyWrap.name.qualified == _protocol.strip &&
         bodyWrap.children.isNotEmpty) {
-      xmlInput(bodyWrap.children.first);
+      _xmlInput(bodyWrap.children.first);
     } else {
-      xmlInput(bodyWrap);
+      _xmlInput(bodyWrap);
     }
 
     if (raw != null) {
-      rawInput(raw);
+      _rawInput(raw);
     } else {
-      rawInput(Utils.serialize(bodyWrap));
+      _rawInput(Utils.serialize(bodyWrap));
     }
 
     final connectionCheck = _protocol.connectCB(bodyWrap);
-    if (connectionCheck == status[Status.connfail]) {
+    if (connectionCheck == status[EchoStatus.connectionFailed]) {
       return;
     }
 
@@ -1316,15 +1352,15 @@ class Echo {
       }
       _saslSuccessHandler = _addSystemHandler(
         name: 'success',
-        handler: ([xml.XmlElement? element]) => _saslSuccessCB(element),
+        handler: ([element]) => _saslSuccessCB(element),
       );
       _saslFailureHandler = _addSystemHandler(
         name: 'failure',
-        handler: ([xml.XmlElement? element]) => _saslFailureCB(element),
+        handler: ([element]) => _saslFailureCB(element),
       );
       _saslChallengeHandler = _addSystemHandler(
         name: 'challenge',
-        handler: ([xml.XmlElement? element]) => _saslChallengeCB(element!),
+        handler: ([element]) => _saslChallengeCB(element!),
       );
 
       _mechanism = mechanisms[i];
@@ -1334,11 +1370,10 @@ class Echo {
         'mechanism': _mechanism!.name,
       });
       if (_mechanism!.isClientFirst!) {
-        final response =
-            _mechanism!.clientChallenge(testCNonce: 'fyko+d2lbbFgONRv9qkxdawL');
+        final response = _mechanism!.clientChallenge();
         requestAuthExchange.t(Utils.btoa(response));
       }
-      send(requestAuthExchange);
+      send(requestAuthExchange.nodeTree);
       mechanismFound = true;
       break;
     }
@@ -1347,28 +1382,32 @@ class Echo {
 
   bool _saslChallengeCB(xml.XmlElement element) {
     final challenge = Utils.atob(Utils.getText(element));
-    final response = _mechanism?.onChallenge(
-        challenge:
-            'r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j,s=QSXCR+Q6sek8bf92,i=4096');
-    print(response);
+    final response = _mechanism?.onChallenge(challenge: challenge);
     final stanza = EchoBuilder('response', {'xmlns': ns['SASL']});
     if (response!.isNotEmpty) {
       stanza.t(Utils.btoa(response));
     }
-    print(stanza);
     send(stanza.nodeTree);
 
     return true;
   }
 
+  /// Attempt legacy (i.e. non-SASL) authentication.
   void _attemptLegacyAuth() {
-    if (Utils().getNodeFromJID(_jid) == null) {
-      _changeConnectStatus(Status.connfail, errorCondition['MISSING_JID_NODE']);
+    /// Check if node is not null, if null then client disconnects.
+    if (Utils().getNodeFromJID(jid) == null) {
+      _changeConnectStatus(
+        EchoStatus.connectionFailed,
+        errorCondition['MISSING_JID_NODE'],
+      );
       disconnect(errorCondition['MISSING_JID_NODE']);
-    } else {
-      _changeConnectStatus(Status.authenticating, null);
+    }
+
+    /// Else attempt to authenticate.
+    else {
+      _changeConnectStatus(EchoStatus.authenticating, null);
       _addSystemHandler(
-        handler: ([xml.XmlElement? element]) => _onLegacyAuthIQResult(),
+        handler: ([element]) => _onLegacyAuthIQResult(),
         id: '_auth_1',
       );
 
@@ -1377,11 +1416,8 @@ class Echo {
           attributes: {'type': 'get', 'to': _domain, 'id': '_auth_1'},
         )
             .c('query', attributes: {'xmlns': ns['AUTH']!})
-            .c(
-              'username',
-              attributes: {},
-            )
-            .t(Utils().getNodeFromJID(_jid)!)
+            .c('username')
+            .t(Utils().getNodeFromJID(jid)!)
             .nodeTree,
       );
     }
@@ -1400,22 +1436,22 @@ class Echo {
     )
         .c('query', attributes: {'xmlns': ns['AUTH']!})
         .c('username')
-        .t(Utils().getNodeFromJID(_jid)!)
+        .t(Utils().getNodeFromJID(jid)!)
         .up()
         .c('password')
         .t(_password as String);
 
-    if (Utils().getResourceFromJID(_jid) == null) {
+    if (Utils().getResourceFromJID(jid) == null) {
       /// Since the user has not supplied a resource, we pick a default one
       /// here. Unlike other auth methods, the server cannot do this for us.
-      _jid = '${Utils().getBareJIDFromJID(_jid)}/echo';
+      jid = '${Utils().getBareJIDFromJID(jid)}/echo';
     }
-    iq.up().c('resource', attributes: {}).t(Utils().getResourceFromJID(_jid)!);
+    iq.up().c('resource', attributes: {}).t(Utils().getResourceFromJID(jid)!);
     _addSystemHandler(
-      handler: ([xml.XmlElement? element]) => _auth2CB(element!),
+      handler: ([element]) => _auth2CB(element!),
       id: '_auth_2',
     );
-    send(iq);
+    send(iq.nodeTree);
     return false;
   }
 
@@ -1429,8 +1465,6 @@ class Echo {
   /// * @param element The matching stanza.
   /// * @return false to remove the handler.
   bool _saslSuccessCB(xml.XmlElement? element) {
-    print('success');
-
     /// Check server signature (if available). By decoding the success message
     /// and extracting the server signature attribute. If the server signature
     /// is invalid, it invokes the SASL failure callback, cleans up the relevant
@@ -1498,8 +1532,7 @@ class Echo {
     /// Add system handlers for stream:features.
     streamFeatureHandlers.add(
       _addSystemHandler(
-        handler: ([xml.XmlElement? element]) =>
-            wrapper(streamFeatureHandlers, element!),
+        handler: ([element]) => wrapper(streamFeatureHandlers, element!),
         name: 'stream:features',
       ),
     );
@@ -1507,8 +1540,7 @@ class Echo {
     /// Add system handlers for features.
     streamFeatureHandlers.add(
       _addSystemHandler(
-        handler: ([xml.XmlElement? element]) =>
-            wrapper(streamFeatureHandlers, element!),
+        handler: ([element]) => wrapper(streamFeatureHandlers, element!),
         namespace: ns['STREAM'],
         name: 'features',
       ),
@@ -1530,20 +1562,105 @@ class Echo {
         _doSession = true;
       }
     }
-    if (_doBind) {
-      _changeConnectStatus(Status.authFail, null);
+    if (!_doBind) {
+      _changeConnectStatus(EchoStatus.authenticationFailed, null);
       return false;
-    } else if ((options['explicitResourceBinding'] as bool) != true) {
+    } else if (options['explicitResourceBinding'] == null ||
+        (options['explicitResourceBinding'] as bool) != true) {
       _bind();
     } else {
-      _changeConnectStatus(Status.bindRequired, null);
+      _changeConnectStatus(EchoStatus.bindingRequired, null);
     }
     return false;
   }
 
-  void _establishSession() {}
-  void _onSessionResultIQ() {}
+  /// Send IQ request to establish a session with the XMPP server.
+  ///
+  /// Note: The protocol for sessoin establishment has been determined as
+  /// unnecessary and removed in `RFC-6121`.
+  void _establishSession() {
+    /// It first checks if `_doSession` is `false`. If it is, it throws an
+    /// exception indicating that the session was not advertised by the server.
+    if (!_doSession) {
+      /// Throw [Exception].
+      throw Exception(
+        '_establishSession called but apparently ${ns['SESSION']} was not advertised by the server',
+      );
+    }
 
+    /// Adds a system handler using the `_addSystemHandler` method. The handler
+    /// is a function that will be called when the session result is received.
+    ///
+    /// The function passed to the handler is `_onSessionResultIQ`, which is
+    /// responsible for handling the session result.
+    _addSystemHandler(
+      handler: ([element]) => _onSessionResultIQ(element!),
+      id: '_session_auth_2',
+    );
+
+    /// Sends an IQ request to the server using the `send` method.
+    ///
+    /// The IQ request is created using `EchoBuilder.iq` and includes
+    /// attributes such as 'type' (set) and 'id' ('_session_auth_2').
+    /// The IQ request also includes a 'session' element with the 'xmlns'
+    /// attribute set to the value of `urn:ietf:params:xml:ns:xmpp-session`.
+    send(
+      EchoBuilder.iq(
+        attributes: {
+          'type': 'set',
+          'id': '_session_auth_2',
+        },
+      ).c('session', attributes: {'xmlns': ns['SESSION']!}).nodeTree,
+    );
+  }
+
+  /// Private handler for the server's IQ response to a client's session
+  /// request.
+  ///
+  /// This sets `_authenticated` to true on success, which starts the
+  /// processing of user handlers.
+  ///
+  /// Note: The protocol for sessoin establishment has been determined as
+  /// unnecessary and removed in `RFC-6121`.
+  ///
+  /// * @param element The matching stanza.
+  /// * @return false to remove the handler.
+  bool _onSessionResultIQ(xml.XmlElement element) {
+    /// If the 'type' attribute is 'result', it means the session was created
+    /// successfully.
+    if (element.getAttribute('type') == 'result') {
+      /// In this case, the method sets the `_authenticated` variable to `true`.
+      _authenticated = true;
+
+      /// The `_changeConnectStatus` method with the parameters
+      /// `EchoStatus.connected` and `null` is called.
+      _changeConnectStatus(EchoStatus.connected, null);
+    }
+
+    /// If the 'type' attribute is 'error', it means the session creation
+    /// failed.
+    else if (element.getAttribute('type') == 'error') {
+      /// The method sets the `_authenticated` variable to `false`.
+      _authenticated = false;
+
+      /// Logs a warning message using the `Log().warn` function.
+      Log().warn('Session creation failed.');
+
+      /// Calls the `_changeConnectStatus` method with the parameters
+      /// `EchoStatus.authenticationFailed`, `null`, and the error element.
+      _changeConnectStatus(EchoStatus.authenticationFailed, null, element);
+
+      /// The method returns `false` in both cases, indicating that the session
+      /// result was not successfully handled.
+      return false;
+    }
+    return false;
+  }
+
+  /// Private handler for SASL authentication failure.
+  ///
+  /// * @param element XmlElment type matching stanza.
+  /// * @return false to remove the handler.
   bool _saslFailureCB([xml.XmlElement? element]) {
     if (_saslChallengeHandler != null) {
       deleteHandler(_saslChallengeHandler!);
@@ -1556,16 +1673,25 @@ class Echo {
     if (_mechanism != null) {
       _mechanism?.onFailure();
     }
-    _changeConnectStatus(Status.authFail, null, element);
+
+    /// Send authentication failed status.
+    _changeConnectStatus(EchoStatus.authenticationFailed, null, element);
     return false;
   }
 
+  /// Private handler to finish legacy authentication.
+  ///
+  /// This handler is called when the result from the `jabber:iq:auth` <iq/>
+  /// stanza is returned.
+  ///
+  /// * @param element The stanza that triggered the callback.
+  /// * @return false to remove the handler.
   bool _auth2CB(xml.XmlElement element) {
     if (element.getAttribute('type') == 'result') {
       _authenticated = true;
-      _changeConnectStatus(Status.connected, null);
+      _changeConnectStatus(EchoStatus.connected, null);
     } else if (element.getAttribute('type') == 'error') {
-      _changeConnectStatus(Status.authFail, null, element);
+      _changeConnectStatus(EchoStatus.authenticationFailed, null, element);
       disconnect('Authenticated failed');
     }
     return false;
@@ -1663,7 +1789,7 @@ class Echo {
     dynamic type,
 
     /// The user callback.
-    bool Function([xml.XmlElement])? handler,
+    bool Function([xml.XmlElement?])? handler,
   }) {
     /// Create [Handler] for passing to the system handler list.
     final hand = Handler(
@@ -1779,7 +1905,7 @@ class Handler {
   bool user = false;
 
   /// The `function` to handle the XMPP stanzas.
-  final bool Function([xml.XmlElement element])? handler;
+  final bool Function([xml.XmlElement? element])? handler;
 
   /// Retrieves the namespacce of an XML element.
   String? getNamespace(xml.XmlElement element) {
@@ -1833,7 +1959,7 @@ class Handler {
                 ? (type! as List).contains(elementType)
                 : elementType == type)) &&
         (id == null || element.getAttribute('id') == id) &&
-        (from == null || from == this.from)) {
+        (this.from == null || from == this.from)) {
       return true;
     }
 
