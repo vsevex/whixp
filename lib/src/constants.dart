@@ -1,6 +1,8 @@
 // IMPORTED FROM `strophe.js` project. (https://github.com/strophe/strophejs/blob/master/src/constants.js)
 //
-// DO NOT MODIFY BY HAND.
+// DO NOT MODIFY.
+
+import 'package:meta/meta.dart';
 
 /// ### Common namespace constants from the XMPP RFCs and XEPs
 ///
@@ -23,6 +25,7 @@
 /// * _ns[SESSION]_ - XMPP Session namespace from RFC 3920.
 /// * _ns[XHTML_IM]_ - XHTML-IM namespace from XEP 71.
 /// * _ns[XHTML]_ - XHTML body namespace from XEP 71.
+@protected
 const ns = <String, String>{
   'HTTPBIND': "http://jabber.org/protocol/httpbind",
   'BOSH': "urn:xmpp:xbosh",
@@ -54,6 +57,7 @@ const ns = <String, String>{
 /// NOTE: See http://xmpp.org/extensions/xep-0071.html#profile-summary for the
 /// list of recommended allowed tags and their attributes.
 
+@protected
 const xhtml = <String, dynamic>{
   'tags': <String>[
     'a',
@@ -101,20 +105,20 @@ const xhtml = <String, dynamic>{
 
 /// All possible statuses enumerated, for further information please refer to
 /// `status` constant.
-enum Status {
+enum EchoStatus {
   error,
   connecting,
-  connfail,
+  connectionFailed,
   authenticating,
-  authFail,
+  authenticationFailed,
   connected,
   disconnected,
   disconnecting,
   attached,
   redirect,
-  connTimeout,
-  bindRequired,
-  attachFail
+  connectionTimeout,
+  bindingRequired,
+  attachFailed
 }
 
 /// ### Connection status constants
@@ -132,20 +136,21 @@ enum Status {
 /// * _status[ATTACHED]_ - The connection has been attached.
 /// * _status[REDIRECT]_ - The connection has been redirected.
 /// * _status[CONNTIMEOUT]_ - The connection has timed out.
-const status = <Status, int>{
-  Status.error: 0,
-  Status.connecting: 1,
-  Status.connfail: 2,
-  Status.authenticating: 3,
-  Status.authFail: 4,
-  Status.connected: 5,
-  Status.disconnected: 6,
-  Status.disconnecting: 7,
-  Status.attached: 8,
-  Status.redirect: 9,
-  Status.connTimeout: 10,
-  Status.bindRequired: 11,
-  Status.attachFail: 12,
+@protected
+const status = <EchoStatus, int>{
+  EchoStatus.error: 0,
+  EchoStatus.connecting: 1,
+  EchoStatus.connectionFailed: 2,
+  EchoStatus.authenticating: 3,
+  EchoStatus.authenticationFailed: 4,
+  EchoStatus.connected: 5,
+  EchoStatus.disconnected: 6,
+  EchoStatus.disconnecting: 7,
+  EchoStatus.attached: 8,
+  EchoStatus.redirect: 9,
+  EchoStatus.connectionTimeout: 10,
+  EchoStatus.bindingRequired: 11,
+  EchoStatus.attachFailed: 12,
 };
 
 const errorCondition = {
@@ -159,10 +164,12 @@ const errorCondition = {
 /// __Timeout multiplier__. A waiting request will be considered failed after
 /// `Math.floor(timeout * wait)` seconds have elapsed. This defaults to `1.1`,
 /// and with default wait, `66` seconds.
+@protected
 const timeout = 1.1;
 
 /// __SecondaryTimeout multiplier__. In cases where `Echo` can detect early
 /// failure, it will consider the request failed if it does not return after
 /// `Math.floor(secondaryTimeout * wait)` seconds have elapsed. This defaults
 /// to `0.1`, and with default wait, `6` seconds.
+@protected
 const secondaryTimeout = .1;
