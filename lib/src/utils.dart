@@ -557,7 +557,7 @@ class Utils {
 
     /// Iterates over each byte in the list and converts it to a character using
     /// the `String.fromCharCode` method.
-    for (int i = 0; i < buffer.length; i++) {
+    for (int i = 0; i < buffer.lengthInBytes; i++) {
       /// The resulting characters are concatenated together into a binary
       /// string using a [StringBuffer].
       binary.write(String.fromCharCode(buffer[i]));
@@ -565,7 +565,7 @@ class Utils {
 
     /// The binary string is encoded into a Base64-encoded string using the
     /// `base64.encode` method. The resulted Base64-encoded string is returned.
-    return base64.encode(stringToArrayBuffer(binary.toString()));
+    return base64.encode(buffer);
   }
 
   /// Converts a string to a buffer of bytes encoded in UTF-8.
@@ -581,32 +581,28 @@ class Utils {
   /// final bytes = Utils.stringToArrayBuffer(value);
   /// ```
   static Uint8List stringToArrayBuffer(String value) {
-    final bytes = utf8.encode(value);
+    final bytes = value.codeUnits;
     return Uint8List.fromList(bytes);
   }
 
-  /// Performs an XOR operation on two [Uint8List]s of the same length and
-  /// returns the result as a new [Uint8List].
+  /// Performs an XOR operation on two [String]s of the same length and
+  /// returns the result as a new [String].
   ///
   /// The [x] and [y] lists must have the same length. The resulting list
   /// contains the XOR of the corresponding elements of [x] and [y].
   ///
-  /// Example:
-  /// ```dart
-  /// final x = Uint8List.fromList([1, 2, 3]);
-  /// final y = Uint8List.fromList([4, 5, 6]);
-  /// final z = xorUint8Lists(x, y);
-  /// print(z); // prints [5, 7, 5]
-  /// ```
-  ///
   /// Throws an [ArgumentError] if [x] and [y] have different lengths.
-  static Uint8List xorUint8Lists(Uint8List x, Uint8List y) {
-    final res = <int>[...x];
+  ///
+  /// * @param x The first input string to XOR.
+  /// * @param y The second input string to XOR.
+  /// * @return The result of the XOR operation as a UTF-8 encoded string.
+  static String xorUint8Lists(String x, String y) {
+    final res = <int>[...x.codeUnits];
 
     for (var i = 0; i < res.length; i++) {
-      res[i] ^= y[i];
+      res[i] ^= y.codeUnits[i];
     }
-    return Uint8List.fromList(res);
+    return String.fromCharCodes(res);
   }
 
   /// Encodes a string using Base64 encoding.
@@ -641,5 +637,6 @@ class Utils {
   /// final decodedString = Utils.atob('SGVsbG8sIFdvcmxkIQ==');
   /// print(decodedString); /// Output: 'Hello, World!'
   /// ```
-  static String atob(String input) => utf8.decode(base64.decode(input));
+  static String atob(String input) =>
+      String.fromCharCodes(base64.decode(input));
 }
