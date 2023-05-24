@@ -37,7 +37,7 @@ void main() {
     test('Must return valid string when the text is not empty', () {
       final generated = builder!.t('hello').toString();
       const expected =
-          '<iq from="me" id="1" to="you" type="get" xmlns="jabber:client"><echo>hello</echo></iq>';
+          '<iq from="me" id="1" to="you" type="get" xmlns="jabber:client">hello</iq>';
       expect(generated, equals(expected));
     });
   });
