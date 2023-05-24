@@ -128,7 +128,7 @@ class Websocket extends Protocol {
     /// and checks if their "xmlns" attribute matches the expected namespace
     /// ("urn:ietf:params:xml:ns:xmpp-streams").
     const namespace = "urn:ietf:params:xml:ns:xmpp-streams";
-    for (final e in error.children) {
+    for (final e in error.descendantElements) {
       /// If the attribute does not match, the iteration is stopped.
       if (e.getAttribute('xmlns') != namespace) {
         break;
@@ -136,13 +136,12 @@ class Websocket extends Protocol {
 
       /// If an element with the local name "text" is found, its inner text is
       /// assigned to the `text` variable.
-      if (e.nodeType == xml.XmlNodeType.ELEMENT &&
-          (e as xml.XmlElement).name.local == "text") {
+      if (e.nodeType == xml.XmlNodeType.ELEMENT && e.name.local == 'text') {
         text = e.innerText;
       } else {
         /// Otherwise, the local name of the first child element is assigned to
         /// the `condition` variable.
-        condition = e.firstElementChild!.localName;
+        condition = e.localName;
       }
     }
 
@@ -841,5 +840,8 @@ class Websocket extends Protocol {
 
   /// Send an xmpp:restart stanza.
   @override
-  void sendRestart() {}
+  void sendRestart() {
+    connection._idleTimeout.cancel();
+    connection._onIdle();
+  }
 }
