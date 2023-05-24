@@ -180,42 +180,46 @@ void main() {
   group('run() Method Test', () {
     test(
       'Must return true with a callback that returns a truthy value',
-      () {
-        final handler = Handler(handler: ([xml.XmlElement? element]) => true);
+      () async {
+        final handler =
+            Handler(handler: ([xml.XmlElement? element]) async => true);
         final element = Utils.xmlElement('element');
-        final shouldRemainActive = handler.run(element!);
+        final shouldRemainActive = await handler.run(element!);
         expect(shouldRemainActive, isTrue);
       },
     );
 
-    test('Must return false with a callback that returns a falsy value', () {
-      final handler = Handler(handler: ([xml.XmlElement? element]) => false);
+    test('Must return false with a callback that returns a falsy value',
+        () async {
+      final handler =
+          Handler(handler: ([xml.XmlElement? element]) async => false);
       final element = Utils.xmlElement('element');
-      final shouldRemainActive = handler.run(element!);
+      final shouldRemainActive = await handler.run(element!);
       expect(shouldRemainActive, isFalse);
     });
 
-    test('Must throw an exception', () {
+    test('Must throw an exception', () async {
       final handler = Handler(
         handler: ([xml.XmlElement? element]) => throw Exception('Blin'),
       );
       final element = Utils.xmlElement('element');
       try {
-        handler.run(element!);
+        await handler.run(element!);
       } catch (error) {
         rethrow;
       }
     });
 
-    test('Must return true with a callback that modifies the element', () {
+    test('Must return true with a callback that modifies the element',
+        () async {
       final handler = Handler(
-        handler: ([xml.XmlElement? element]) {
+        handler: ([xml.XmlElement? element]) async {
           element!.setAttribute('modified', 'true');
           return true;
         },
       );
       final element = Utils.xmlElement('element');
-      final shouldRemainActive = handler.run(element!);
+      final shouldRemainActive = await handler.run(element!);
       expect(shouldRemainActive, isTrue);
       expect(element.getAttribute('modified'), equals('true'));
     });

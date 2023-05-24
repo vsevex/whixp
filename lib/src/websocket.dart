@@ -89,7 +89,10 @@ class Websocket extends Protocol {
   ///
   /// This method searches for stream error elements within the XML document,
   /// `bodyWrap`, and performs necessary error handling if any errors are found.
-  bool _checkStreamError(xml.XmlElement bodyWrap, EchoStatus status) {
+  Future<bool> _checkStreamError(
+    xml.XmlElement bodyWrap,
+    EchoStatus status,
+  ) async {
     /// The method begins by declaring a `List<xml.XmlElement>` variable named
     /// `errors` to store the stream error elements found in the XML document.
     ///
@@ -162,11 +165,11 @@ class Websocket extends Protocol {
     /// The connection status is changed to the specified `status` and the
     /// error condition is passed as the reason using the
     /// `connection._changeConnectStatus` method.
-    connection._changeConnectStatus(status, condition);
+    await connection._changeConnectStatus(status, condition);
 
     /// The connection is then disconnected using the `connection.doDisconnect`
     /// method.
-    connection._doDisconnect();
+    await connection._doDisconnect();
 
     /// The method returns `true`, indicting that stream errors were encountered
     /// and handled.
@@ -251,12 +254,13 @@ class Websocket extends Protocol {
   /// * - If there are no stream errors indicating a successful connection,
   /// * @return `status[Status.connected]`.
   @override
-  int connectCB(xml.XmlElement bodyWrap) {
+  Future<int> connectCB(xml.XmlElement bodyWrap) async {
     /// Calls `_checkStreamError` method inside, passes `bodyWrap` and the
     /// [EchoStatus] of connection failed as parameters. If any stream errors
     /// are detected, then the method returns corresponding failure status
     /// code.
-    final error = _checkStreamError(bodyWrap, EchoStatus.connectionFailed);
+    final error =
+        await _checkStreamError(bodyWrap, EchoStatus.connectionFailed);
     if (error) return status[EchoStatus.connectionFailed]!;
 
     /// If no stream errors are found, indicating a successful connection, the
@@ -452,12 +456,12 @@ class Websocket extends Protocol {
   /// * @param callback The callback to be called when the authentication
   /// is not supported.
   @override
-  void nonAuth([void Function(Echo)? callback]) {
+  Future<void> nonAuth([Future<void> Function(Echo)? callback]) async {
     /// Log error message.
     Log().error('Server did not offer a supported authentication mechanism');
 
     /// Change the status to the not supported authentication mechanism.
-    connection._changeConnectStatus(
+    await connection._changeConnectStatus(
       EchoStatus.connectionFailed,
       errorCondition['NO_AUTH_MECH'],
     );
@@ -468,20 +472,28 @@ class Websocket extends Protocol {
     }
 
     /// Lastly, disconnect from the current connection.
-    connection._doDisconnect();
+    await connection._doDisconnect();
   }
 
   /// Disconnects the socket connection and performs necessary cleanup actions.
   ///
   /// Accepts only a parameter representing the presence to be sent before
   /// disconnecting.
+  ///
+  /// * A `close` XML element is created using [EchoBuilder] with the `xmlns`
+  /// attribute.
+  /// * The XML tree representation of the `close` element is sent using the
+  /// connection's `_xmlOutput()` method.
+  /// * The `close` node tree is serialized to a string using
+  /// `Utils.serialize()`.
+  /// * The `close` string is added to the socket using the `add()` method.
   @override
-  void disconnect([xml.XmlElement? presence]) {
+  Future<void> disconnect([xml.XmlElement? presence]) async {
     /// Check if the socket is not null and its state is not equal to 3 (closed).
     if (socket != null && socket!.readyState != 3) {
       /// If presence is provided, send the presence using the connection.
       if (presence != null) {
-        connection.send(presence);
+        await connection.send(presence);
       }
 
       /// Create a 'close' XML element using [EchoBuilder] with 'xlmns'
@@ -500,9 +512,9 @@ class Websocket extends Protocol {
       try {
         /// Add the 'close' string to the socket.
         socket!.add(closeString);
-      } catch (_) {
+      } on WebSocketException catch (error) {
         /// Log a warning if adding the 'close' string to the socket fails.
-        Log().warn('Could not send <close /> tag.');
+        Log().warn('Could not send <close /> tag: ${error.message}');
       }
     }
     return connection._doDisconnect();
@@ -510,12 +522,18 @@ class Websocket extends Protocol {
 
   /// Just closes the Socket.
   @override
-  void doDisconnect() {
+  Future<void> doDisconnect() async {
     /// Informs user about the method call.
     Log().info("WebSocket's doDisconnect method is called.");
 
     /// And calls close socket for returning to the initial state.
-    _closeSocket();
+    try {
+      await _closeSocket();
+    } on WebSocketException catch (error) {
+      Log().warn(
+        'An error occured while trying to disconnect from socket: ${error.message}',
+      );
+    }
   }
 
   /// Helper function to wrap a stanza in a <stream> tag.
@@ -603,7 +621,7 @@ class Websocket extends Protocol {
   ///                 from='SERVER'>
   /// ```
   /// The first stanza will always fail to be parsed.
-  void _onMessage(String message) {
+  Future<void> _onMessage(String message) async {
     /// Decleration of [xml.XmlElement] for later use.
     xml.XmlElement? element;
 
@@ -625,7 +643,7 @@ class Websocket extends Protocol {
       /// Check if connection is in the `disconnecting` state.
       if (connection._disconnecting) {
         /// If yes, then disconnect from it.
-        connection._doDisconnect();
+        await connection._doDisconnect();
       } else if (message.contains('<open ')) {
         element = xml.XmlDocument.parse(message).rootElement;
         if (!_handleStreamStart(element)) {
@@ -636,7 +654,7 @@ class Websocket extends Protocol {
         element = xml.XmlDocument.parse(data).rootElement;
       }
 
-      if (_checkStreamError(element!, EchoStatus.error)) {
+      if (await _checkStreamError(element!, EchoStatus.error)) {
         return;
       }
 
@@ -652,7 +670,7 @@ class Websocket extends Protocol {
         return;
       }
 
-      connection._dataReceived(element, message);
+      await connection._dataReceived(element, message);
     }
 
     /// If the message starts with `<open`, it is parsed into an XML element
@@ -676,7 +694,7 @@ class Websocket extends Protocol {
 
     /// The method checks if there is a stream error by calling
     /// `_checkStreamError`.
-    if (_checkStreamError(element, EchoStatus.error)) {
+    if (await _checkStreamError(element, EchoStatus.error)) {
       return;
     }
 
@@ -788,16 +806,19 @@ class Websocket extends Protocol {
   /// * If a WebSocket connection is currently open, it is closed gracefully.
   /// * If an error occurs during the closing process, an info log is generated.
   /// * After closing the connection, the socket reference is set to null.
-  void _closeSocket() {
+  Future<void> _closeSocket() async {
     if (socket != null) {
       try {
         /// It performs a graceful closing of the connection by calling the
         /// `close()` method on the WebSocket object
-        socket!.close();
-      } catch (error) {
+        await socket!.close();
+      } on io.WebSocketException catch (error) {
         /// If an error occurs during the closing process, an info log is
         /// generated with the error message.
-        Log().info(error.toString());
+        Log().warn(
+          'An ${error.message} occured when trying to close socket connection.',
+        );
+        return;
       }
     }
 
@@ -810,7 +831,7 @@ class Websocket extends Protocol {
   ///
   /// Just flushes the messages that are in the queue.
   @override
-  void send() => connection.flush();
+  Future<void> send() async => connection.flush();
 
   /// Method to get a stanza out of a request.
   ///
