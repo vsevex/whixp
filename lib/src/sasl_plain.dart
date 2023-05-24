@@ -39,6 +39,6 @@ class SASLPlain extends SASL {
     auth = '$auth${connection!._authcid}';
     auth = '$auth\u0000';
     auth = '$auth${connection!._password}';
-    return Utils.utf16to8(auth);
+    return Echotils.utf16to8(auth);
   }
 }

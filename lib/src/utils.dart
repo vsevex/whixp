@@ -5,15 +5,15 @@ import 'package:echo/src/constants.dart';
 
 import 'package:xml/xml.dart' as xml;
 
-class Utils {
+class Echotils {
   /// Factory method which returns private instance of this class.
-  factory Utils() => _instance;
+  factory Echotils() => _instance;
 
   /// Private constructor of the class.
-  const Utils._();
+  const Echotils._();
 
   /// Constant instance of private constructor.
-  static const Utils _instance = Utils._();
+  static const Echotils _instance = Echotils._();
 
   /// These line define field `_xmlGenerator` and a static method
   /// `_makeGenerator()` that returns `_xmlGenerator`. The purpopse of these
@@ -130,7 +130,7 @@ class Utils {
     }
 
     /// Use `xmlEscape` method to return XML markup.
-    return Utils.xmlEscape(buffer);
+    return Echotils.xmlEscape(buffer);
   }
 
   /// ### forEachChild
@@ -301,7 +301,7 @@ class Utils {
           case xml.XmlNodeType.TEXT:
 
             /// Text element to escape values
-            result += Utils.xmlEscape(child.value!);
+            result += Echotils.xmlEscape(child.value!);
             break;
           case xml.XmlNodeType.CDATA:
 
@@ -529,7 +529,7 @@ class Utils {
   /// ### Example
   /// ```dart
   /// const encoded = 'SGVsbG8gV29ybGQ='
-  /// final bytes = Utils.base64ToArrayBuffer(encoded);
+  /// final bytes = Echotils.base64ToArrayBuffer(encoded);
   /// ```
   ///
   /// See also:
@@ -578,7 +578,7 @@ class Utils {
   /// ### Example
   /// ```dart
   /// final value = 'Hello, blya!';
-  /// final bytes = Utils.stringToArrayBuffer(value);
+  /// final bytes = Echotils.stringToArrayBuffer(value);
   /// ```
   static Uint8List stringToArrayBuffer(String value) {
     final bytes = value.codeUnits;
@@ -619,7 +619,7 @@ class Utils {
   ///
   /// ### Example usage
   /// ```dart
-  /// final encodedString = Utils.btoa('Hello, World!');
+  /// final encodedString = Echotils.btoa('Hello, World!');
   /// print(encodedString); /// Output: 'SGVsbG8sIFdvcmxkIQ=='
   /// ```
   static String btoa(String input) => base64.encode(stringToArrayBuffer(input));
@@ -634,7 +634,7 @@ class Utils {
   ///
   /// ### Example usage
   /// ```dart
-  /// final decodedString = Utils.atob('SGVsbG8sIFdvcmxkIQ==');
+  /// final decodedString = Echotils.atob('SGVsbG8sIFdvcmxkIQ==');
   /// print(decodedString); /// Output: 'Hello, World!'
   /// ```
   static String atob(String input) =>

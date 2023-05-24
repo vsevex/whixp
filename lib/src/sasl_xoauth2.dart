@@ -36,6 +36,6 @@ class SASLXOAuth2 extends SASL {
 
     /// The string is then converted from UTF-16 to UTF-8 format and returned
     /// as the response.
-    return Utils.utf16to8(auth);
+    return Echotils.utf16to8(auth);
   }
 }

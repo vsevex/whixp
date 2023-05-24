@@ -22,7 +22,7 @@ void main() {
         handlerWOptions = Handler(options: options);
 
         /// Create element with the given name.
-        element = Utils.xmlElement('element');
+        element = Echotils.xmlElement('element');
       },
     );
 
@@ -53,7 +53,7 @@ void main() {
         handler = Handler(namespace: 'http://example.com');
 
         /// Create element with the given name.
-        element = Utils.xmlElement('element');
+        element = Echotils.xmlElement('element');
       },
     );
 
@@ -79,9 +79,9 @@ void main() {
     test(
       'Must return true with a matching namespace and among child elements',
       () {
-        final firstChild = Utils.xmlElement('hehe');
+        final firstChild = Echotils.xmlElement('hehe');
         firstChild!.setAttribute('xmlns', 'http://blin.com');
-        final secondChild = Utils.xmlElement('hehehe');
+        final secondChild = Echotils.xmlElement('hehehe');
         secondChild!.setAttribute('xmlns', 'http://example.com');
         element!.children.addAll([firstChild, secondChild]);
         final result = handler!.namespaceMatch(element!);
@@ -92,8 +92,8 @@ void main() {
     test(
       'Must return false with a no namespace and among child elements',
       () {
-        final firstChild = Utils.xmlElement('hehe');
-        final secondChild = Utils.xmlElement('hehehe');
+        final firstChild = Echotils.xmlElement('hehe');
+        final secondChild = Echotils.xmlElement('hehehe');
         element!.children.addAll([firstChild!, secondChild!]);
         final result = handler!.namespaceMatch(element!);
         expect(result, isFalse);
@@ -116,7 +116,7 @@ void main() {
         );
 
         /// Create element with the given name.
-        element = Utils.xmlElement('element');
+        element = Echotils.xmlElement('element');
       },
     );
     test('Must return true with all parameters matching', () {
@@ -145,14 +145,14 @@ void main() {
 
     test('Must return false wiht mismatched element name', () {
       final handler = Handler(name: 'element');
-      final element = Utils.xmlElement('artyom');
+      final element = Echotils.xmlElement('artyom');
       final result = handler.isMatch(element!);
       expect(result, isFalse);
     });
 
     test('Must return false with mismatched element type', () {
       final handler = Handler(type: 'type');
-      final element = Utils.xmlElement('alyosha');
+      final element = Echotils.xmlElement('alyosha');
       element!.setAttribute('type', 'human');
       final result = handler.isMatch(element);
       expect(result, isFalse);
@@ -183,7 +183,7 @@ void main() {
       () async {
         final handler =
             Handler(handler: ([xml.XmlElement? element]) async => true);
-        final element = Utils.xmlElement('element');
+        final element = Echotils.xmlElement('element');
         final shouldRemainActive = await handler.run(element!);
         expect(shouldRemainActive, isTrue);
       },
@@ -193,7 +193,7 @@ void main() {
         () async {
       final handler =
           Handler(handler: ([xml.XmlElement? element]) async => false);
-      final element = Utils.xmlElement('element');
+      final element = Echotils.xmlElement('element');
       final shouldRemainActive = await handler.run(element!);
       expect(shouldRemainActive, isFalse);
     });
@@ -202,7 +202,7 @@ void main() {
       final handler = Handler(
         handler: ([xml.XmlElement? element]) => throw Exception('Blin'),
       );
-      final element = Utils.xmlElement('element');
+      final element = Echotils.xmlElement('element');
       try {
         await handler.run(element!);
       } catch (error) {
@@ -218,7 +218,7 @@ void main() {
           return true;
         },
       );
-      final element = Utils.xmlElement('element');
+      final element = Echotils.xmlElement('element');
       final shouldRemainActive = await handler.run(element!);
       expect(shouldRemainActive, isTrue);
       expect(element.getAttribute('modified'), equals('true'));

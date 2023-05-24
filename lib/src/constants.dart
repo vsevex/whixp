@@ -2,7 +2,7 @@
 //
 // DO NOT MODIFY.
 
-import 'package:meta/meta.dart';
+import 'package:echo/src/enums.dart';
 
 /// ### Common namespace constants from the XMPP RFCs and XEPs
 ///
@@ -25,7 +25,6 @@ import 'package:meta/meta.dart';
 /// * _ns[SESSION]_ - XMPP Session namespace from RFC 3920.
 /// * _ns[XHTML_IM]_ - XHTML-IM namespace from XEP 71.
 /// * _ns[XHTML]_ - XHTML body namespace from XEP 71.
-@protected
 const ns = <String, String>{
   'HTTPBIND': "http://jabber.org/protocol/httpbind",
   'BOSH': "urn:xmpp:xbosh",
@@ -57,7 +56,6 @@ const ns = <String, String>{
 /// NOTE: See http://xmpp.org/extensions/xep-0071.html#profile-summary for the
 /// list of recommended allowed tags and their attributes.
 
-@protected
 const xhtml = <String, dynamic>{
   'tags': <String>[
     'a',
@@ -103,24 +101,6 @@ const xhtml = <String, dynamic>{
   ],
 };
 
-/// All possible statuses enumerated, for further information please refer to
-/// `status` constant.
-enum EchoStatus {
-  error,
-  connecting,
-  connectionFailed,
-  authenticating,
-  authenticationFailed,
-  connected,
-  disconnected,
-  disconnecting,
-  attached,
-  redirect,
-  connectionTimeout,
-  bindingRequired,
-  attachFailed
-}
-
 /// ### Connection status constants
 ///
 /// Connection status constants for use by the connection handler callback.
@@ -136,7 +116,6 @@ enum EchoStatus {
 /// * _status[ATTACHED]_ - The connection has been attached.
 /// * _status[REDIRECT]_ - The connection has been redirected.
 /// * _status[CONNTIMEOUT]_ - The connection has timed out.
-@protected
 const status = <EchoStatus, int>{
   EchoStatus.error: 0,
   EchoStatus.connecting: 1,
@@ -164,12 +143,10 @@ const errorCondition = {
 /// __Timeout multiplier__. A waiting request will be considered failed after
 /// `Math.floor(timeout * wait)` seconds have elapsed. This defaults to `1.1`,
 /// and with default wait, `66` seconds.
-@protected
 const timeout = 1.1;
 
 /// __SecondaryTimeout multiplier__. In cases where `Echo` can detect early
 /// failure, it will consider the request failed if it does not return after
 /// `Math.floor(secondaryTimeout * wait)` seconds have elapsed. This defaults
 /// to `0.1`, and with default wait, `6` seconds.
-@protected
 const secondaryTimeout = .1;

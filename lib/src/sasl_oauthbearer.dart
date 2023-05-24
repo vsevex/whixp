@@ -46,6 +46,6 @@ class SASLOAuthBearer extends SASL {
     auth = '$auth\u0001';
 
     /// The authentication information is returned as a UTF-8 encoded string.
-    return Utils.utf16to8(auth);
+    return Echotils.utf16to8(auth);
   }
 }

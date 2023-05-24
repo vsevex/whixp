@@ -44,7 +44,7 @@ void main() {
         'SHA-1',
       );
       expect(
-        Utils.btoa(result),
+        Echotils.btoa(result),
         equals('frsVRm77a2tPQ5vy+zZuaKRR17o='),
       );
     });
@@ -82,7 +82,7 @@ void main() {
       expect(result!['nonce'], equals('fyko+d2lbbFgONRv9qkxdawL'));
       expect(
         result['salt'],
-        equals(Utils.base64ToArrayBuffer('W22ZaJ0SNY7soEsUEjb6')),
+        equals(Echotils.base64ToArrayBuffer('W22ZaJ0SNY7soEsUEjb6')),
       );
       expect(result['iter'], equals(4096));
     });

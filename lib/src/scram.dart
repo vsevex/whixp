@@ -36,7 +36,7 @@ class Scram {
       hash,
     );
 
-    return Utils.xorUint8Lists(clientKey, signature);
+    return Echotils.xorUint8Lists(clientKey, signature);
   }
 
   /// The purpose ofthis method is to sign the given `message` using the
@@ -92,7 +92,7 @@ class Scram {
           nonce = matches[2];
           break;
         case 's':
-          salt = Utils.base64ToArrayBuffer(matches[2]!);
+          salt = Echotils.base64ToArrayBuffer(matches[2]!);
           break;
         case 'i':
           iter = int.parse(matches[2]!, radix: 10);
@@ -370,10 +370,11 @@ class Scram {
       /// Check if the password matches with the challenge.
       if (password['name'] == hashName &&
           password['salt'] ==
-              Utils.arrayBufferToBase64(challengeData['salt'] as Uint8List) &&
+              Echotils.arrayBufferToBase64(
+                  challengeData['salt'] as Uint8List) &&
           password['iter'] == challengeData['iteration']) {
-        clientKey = Utils.atob(password['ck'] as String);
-        serverKey = Utils.atob(password['sk'] as String);
+        clientKey = Echotils.atob(password['ck'] as String);
+        serverKey = Echotils.atob(password['sk'] as String);
       }
     } else if (connection._password is String) {
       final password = connection._password as String?;
@@ -405,17 +406,17 @@ class Scram {
     final proof = clientProof(message, clientKey!, hashName);
     final serverSignature = serverSign(message, serverKey!, hashName);
 
-    connection._saslData!['server-signature'] = Utils.btoa(serverSignature);
+    connection._saslData!['server-signature'] = Echotils.btoa(serverSignature);
     connection._saslData!['keys'] = {
       'name': hashName,
       'iter': challengeData['iter'],
-      'salt': Utils.arrayBufferToBase64(
+      'salt': Echotils.arrayBufferToBase64(
         challengeData['salt'] as Uint8List,
       ),
-      'ck': Utils.btoa(clientKey),
-      'sk': Utils.btoa(serverKey),
+      'ck': Echotils.btoa(clientKey),
+      'sk': Echotils.btoa(serverKey),
     };
 
-    return '$clientFinalMessageBare,p=${Utils.btoa(proof)}';
+    return '$clientFinalMessageBare,p=${Echotils.btoa(proof)}';
   }
 }

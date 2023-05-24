@@ -9,11 +9,11 @@ import 'package:crypto/crypto.dart' as crypto;
 
 import 'package:echo/src/builder.dart';
 import 'package:echo/src/constants.dart';
+import 'package:echo/src/enums.dart';
 import 'package:echo/src/log.dart';
 import 'package:echo/src/protocol.dart';
 import 'package:echo/src/sasl.dart';
 import 'package:echo/src/utils.dart';
-import 'package:meta/meta.dart';
 
 import 'package:xml/xml.dart' as xml;
 
@@ -538,10 +538,10 @@ class Echo {
     this.jid = jid;
 
     /// Authorization identity (username).
-    _authzid = Utils().getBareJIDFromJID(jid);
+    _authzid = Echotils().getBareJIDFromJID(jid);
 
     /// Authentication identity (user name).
-    _authcid = authcid ?? Utils().getNodeFromJID(jid);
+    _authcid = authcid ?? Echotils().getNodeFromJID(jid);
 
     /// Authentication identity. Equal gathered `password` to global password.
     _password = password;
@@ -563,7 +563,7 @@ class Echo {
     _disconnectionTimeout = disconnectionTimeout;
 
     /// Parse `jid` for domain.
-    _domain = Utils().getDomainFromJID(jid);
+    _domain = Echotils().getDomainFromJID(jid);
 
     /// Change the status of connection to `connecting`.
     _changeConnectStatus(EchoStatus.connecting, null);
@@ -631,7 +631,6 @@ class Echo {
   /// ```
   ///
   /// * @param element The XML data received by the connection.
-  @protected
   void _xmlInput(dynamic element) {
     if (xmlInput != null) {
       xmlInput?.call(element);
@@ -1142,7 +1141,7 @@ class Echo {
     if (raw != null) {
       _rawInput(raw);
     } else {
-      _rawInput(Utils.serialize(element));
+      _rawInput(Echotils.serialize(element));
     }
 
     /// Remove handlers scheduled for deletion.
@@ -1192,7 +1191,7 @@ class Echo {
     }
 
     /// Send each incoming stanza through the handler chain.
-    Utils.forEachChild(element, null, (child) async {
+    Echotils.forEachChild(element, null, (child) async {
       final matches = [];
       _handlers = _handlers.where((handler) {
         try {
@@ -1245,7 +1244,7 @@ class Echo {
       handler: ([element]) async => _onResourceBindResultIQ(element!),
       id: '_bind_auth_2',
     );
-    final resource = Utils().getResourceFromJID(jid);
+    final resource = Echotils().getResourceFromJID(jid);
     if (resource != null) {
       await send(
         EchoBuilder.iq(
@@ -1289,7 +1288,7 @@ class Echo {
       final jidNode = bind[0].findAllElements('jid').toList();
       if (jidNode.isNotEmpty) {
         _authenticated = true;
-        jid = Utils.getText(jidNode[0]);
+        jid = Echotils.getText(jidNode[0]);
         if (_doSession) {
           await _establishSession();
         } else {
@@ -1345,7 +1344,7 @@ class Echo {
     if (raw != null) {
       _rawInput(raw);
     } else {
-      _rawInput(Utils.serialize(bodyWrap));
+      _rawInput(Echotils.serialize(bodyWrap));
     }
 
     final connectionCheck = await _protocol.connectCB(bodyWrap);
@@ -1446,7 +1445,7 @@ class Echo {
       });
       if (_mechanism!.isClientFirst!) {
         final response = _mechanism!.clientChallenge();
-        requestAuthExchange.t(Utils.btoa(response));
+        requestAuthExchange.t(Echotils.btoa(response));
       }
       await send(requestAuthExchange.nodeTree);
       mechanismFound = true;
@@ -1456,11 +1455,11 @@ class Echo {
   }
 
   Future<bool> _saslChallengeCB(xml.XmlElement element) async {
-    final challenge = Utils.atob(Utils.getText(element));
+    final challenge = Echotils.atob(Echotils.getText(element));
     final response = _mechanism?.onChallenge(challenge: challenge);
     final stanza = EchoBuilder('response', {'xmlns': ns['SASL']});
     if (response!.isNotEmpty) {
-      stanza.t(Utils.btoa(response));
+      stanza.t(Echotils.btoa(response));
     }
     await send(stanza.nodeTree);
 
@@ -1470,7 +1469,7 @@ class Echo {
   /// Attempt legacy (i.e. non-SASL) authentication.
   Future<void> _attemptLegacyAuth() async {
     /// Check if node is not null, if null then client disconnects.
-    if (Utils().getNodeFromJID(jid) == null) {
+    if (Echotils().getNodeFromJID(jid) == null) {
       await _changeConnectStatus(
         EchoStatus.connectionFailed,
         errorCondition['MISSING_JID_NODE'],
@@ -1492,7 +1491,7 @@ class Echo {
         )
             .c('query', attributes: {'xmlns': ns['AUTH']!})
             .c('username')
-            .t(Utils().getNodeFromJID(jid)!)
+            .t(Echotils().getNodeFromJID(jid)!)
             .nodeTree,
       );
     }
@@ -1511,17 +1510,19 @@ class Echo {
     )
         .c('query', attributes: {'xmlns': ns['AUTH']!})
         .c('username')
-        .t(Utils().getNodeFromJID(jid)!)
+        .t(Echotils().getNodeFromJID(jid)!)
         .up()
         .c('password')
         .t(_password as String);
 
-    if (Utils().getResourceFromJID(jid) == null) {
+    if (Echotils().getResourceFromJID(jid) == null) {
       /// Since the user has not supplied a resource, we pick a default one
       /// here. Unlike other auth methods, the server cannot do this for us.
-      jid = '${Utils().getBareJIDFromJID(jid)}/echo';
+      jid = '${Echotils().getBareJIDFromJID(jid)}/echo';
     }
-    iq.up().c('resource', attributes: {}).t(Utils().getResourceFromJID(jid)!);
+    iq
+        .up()
+        .c('resource', attributes: {}).t(Echotils().getResourceFromJID(jid)!);
     _addSystemHandler(
       handler: ([element]) async => _auth2CB(element!),
       id: '_auth_2',
@@ -1546,7 +1547,7 @@ class Echo {
     /// handlers, and returns false.
     if (_saslData!['server-signature'] != null) {
       String? serverSignature;
-      final success = Utils.btoa(Utils.getText(element!));
+      final success = Echotils.btoa(Echotils.getText(element!));
       final attribute = RegExp(r'([a-z]+)=([^,]+)(,|$)');
       final matches = attribute.allMatches(success);
       for (final match in matches) {
@@ -1956,7 +1957,7 @@ class Handler {
       this.options!.remove('matchBare');
     }
     if (this.options!.containsKey('matchBareFromJid')) {
-      this.from = from != null ? Utils().getBareJIDFromJID(from) : null;
+      this.from = from != null ? Echotils().getBareJIDFromJID(from) : null;
     } else {
       this.from = from;
     }
@@ -2014,7 +2015,7 @@ class Handler {
 
     /// If null then return true that namespace matches.
     if (namespace == null) return true;
-    Utils.forEachChild(element, null, (node) {
+    Echotils.forEachChild(element, null, (node) {
       if (getNamespace(node) == namespace) {
         isNamespaceMatches = true;
       }
@@ -2032,11 +2033,11 @@ class Handler {
     String? from = element.getAttribute('from');
 
     if (options!['matchBareFromJid']!) {
-      from = Utils().getBareJIDFromJID(from!);
+      from = Echotils().getBareJIDFromJID(from!);
     }
     final elementType = element.getAttribute('type');
     if (namespaceMatch(element) &&
-        (name == null || Utils.isTagEqual(element, name!)) &&
+        (name == null || Echotils.isTagEqual(element, name!)) &&
         (type == null ||
             (type is List
                 ? (type! as List).contains(elementType)

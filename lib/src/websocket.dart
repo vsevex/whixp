@@ -485,7 +485,7 @@ class Websocket extends Protocol {
   /// * The XML tree representation of the `close` element is sent using the
   /// connection's `_xmlOutput()` method.
   /// * The `close` node tree is serialized to a string using
-  /// `Utils.serialize()`.
+  /// `Echotils.serialize()`.
   /// * The `close` string is added to the socket using the `add()` method.
   @override
   Future<void> disconnect([xml.XmlElement? presence]) async {
@@ -505,7 +505,7 @@ class Websocket extends Protocol {
       connection._xmlOutput(close.nodeTree);
 
       /// Serialize the 'close' node tree to a string.
-      final closeString = Utils.serialize(close.nodeTree);
+      final closeString = Echotils.serialize(close.nodeTree);
 
       /// Send the serialized 'close' string using connection's `_rawOutput`.
       connection._rawOutput(closeString);
@@ -589,7 +589,7 @@ class Websocket extends Protocol {
           }
 
           /// Serialize the stanza to a raw string.
-          final rawStanza = Utils.serialize(stanza);
+          final rawStanza = Echotils.serialize(stanza);
 
           /// Send the stanza using the connection's `_xmlOutput` and
           /// `_rawOutput` methods.
@@ -662,7 +662,7 @@ class Websocket extends Protocol {
           element.firstChild!.value == 'presence' &&
           element.firstChild!.getAttribute('type') == 'unavailable') {
         connection._xmlInput(element);
-        connection._rawInput(Utils.serialize(element));
+        connection._rawInput(Echotils.serialize(element));
 
         /// If we are already disconnecting we will ignore the unavailable
         /// stanza and wait for the </stream:stream> tag before we close the
@@ -705,7 +705,7 @@ class Websocket extends Protocol {
         element.firstChild!.nodeType == xml.XmlNodeType.ELEMENT &&
         element.firstChild!.getAttribute('type') == 'unavailable') {
       connection._xmlInput(element);
-      connection._rawInput(Utils.serialize(element));
+      connection._rawInput(Echotils.serialize(element));
       // if we are already disconnecting we will ignore the unavailable stanza and
       // wait for the </stream:stream> tag before we close the connection
       return;
@@ -730,8 +730,8 @@ class Websocket extends Protocol {
     /// `connection._xmlOutput` method.
     connection._xmlOutput(start.nodeTree);
 
-    /// The node tree serialized using [Utils]'s serialize method.
-    final startString = Utils.serialize(start.nodeTree);
+    /// The node tree serialized using [Echotils]'s serialize method.
+    final startString = Echotils.serialize(start.nodeTree);
 
     /// the serialized string representation is logged using the
     /// `connection.rawOutput` method.

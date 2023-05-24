@@ -3,7 +3,7 @@ import 'package:echo/src/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
 
-/// This class represents a builder for creating XML elements using [Utils]
+/// This class represents a builder for creating XML elements using [Echotils]
 /// helper methods. It provides methods for constructing the XML tree and
 /// manipulating the current node.
 class EchoBuilder {
@@ -25,7 +25,7 @@ class EchoBuilder {
     }
 
     /// Holds the tree being built.
-    nodeTree = Utils.xmlElement(name, attributes: attributes);
+    nodeTree = Echotils.xmlElement(name, attributes: attributes);
 
     /// Points to the current operation node.
     _node = nodeTree;
@@ -57,7 +57,7 @@ class EchoBuilder {
   /// This function returns a String serialiation of the current DOM tree. It is
   /// often used internally to pass data to a Request object.
   @override
-  String toString() => Utils.serialize(nodeTree)!;
+  String toString() => Echotils.serialize(nodeTree)!;
 
   /// Sets the current node to its parent node.
   ///
@@ -102,8 +102,8 @@ class EchoBuilder {
     Map<String, String>? attributes,
     String? text,
   }) {
-    /// Creates child using `Utils.xmlElement`.
-    final child = Utils.xmlElement(name, attributes: attributes, text: text);
+    /// Creates child using `Echotils.xmlElement`.
+    final child = Echotils.xmlElement(name, attributes: attributes, text: text);
 
     /// Add created child to nodes.
     _node!.children.add(child!);
@@ -119,7 +119,7 @@ class EchoBuilder {
   ///
   /// * @return [EchoBuilder] object.
   EchoBuilder cnode(xml.XmlElement element) {
-    final node = Utils.copyElement(element);
+    final node = Echotils.copyElement(element);
     _node!.children.add(node);
     _node = node;
     return this;
@@ -133,7 +133,7 @@ class EchoBuilder {
   /// * @return [EchoBuilder] object.
   EchoBuilder t(String text) {
     /// Create text node.
-    final child = Utils.xmlTextNode(text);
+    final child = Echotils.xmlTextNode(text);
 
     /// Add created text node to current nodes.
     _node!.children.add(child);
