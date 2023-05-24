@@ -371,7 +371,8 @@ class Scram {
       if (password['name'] == hashName &&
           password['salt'] ==
               Echotils.arrayBufferToBase64(
-                  challengeData['salt'] as Uint8List) &&
+                challengeData['salt'] as Uint8List,
+              ) &&
           password['iter'] == challengeData['iteration']) {
         clientKey = Echotils.atob(password['ck'] as String);
         serverKey = Echotils.atob(password['sk'] as String);

@@ -468,11 +468,12 @@ class Echotils {
   /// might be misinterpreted as XML markup. For instance, if a string contains
   /// the character `<`, it needs to be replaced with `&lt;` to prevent it from
   /// being interpreted as the start of a new XML element.
-  static String xmlEscape(String text) => text.replaceAll('&', '&amp;');
-  // .replaceAll('<', '&lt;')
-  // .replaceAll('>', '&gt;')
-  // .replaceAll("'", '&apos;')
-  // .replaceAll('"', '&quot;');
+  static String xmlEscape(String text) => text
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll("'", '&apos;')
+      .replaceAll('"', '&quot;');
 
   /// This method takes a [String] argument `value` and returns a [String]
   /// in UTF-8. It works by iterating through each character in the input string
