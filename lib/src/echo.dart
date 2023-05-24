@@ -769,7 +769,7 @@ class Echo {
     }
 
     final handler = addHandler(
-      handler: (stanza) async {
+      (stanza) async {
         if (timeoutHandler != null) {
           deleteTimedHandler(timeoutHandler);
         }
@@ -921,7 +921,9 @@ class Echo {
   /// * @param from The stanza from attribute to match.
   /// * @param options The handler options
   /// * @return A reference to the handler that can be used to remove it.
-  Handler addHandler({
+  Handler addHandler(
+    /// The user callback.
+    Future<bool> Function(xml.XmlElement)? handler, {
     /// The user callback.
     String? namespace,
 
@@ -939,9 +941,6 @@ class Echo {
 
     /// The handler options.
     Map<String, bool>? options,
-
-    /// The user callback.
-    Future<bool> Function(xml.XmlElement)? handler,
   }) {
     /// Create new [Handler] object.
     final hand = Handler(
