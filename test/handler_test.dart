@@ -14,12 +14,22 @@ void main() {
     Handler? handlerWOptions;
     setUp(
       () {
-        handler = Handler(namespace: 'http://example.com');
+        handler = Handler(
+          (element) async {
+            return false;
+          },
+          namespace: 'http://example.com',
+        );
 
         const options = {'ignoreNamespaceFragment': true};
 
         /// Handler with options decleration.
-        handlerWOptions = Handler(options: options);
+        handlerWOptions = Handler(
+          (element) async {
+            return false;
+          },
+          options: options,
+        );
 
         /// Create element with the given name.
         element = Echotils.xmlElement('element');
@@ -50,7 +60,12 @@ void main() {
     Handler? handler;
     setUp(
       () {
-        handler = Handler(namespace: 'http://example.com');
+        handler = Handler(
+          (element) async {
+            return false;
+          },
+          namespace: 'http://example.com',
+        );
 
         /// Create element with the given name.
         element = Echotils.xmlElement('element');
@@ -59,7 +74,9 @@ void main() {
 
     test('Must return true with no namespace given', () {
       /// Handler without namespace
-      final handler = Handler();
+      final handler = Handler((element) async {
+        return false;
+      });
       final result = handler.namespaceMatch(element!);
       expect(result, isTrue);
     });
@@ -108,6 +125,9 @@ void main() {
     setUp(
       () {
         handler = Handler(
+          (element) async {
+            return false;
+          },
           namespace: 'http://example.com',
           name: 'element',
           type: 'type',
@@ -131,27 +151,47 @@ void main() {
     });
 
     test('Must return true with missing optional params', () {
-      final handler = Handler(namespace: 'http://example.com');
+      final handler = Handler(
+        (element) async {
+          return false;
+        },
+        namespace: 'http://example.com',
+      );
       element!.setAttribute('xmlns', 'http://example.com');
       final result = handler.isMatch(element!);
       expect(result, isTrue);
     });
     test('Must return false with mismatched namespace', () {
-      final handler = Handler(namespace: 'http://example.com');
+      final handler = Handler(
+        (element) async {
+          return false;
+        },
+        namespace: 'http://example.com',
+      );
       element!.setAttribute('xmlns', 'http://blin.com');
       final result = handler.isMatch(element!);
       expect(result, isFalse);
     });
 
     test('Must return false wiht mismatched element name', () {
-      final handler = Handler(name: 'element');
+      final handler = Handler(
+        (element) async {
+          return false;
+        },
+        name: 'element',
+      );
       final element = Echotils.xmlElement('artyom');
       final result = handler.isMatch(element!);
       expect(result, isFalse);
     });
 
     test('Must return false with mismatched element type', () {
-      final handler = Handler(type: 'type');
+      final handler = Handler(
+        (element) async {
+          return false;
+        },
+        type: 'type',
+      );
       final element = Echotils.xmlElement('alyosha');
       element!.setAttribute('type', 'human');
       final result = handler.isMatch(element);
@@ -159,7 +199,12 @@ void main() {
     });
 
     test('Must return false with mismatched id', () {
-      final handler = Handler(id: 'id');
+      final handler = Handler(
+        (element) async {
+          return false;
+        },
+        id: 'id',
+      );
       element!.setAttribute('id', 'lol');
       final result = handler.isMatch(element!);
       expect(result, isFalse);
@@ -169,7 +214,13 @@ void main() {
       'Must return true with `matchBareFromJid` option enabled, and matching `from` attribute',
       () {
         const options = {'matchBareFromJid': true};
-        final handler = Handler(from: 'user@example.com', options: options);
+        final handler = Handler(
+          (element) async {
+            return false;
+          },
+          from: 'user@example.com',
+          options: options,
+        );
         element!.setAttribute('from', 'user@example.com/resource');
         final result = handler.isMatch(element!);
         expect(result, isTrue);
@@ -181,8 +232,7 @@ void main() {
     test(
       'Must return true with a callback that returns a truthy value',
       () async {
-        final handler =
-            Handler(handler: ([xml.XmlElement? element]) async => true);
+        final handler = Handler((element) async => true);
         final element = Echotils.xmlElement('element');
         final shouldRemainActive = await handler.run(element!);
         expect(shouldRemainActive, isTrue);
@@ -191,17 +241,14 @@ void main() {
 
     test('Must return false with a callback that returns a falsy value',
         () async {
-      final handler =
-          Handler(handler: ([xml.XmlElement? element]) async => false);
+      final handler = Handler((element) async => false);
       final element = Echotils.xmlElement('element');
       final shouldRemainActive = await handler.run(element!);
       expect(shouldRemainActive, isFalse);
     });
 
     test('Must throw an exception', () async {
-      final handler = Handler(
-        handler: ([xml.XmlElement? element]) => throw Exception('Blin'),
-      );
+      final handler = Handler((element) => throw Exception('Blin'));
       final element = Echotils.xmlElement('element');
       try {
         await handler.run(element!);
@@ -213,8 +260,8 @@ void main() {
     test('Must return true with a callback that modifies the element',
         () async {
       final handler = Handler(
-        handler: ([xml.XmlElement? element]) async {
-          element!.setAttribute('modified', 'true');
+        (element) async {
+          element.setAttribute('modified', 'true');
           return true;
         },
       );
