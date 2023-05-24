@@ -97,7 +97,7 @@ class Echo {
     /// called for a received IQ 'set' or 'get'.
     _iqFallbackHandler = Handler(
       handler: ([iq]) async {
-        send(
+        await send(
           EchoBuilder.iq(
             attributes: {
               'type': 'error',
@@ -1192,18 +1192,17 @@ class Echo {
 
     /// Send each incoming stanza through the handler chain.
     Echotils.forEachChild(element, null, (child) async {
-      final matches = [];
-      _handlers = _handlers.where((handler) {
+      final matches = <Handler>[];
+      final handlers = <Handler>[];
+      for (final handler in _handlers) {
         try {
           if (handler.isMatch(child) && (_authenticated || !handler.user)) {
-            handler.run(child)!.then((value) {
-              if (value) {
-                return true;
-              }
-            });
+            if (await handler.run(child)!) {
+              handlers.add(handler);
+            }
             matches.add(handler);
           } else {
-            return true;
+            handlers.add(handler);
           }
         } catch (error) {
           /// If the handler throws an exception, we consider it as false.
@@ -1212,13 +1211,14 @@ class Echo {
           Log()
               .warn('Removing Echo handlers due to uncaught exception: $error');
         }
-        return false;
-      }).toList();
+      }
+
+      _handlers = handlers;
 
       /// If no handler was fired for an incoming IQ with type='set', then we
       /// return an IQ error stanza with `service-unavailable`.
       if (matches.isEmpty && _iqFallbackHandler.isMatch(child)) {
-        _iqFallbackHandler.run(child);
+        await _iqFallbackHandler.run(child);
       }
     });
   }
