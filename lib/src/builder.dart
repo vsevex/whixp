@@ -15,14 +15,14 @@ class EchoBuilder {
     this.name, [
     /// [Map] representation of attribute key-value pairs for the XML element
     /// being constructed.
-    Map<String, dynamic>? attributes,
+    this.attributes,
   ]) {
-    this.attributes = attributes ?? {};
-
     /// Sets correct namespace for jabber:client elements.
     if (name == 'presence' || name == 'message' || name == 'iq') {
-      if (this.attributes.containsKey('xmlns')) {
-        this.attributes['xmlns'] = ns['CLIENT'];
+      if (attributes != null && attributes!['xmlns'] == null) {
+        attributes!['xmlns'] = ns['CLIENT'];
+      } else {
+        attributes ??= {'xmlns': ns['CLIENT']};
       }
     }
 
@@ -34,15 +34,15 @@ class EchoBuilder {
   }
 
   /// Creates an [EchoBuilder] with a <message/> element as the root.
-  factory EchoBuilder.message({Map<String, dynamic> attributes = const {}}) =>
+  factory EchoBuilder.message({Map<String, dynamic>? attributes}) =>
       EchoBuilder('message', attributes);
 
   /// Creates an [EchoBuilder] with an <iq/> element as the root.
-  factory EchoBuilder.iq({Map<String, dynamic> attributes = const {}}) =>
+  factory EchoBuilder.iq({Map<String, dynamic>? attributes}) =>
       EchoBuilder('iq', attributes);
 
   /// Creates an [EchoBuilder] with a <presence/> element as the root.
-  factory EchoBuilder.pres({Map<String, dynamic> attributes = const {}}) =>
+  factory EchoBuilder.pres({Map<String, dynamic>? attributes}) =>
       EchoBuilder('presence', attributes);
 
   /// [String] representation of the name of an XML element that is being
@@ -51,7 +51,7 @@ class EchoBuilder {
 
   /// [Map] representation of attribute key-value pairs for the XML element
   /// being constructed.
-  late Map<String, dynamic> attributes;
+  Map<String, dynamic>? attributes;
 
   xml.XmlElement? nodeTree;
   xml.XmlNode? _node;
