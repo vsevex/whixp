@@ -1213,6 +1213,7 @@ class Echo {
         }
       }
 
+      /// Assign new handlers to embbedded one.
       _handlers = handlers;
 
       /// If no handler was fired for an incoming IQ with type='set', then we
