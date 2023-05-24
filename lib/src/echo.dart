@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -95,7 +96,7 @@ class Echo {
     /// This is a fallback handler which gets called when no other handler was
     /// called for a received IQ 'set' or 'get'.
     _iqFallbackHandler = Handler(
-      handler: ([iq]) {
+      handler: ([iq]) async {
         send(
           EchoBuilder.iq(
             attributes: {
@@ -229,7 +230,8 @@ class Echo {
 
   /// This variable represents a function that can be assigned to handle the
   /// connection status and related data after a connection attempt.
-  late final Function(EchoStatus, [String?, xml.XmlElement?])? _connectCallback;
+  late final Future Function(EchoStatus, [String?, xml.XmlElement?])?
+      _connectCallback;
 
   /// This variable holds an instance of the [Handler] class that serves as a
   /// fallback handler for IQ (Info/Query) stanzas.
@@ -427,23 +429,23 @@ class Echo {
   ///
   /// * @param suffix A optional suffix to append to the unique id.
   /// * @return The generated unique ID.
-  // String _getUniqueId(dynamic suffix) {
-  //   /// It follows the format specified by the UUID version 4 standart.
-  //   final uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
-  //       .replaceAllMapped(RegExp('[xy]'), (match) {
-  //     final r = math.Random.secure().nextInt(16);
-  //     final v = match.group(0) == 'x' ? r : (r & 0x3 | 0x8);
-  //     return v.toRadixString(16);
-  //   });
+  String _getUniqueId(dynamic suffix) {
+    /// It follows the format specified by the UUID version 4 standart.
+    final uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+        .replaceAllMapped(RegExp('[xy]'), (match) {
+      final r = math.Random.secure().nextInt(16);
+      final v = match.group(0) == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toRadixString(16);
+    });
 
-  //   /// Check whether the provided suffix is [String] or [int], so if type is
-  //   /// one of them, proceed to concatting.
-  //   if (suffix is String || suffix is num) {
-  //     return '$uuid:$suffix';
-  //   } else {
-  //     return uuid;
-  //   }
-  // }
+    /// Check whether the provided suffix is [String] or [int], so if type is
+    /// one of them, proceed to concatting.
+    if (suffix is String || suffix is num) {
+      return '$uuid:$suffix';
+    } else {
+      return uuid;
+    }
+  }
 
   /// NOTE: Actually, this method does not have any meaning at the moment due the
   /// [Echo] only supports messaging through Websockets, so if there will be
@@ -514,7 +516,7 @@ class Echo {
   /// to that same JID. See XEP-178 for more details.
   /// * @param disconnectionTimeout The optional disconnection timeout in
   /// milliseconds before `doDisconnect` will be called.
-  void connect({
+  Future<void> connect({
     /// User's `Jabber` identifier.
     required String jid,
 
@@ -522,14 +524,14 @@ class Echo {
     dynamic password,
 
     /// The connection callback function.
-    void Function(EchoStatus)? callback,
+    Future<void> Function(EchoStatus)? callback,
 
     /// Optional alternative authentication identifier.
     String? authcid,
 
     /// Disconnection timeout before terminating.
     int disconnectionTimeout = 3000,
-  }) {
+  }) async {
     /// Equal gathered `jid` to global one.
     ///
     /// Authorization identity.
@@ -545,7 +547,8 @@ class Echo {
     _password = password;
 
     /// Connection callback will be equal if there is one.
-    _connectCallback = (status, [condition, element]) => callback!.call(status);
+    _connectCallback =
+        (status, [condition, element]) async => callback!.call(status);
 
     /// Make `disconnectin` false.
     _disconnecting = false;
@@ -566,7 +569,7 @@ class Echo {
     _changeConnectStatus(EchoStatus.connecting, null);
 
     /// Build connection of the `protocol`.
-    _protocol.connect();
+    await _protocol.connect();
   }
 
   /// Helper function that makes sure plugins and the user's callback are
@@ -575,7 +578,7 @@ class Echo {
   /// * @param status New connection status, one of the values of [Status] enum.
   /// * @param condition The error condition or null.
   /// * @param element The triggering stanza.
-  void _changeConnectStatus(
+  Future<void> _changeConnectStatus(
     /// Status of the connection.
     EchoStatus status,
 
@@ -585,7 +588,7 @@ class Echo {
     /// [xml.XmlElement] type element parameter.
     [
     xml.XmlElement? element,
-  ]) {
+  ]) async {
     // for (final k in _connectionPlugins!.keys) {
     //   final plugin = _connectionPlugins![k];
     //   if (plugin!.status != status) {
@@ -598,7 +601,7 @@ class Echo {
     // }
     if (_connectCallback != null) {
       try {
-        _connectCallback!.call(status, condition, element);
+        await _connectCallback!.call(status, condition, element);
       } catch (error) {
         _handleError(error);
         Log().error('User connection callback caused an exception: $error');
@@ -719,7 +722,7 @@ class Echo {
   ///
   /// The message type can be [xml.XmlElement], or list of [xml.XmlElement], or
   /// just [EchoBuilder].
-  void send(dynamic message) {
+  Future<void> send(dynamic message) async {
     /// If the message is null or empty, exit from the function.
     if (message == null) return;
 
@@ -742,7 +745,69 @@ class Echo {
     }
 
     /// Run the protocol send function to flush all the available data.
-    _protocol.send();
+    await _protocol.send();
+  }
+
+  /// Helper function to send IQ stanzas.
+  ///
+  /// * @param element The stanza to send.
+  /// * @param callback The callback function for a successful request.
+  /// * @param onError The callback function for a failed or timed out request.
+  /// On timeout, the stanza will be null.
+  /// * @param timeout The time specified in milliseconds for a timeout to
+  /// occur.
+  Future<String> sendIQ({
+    required xml.XmlElement element,
+    void Function(xml.XmlElement element)? callback,
+    void Function(xml.XmlElement? element)? onError,
+    int? timeout,
+  }) async {
+    _TimedHandler? timeoutHandler;
+    String? id = element.getAttribute('id');
+    if (id == null) {
+      id = _getUniqueId('sendIQ');
+      element.setAttribute('id', id);
+    }
+
+    final handler = addHandler(
+      handler: ([stanza]) async {
+        if (timeoutHandler != null) {
+          deleteTimedHandler(timeoutHandler);
+        }
+        final iqType = stanza!.getAttribute('type');
+        if (iqType == 'result') {
+          if (callback != null) {
+            callback.call(stanza);
+          }
+        } else if (iqType == 'error') {
+          if (onError != null) {
+            onError.call(stanza);
+          }
+        } else {
+          throw Exception('Got bad IQ type of $iqType');
+        }
+        return false;
+      },
+      name: 'iq',
+      id: id,
+      type: ['error', 'result'],
+    );
+
+    /// If timeout specified, set up a timeout handler.
+    if (timeout != null) {
+      timeoutHandler = addTimedHandler(timeout, () {
+        /// Get rid of normal handler.
+        deleteHandler(handler);
+
+        /// If onError is not null, then call onError with null identifier.
+        if (onError != null) {
+          onError.call(null);
+        }
+        return false;
+      });
+    }
+    await send(element);
+    return id;
   }
 
   /// Queue outgoing data for later sending.
@@ -870,7 +935,7 @@ class Echo {
     Map<String, bool>? options,
 
     /// The user callback.
-    bool Function([xml.XmlElement?])? handler,
+    Future<bool> Function([xml.XmlElement?])? handler,
   }) {
     /// Create new [Handler] object.
     final hand = Handler(
@@ -953,9 +1018,9 @@ class Echo {
   /// as this process happens.
   ///
   /// * @param reason The reason the disconnect is occuring.
-  void disconnect(String? reason) {
+  Future<void> disconnect(String? reason) async {
     /// Change the status of connection to disconnecting.
-    _changeConnectStatus(EchoStatus.disconnecting, reason);
+    await _changeConnectStatus(EchoStatus.disconnecting, reason);
 
     /// Log according to the `reason` value.
     if (reason != null) {
@@ -988,7 +1053,7 @@ class Echo {
       if (presence != null) {
         _protocol.disconnect(presence.nodeTree);
       } else {
-        _protocol.disconnect();
+        await _protocol.disconnect();
       }
     }
 
@@ -996,7 +1061,7 @@ class Echo {
     else {
       Log().warn('Disconnect was called before Echo connected to the server.');
       _protocol.abortAllRequests();
-      _doDisconnect();
+      await _doDisconnect();
     }
   }
 
@@ -1007,7 +1072,7 @@ class Echo {
   ///
   /// It takes an optional [condition] parameter which represents the reason or
   /// condition for disconnecting.
-  void _doDisconnect([String? condition]) {
+  Future<void> _doDisconnect([String? condition]) async {
     _idleTimeout.cancel();
 
     /// If the [_disconnectTimeout] is set, it will be canceled by calling the
@@ -1024,7 +1089,7 @@ class Echo {
 
     /// Invokes `doDisconnect` method which is declared as [Protocol] object
     /// method.
-    _protocol.doDisconnect();
+    await _protocol.doDisconnect();
 
     /// Resetting internal flags and variables.
     _authenticated = false;
@@ -1050,7 +1115,7 @@ class Echo {
 
     /// Change connection status of the server to disconnecting to indicate that
     /// the process is in the state of disconnecting.
-    _changeConnectStatus(EchoStatus.disconnected, condition);
+    await _changeConnectStatus(EchoStatus.disconnected, condition);
 
     /// Finally, make connected property false.
     _connected = false;
@@ -1064,7 +1129,7 @@ class Echo {
   ///
   /// * @param response The response that has data ready
   /// * @param raw The stanza as a raw string (optional)
-  void _dataReceived(xml.XmlElement response, [String? raw]) {
+  Future<void> _dataReceived(xml.XmlElement response, [String? raw]) async {
     final element = _protocol.reqToData(response);
     if (element == null) return;
 
@@ -1096,7 +1161,7 @@ class Echo {
 
     /// Handle graceful disconnect
     if (_disconnecting) {
-      _doDisconnect();
+      await _doDisconnect();
       return;
     }
 
@@ -1115,26 +1180,28 @@ class Echo {
             conflict!.childElements.isNotEmpty) {
           condition = 'conflict';
         }
-        _changeConnectStatus(EchoStatus.connectionFailed, condition);
+        await _changeConnectStatus(EchoStatus.connectionFailed, condition);
       } else {
-        _changeConnectStatus(
+        await _changeConnectStatus(
           EchoStatus.connectionFailed,
           errorCondition['UNKNOWN_REASON'],
         );
       }
-      _doDisconnect(condition);
+      await _doDisconnect(condition);
       return;
     }
 
     /// Send each incoming stanza through the handler chain.
-    Utils.forEachChild(element, null, (child) {
+    Utils.forEachChild(element, null, (child) async {
       final matches = [];
       _handlers = _handlers.where((handler) {
         try {
           if (handler.isMatch(child) && (_authenticated || !handler.user)) {
-            if (handler.run(child)!) {
-              return true;
-            }
+            handler.run(child)!.then((value) {
+              if (value) {
+                return true;
+              }
+            });
             matches.add(handler);
           } else {
             return true;
@@ -1169,18 +1236,18 @@ class Echo {
   ///
   /// Otherwise it will be called automatically as soon as the XMPP server
   /// advertises the 'urn:ietf:params:xml:ns:xmpp-bind' stream feature.
-  void _bind() {
+  Future<void> _bind() async {
     if (!_doBind) {
       Log().info('Echo bind called but "do_bind" is false');
       return;
     }
     _addSystemHandler(
-      handler: ([element]) => _onResourceBindResultIQ(element!),
+      handler: ([element]) async => _onResourceBindResultIQ(element!),
       id: '_bind_auth_2',
     );
     final resource = Utils().getResourceFromJID(jid);
     if (resource != null) {
-      send(
+      await send(
         EchoBuilder.iq(
           attributes: {'type': 'set', 'id': '_bind_auth_2'},
         )
@@ -1190,7 +1257,7 @@ class Echo {
             .nodeTree,
       );
     } else {
-      send(
+      await send(
         EchoBuilder.iq(
           attributes: {'type': 'set', 'id': '_bind_auth_2'},
         ).c('bind', attributes: {'xmlns': ns['BIND']!}).nodeTree,
@@ -1202,7 +1269,7 @@ class Echo {
   ///
   /// * @param element XmlElement matching stanza.
   /// * @return false to remove the handler.
-  bool _onResourceBindResultIQ(xml.XmlElement element) {
+  Future<bool> _onResourceBindResultIQ(xml.XmlElement element) async {
     if (element.getAttribute('type') == 'error') {
       Log().warn('Resource binding failed.');
       final conflict = element.getElement('conflict');
@@ -1210,7 +1277,11 @@ class Echo {
       if (conflict != null) {
         condition = errorCondition['CONFLICT'];
       }
-      _changeConnectStatus(EchoStatus.authenticationFailed, condition, element);
+      await _changeConnectStatus(
+        EchoStatus.authenticationFailed,
+        condition,
+        element,
+      );
       return false;
     }
     final bind = element.findAllElements('bind').toList();
@@ -1220,14 +1291,18 @@ class Echo {
         _authenticated = true;
         jid = Utils.getText(jidNode[0]);
         if (_doSession) {
-          _establishSession();
+          await _establishSession();
         } else {
-          _changeConnectStatus(EchoStatus.connected, null);
+          await _changeConnectStatus(EchoStatus.connected, null);
         }
       }
     } else {
       Log().warn('Resource binding failed.');
-      _changeConnectStatus(EchoStatus.authenticationFailed, null, element);
+      await _changeConnectStatus(
+        EchoStatus.authenticationFailed,
+        null,
+        element,
+      );
       return false;
     }
     return false;
@@ -1240,11 +1315,11 @@ class Echo {
   ///
   /// * @param request The current request
   /// * @param callback Low level (xmpp) connect callback function.
-  void _connectCB(
+  Future<void> _connectCB(
     xml.XmlElement request,
-    void Function(Echo)? callback, [
+    Future<void> Function(Echo)? callback, [
     String? raw,
-  ]) {
+  ]) async {
     Log().log('connectCB was called');
     _connected = true;
 
@@ -1252,11 +1327,11 @@ class Echo {
     try {
       bodyWrap = _protocol.reqToData(request);
     } catch (error) {
-      _changeConnectStatus(
+      await _changeConnectStatus(
         EchoStatus.connectionFailed,
         errorCondition['BAD_FORMAT'],
       );
-      _doDisconnect(errorCondition['BAD_FORMAT']);
+      await _doDisconnect(errorCondition['BAD_FORMAT']);
     }
 
     if (bodyWrap == null) return;
@@ -1273,7 +1348,7 @@ class Echo {
       _rawInput(Utils.serialize(bodyWrap));
     }
 
-    final connectionCheck = _protocol.connectCB(bodyWrap);
+    final connectionCheck = await _protocol.connectCB(bodyWrap);
     if (connectionCheck == status[EchoStatus.connectionFailed]) {
       return;
     }
@@ -1285,7 +1360,7 @@ class Echo {
             bodyWrap.findAllElements('features').toList().isNotEmpty;
 
     if (!hasFeatures) {
-      _protocol.nonAuth(callback);
+      await _protocol.nonAuth(callback);
       return;
     }
 
@@ -1303,16 +1378,16 @@ class Echo {
           .isEmpty) {
         /// There are no matching SASL mechanisms and also no legacy auth
         /// available.
-        _protocol.nonAuth(callback);
+        await _protocol.nonAuth(callback);
         return;
       }
     }
-    if (_doAuthentication) _authenticate(matched);
+    if (_doAuthentication) await _authenticate(matched);
   }
 
-  void _authenticate(List<SASL?> mechanisms) {
-    if (!_attemptSASLAuth(mechanisms)) {
-      _attemptLegacyAuth();
+  Future<void> _authenticate(List<SASL?> mechanisms) async {
+    if (!await _attemptSASLAuth(mechanisms)) {
+      await _attemptLegacyAuth();
     }
   }
 
@@ -1342,7 +1417,7 @@ class Echo {
   /// * @param mechanisms List of [SASL] mechanisms.
   /// * @return [bool] true or false, depending on whether a valid SASL
   /// mechanism was found with which authentication could be started.
-  bool _attemptSASLAuth(List<SASL?> mechanisms) {
+  Future<bool> _attemptSASLAuth(List<SASL?> mechanisms) async {
     final mechs = _sortMechanismsByPriority(mechanisms);
     bool mechanismFound = false;
     for (int i = 0; i < mechs.length; i++) {
@@ -1373,45 +1448,45 @@ class Echo {
         final response = _mechanism!.clientChallenge();
         requestAuthExchange.t(Utils.btoa(response));
       }
-      send(requestAuthExchange.nodeTree);
+      await send(requestAuthExchange.nodeTree);
       mechanismFound = true;
       break;
     }
     return mechanismFound;
   }
 
-  bool _saslChallengeCB(xml.XmlElement element) {
+  Future<bool> _saslChallengeCB(xml.XmlElement element) async {
     final challenge = Utils.atob(Utils.getText(element));
     final response = _mechanism?.onChallenge(challenge: challenge);
     final stanza = EchoBuilder('response', {'xmlns': ns['SASL']});
     if (response!.isNotEmpty) {
       stanza.t(Utils.btoa(response));
     }
-    send(stanza.nodeTree);
+    await send(stanza.nodeTree);
 
     return true;
   }
 
   /// Attempt legacy (i.e. non-SASL) authentication.
-  void _attemptLegacyAuth() {
+  Future<void> _attemptLegacyAuth() async {
     /// Check if node is not null, if null then client disconnects.
     if (Utils().getNodeFromJID(jid) == null) {
-      _changeConnectStatus(
+      await _changeConnectStatus(
         EchoStatus.connectionFailed,
         errorCondition['MISSING_JID_NODE'],
       );
-      disconnect(errorCondition['MISSING_JID_NODE']);
+      await disconnect(errorCondition['MISSING_JID_NODE']);
     }
 
     /// Else attempt to authenticate.
     else {
-      _changeConnectStatus(EchoStatus.authenticating, null);
+      await _changeConnectStatus(EchoStatus.authenticating, null);
       _addSystemHandler(
-        handler: ([element]) => _onLegacyAuthIQResult(),
+        handler: ([element]) async => _onLegacyAuthIQResult(),
         id: '_auth_1',
       );
 
-      send(
+      await send(
         EchoBuilder.iq(
           attributes: {'type': 'get', 'to': _domain, 'id': '_auth_1'},
         )
@@ -1429,7 +1504,7 @@ class Echo {
   ///
   /// * @param element The stanza that triggered the callback.
   /// * @return false to remove the handler.
-  bool _onLegacyAuthIQResult() {
+  Future<bool> _onLegacyAuthIQResult() async {
     /// Generate IQ stanza with the id of `_auth_2`.
     final iq = EchoBuilder.iq(
       attributes: {'type': 'set', 'id': '_auth_2'},
@@ -1448,10 +1523,10 @@ class Echo {
     }
     iq.up().c('resource', attributes: {}).t(Utils().getResourceFromJID(jid)!);
     _addSystemHandler(
-      handler: ([element]) => _auth2CB(element!),
+      handler: ([element]) async => _auth2CB(element!),
       id: '_auth_2',
     );
-    send(iq.nodeTree);
+    await send(iq.nodeTree);
     return false;
   }
 
@@ -1464,7 +1539,7 @@ class Echo {
   ///
   /// * @param element The matching stanza.
   /// * @return false to remove the handler.
-  bool _saslSuccessCB(xml.XmlElement? element) {
+  Future<bool> _saslSuccessCB(xml.XmlElement? element) async {
     /// Check server signature (if available). By decoding the success message
     /// and extracting the server signature attribute. If the server signature
     /// is invalid, it invokes the SASL failure callback, cleans up the relevant
@@ -1521,11 +1596,11 @@ class Echo {
     final streamFeatureHandlers = <Handler>[];
 
     /// Wrapper function to handle stream features after SASL authentication.
-    bool wrapper(List<Handler> handlers, xml.XmlElement element) {
+    Future<bool> wrapper(List<Handler> handlers, xml.XmlElement element) async {
       while (handlers.isNotEmpty) {
         deleteHandler(handlers.removeLast());
       }
-      _onStreamFeaturesAfterSASL(element);
+      await _onStreamFeaturesAfterSASL(element);
       return false;
     }
 
@@ -1551,7 +1626,7 @@ class Echo {
     return false;
   }
 
-  bool _onStreamFeaturesAfterSASL(xml.XmlElement element) {
+  Future<bool> _onStreamFeaturesAfterSASL(xml.XmlElement element) async {
     // _features = element;
     for (int i = 0; i < element.descendantElements.length; i++) {
       final child = element.descendantElements.toList()[i];
@@ -1563,13 +1638,13 @@ class Echo {
       }
     }
     if (!_doBind) {
-      _changeConnectStatus(EchoStatus.authenticationFailed, null);
+      await _changeConnectStatus(EchoStatus.authenticationFailed, null);
       return false;
     } else if (options['explicitResourceBinding'] == null ||
         (options['explicitResourceBinding'] as bool) != true) {
-      _bind();
+      await _bind();
     } else {
-      _changeConnectStatus(EchoStatus.bindingRequired, null);
+      await _changeConnectStatus(EchoStatus.bindingRequired, null);
     }
     return false;
   }
@@ -1578,14 +1653,14 @@ class Echo {
   ///
   /// Note: The protocol for sessoin establishment has been determined as
   /// unnecessary and removed in `RFC-6121`.
-  void _establishSession() {
+  Future<void> _establishSession() async {
     /// It first checks if `_doSession` is `false`. If it is, it throws an
     /// exception indicating that the session was not advertised by the server.
     if (!_doSession) {
-      /// Throw [Exception].
-      throw Exception(
+      Log().warn(
         '_establishSession called but apparently ${ns['SESSION']} was not advertised by the server',
       );
+      return;
     }
 
     /// Adds a system handler using the `_addSystemHandler` method. The handler
@@ -1594,7 +1669,7 @@ class Echo {
     /// The function passed to the handler is `_onSessionResultIQ`, which is
     /// responsible for handling the session result.
     _addSystemHandler(
-      handler: ([element]) => _onSessionResultIQ(element!),
+      handler: ([element]) async => _onSessionResultIQ(element!),
       id: '_session_auth_2',
     );
 
@@ -1604,7 +1679,7 @@ class Echo {
     /// attributes such as 'type' (set) and 'id' ('_session_auth_2').
     /// The IQ request also includes a 'session' element with the 'xmlns'
     /// attribute set to the value of `urn:ietf:params:xml:ns:xmpp-session`.
-    send(
+    await send(
       EchoBuilder.iq(
         attributes: {
           'type': 'set',
@@ -1625,7 +1700,7 @@ class Echo {
   ///
   /// * @param element The matching stanza.
   /// * @return false to remove the handler.
-  bool _onSessionResultIQ(xml.XmlElement element) {
+  Future<bool> _onSessionResultIQ(xml.XmlElement element) async {
     /// If the 'type' attribute is 'result', it means the session was created
     /// successfully.
     if (element.getAttribute('type') == 'result') {
@@ -1634,7 +1709,7 @@ class Echo {
 
       /// The `_changeConnectStatus` method with the parameters
       /// `EchoStatus.connected` and `null` is called.
-      _changeConnectStatus(EchoStatus.connected, null);
+      await _changeConnectStatus(EchoStatus.connected, null);
     }
 
     /// If the 'type' attribute is 'error', it means the session creation
@@ -1648,7 +1723,11 @@ class Echo {
 
       /// Calls the `_changeConnectStatus` method with the parameters
       /// `EchoStatus.authenticationFailed`, `null`, and the error element.
-      _changeConnectStatus(EchoStatus.authenticationFailed, null, element);
+      await _changeConnectStatus(
+        EchoStatus.authenticationFailed,
+        null,
+        element,
+      );
 
       /// The method returns `false` in both cases, indicating that the session
       /// result was not successfully handled.
@@ -1661,7 +1740,7 @@ class Echo {
   ///
   /// * @param element XmlElment type matching stanza.
   /// * @return false to remove the handler.
-  bool _saslFailureCB([xml.XmlElement? element]) {
+  Future<bool> _saslFailureCB([xml.XmlElement? element]) async {
     if (_saslChallengeHandler != null) {
       deleteHandler(_saslChallengeHandler!);
       _saslChallengeHandler = null;
@@ -1675,7 +1754,7 @@ class Echo {
     }
 
     /// Send authentication failed status.
-    _changeConnectStatus(EchoStatus.authenticationFailed, null, element);
+    await _changeConnectStatus(EchoStatus.authenticationFailed, null, element);
     return false;
   }
 
@@ -1686,13 +1765,17 @@ class Echo {
   ///
   /// * @param element The stanza that triggered the callback.
   /// * @return false to remove the handler.
-  bool _auth2CB(xml.XmlElement element) {
+  Future<bool> _auth2CB(xml.XmlElement element) async {
     if (element.getAttribute('type') == 'result') {
       _authenticated = true;
-      _changeConnectStatus(EchoStatus.connected, null);
+      await _changeConnectStatus(EchoStatus.connected, null);
     } else if (element.getAttribute('type') == 'error') {
-      _changeConnectStatus(EchoStatus.authenticationFailed, null, element);
-      disconnect('Authenticated failed');
+      await _changeConnectStatus(
+        EchoStatus.authenticationFailed,
+        null,
+        element,
+      );
+      await disconnect('Authenticated failed');
     }
     return false;
   }
@@ -1789,7 +1872,7 @@ class Echo {
     dynamic type,
 
     /// The user callback.
-    bool Function([xml.XmlElement?])? handler,
+    Future<bool> Function([xml.XmlElement?])? handler,
   }) {
     /// Create [Handler] for passing to the system handler list.
     final hand = Handler(
@@ -1905,7 +1988,7 @@ class Handler {
   bool user = false;
 
   /// The `function` to handle the XMPP stanzas.
-  final bool Function([xml.XmlElement? element])? handler;
+  final Future<bool> Function([xml.XmlElement? element])? handler;
 
   /// Retrieves the namespacce of an XML element.
   String? getNamespace(xml.XmlElement element) {
@@ -1971,10 +2054,10 @@ class Handler {
   /// * @param element The XML element to process.
   /// * @return The result of the handler function, if available.
   /// Otherwise returns null.
-  bool? run(xml.XmlElement element) {
+  Future<bool>? run(xml.XmlElement element) async {
     bool? result;
     try {
-      result = handler!.call(element);
+      result = await handler!.call(element);
     } catch (error) {
       return false;
     }
