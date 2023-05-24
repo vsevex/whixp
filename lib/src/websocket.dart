@@ -234,7 +234,7 @@ class Websocket extends Protocol {
         _onClose(code: socket!.closeCode);
       }
     } catch (error) {
-      print(error);
+      /// TODO: Implement WebsocketError Handlers
     }
   }
 
