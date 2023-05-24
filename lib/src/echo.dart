@@ -813,6 +813,13 @@ class Echo {
   ///
   /// * @param element dynamic, this can be one
   void _queueData(xml.XmlElement? element) {
+    /// Check if `xmlns` contains the given xmlns attribute, if yes, then
+    /// queue data without check.
+    if (element != null && element.getAttribute('xmlns') == ns['CLIENT']) {
+      _data.add(element);
+      return;
+    }
+
     /// Check whether `element` is not null and local name is not empty.
     if (element == null ||
         element.children.isEmpty ||
