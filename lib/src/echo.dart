@@ -96,12 +96,12 @@ class Echo {
     /// This is a fallback handler which gets called when no other handler was
     /// called for a received IQ 'set' or 'get'.
     _iqFallbackHandler = Handler(
-      handler: ([iq]) async {
+      (iq) async {
         await send(
           EchoBuilder.iq(
             attributes: {
               'type': 'error',
-              'id': iq!.getAttribute('id'),
+              'id': iq.getAttribute('id'),
             },
           ).c('error', attributes: {'type': 'cancel'}).c(
             'service-unavailable',
@@ -769,11 +769,11 @@ class Echo {
     }
 
     final handler = addHandler(
-      handler: ([stanza]) async {
+      handler: (stanza) async {
         if (timeoutHandler != null) {
           deleteTimedHandler(timeoutHandler);
         }
-        final iqType = stanza!.getAttribute('type');
+        final iqType = stanza.getAttribute('type');
         if (iqType == 'result') {
           if (callback != null) {
             callback.call(stanza);
@@ -934,11 +934,11 @@ class Echo {
     Map<String, bool>? options,
 
     /// The user callback.
-    Future<bool> Function([xml.XmlElement?])? handler,
+    Future<bool> Function(xml.XmlElement)? handler,
   }) {
     /// Create new [Handler] object.
     final hand = Handler(
-      handler: handler,
+      handler,
       name: name,
       namespace: namespace,
       type: type,
@@ -1242,7 +1242,7 @@ class Echo {
       return;
     }
     _addSystemHandler(
-      handler: ([element]) async => _onResourceBindResultIQ(element!),
+      (element) async => _onResourceBindResultIQ(element),
       id: '_bind_auth_2',
     );
     final resource = Echotils().getResourceFromJID(jid);
@@ -1426,16 +1426,16 @@ class Echo {
         continue;
       }
       _saslSuccessHandler = _addSystemHandler(
+        (element) => _saslSuccessCB(element),
         name: 'success',
-        handler: ([element]) => _saslSuccessCB(element),
       );
       _saslFailureHandler = _addSystemHandler(
+        (element) => _saslFailureCB(element),
         name: 'failure',
-        handler: ([element]) => _saslFailureCB(element),
       );
       _saslChallengeHandler = _addSystemHandler(
+        (element) => _saslChallengeCB(element),
         name: 'challenge',
-        handler: ([element]) => _saslChallengeCB(element!),
       );
 
       _mechanism = mechanisms[i];
@@ -1482,7 +1482,7 @@ class Echo {
     else {
       await _changeConnectStatus(EchoStatus.authenticating, null);
       _addSystemHandler(
-        handler: ([element]) async => _onLegacyAuthIQResult(),
+        (element) async => _onLegacyAuthIQResult(),
         id: '_auth_1',
       );
 
@@ -1525,7 +1525,7 @@ class Echo {
         .up()
         .c('resource', attributes: {}).t(Echotils().getResourceFromJID(jid)!);
     _addSystemHandler(
-      handler: ([element]) async => _auth2CB(element!),
+      (element) async => _auth2CB(element),
       id: '_auth_2',
     );
     await send(iq.nodeTree);
@@ -1609,7 +1609,7 @@ class Echo {
     /// Add system handlers for stream:features.
     streamFeatureHandlers.add(
       _addSystemHandler(
-        handler: ([element]) => wrapper(streamFeatureHandlers, element!),
+        (element) => wrapper(streamFeatureHandlers, element),
         name: 'stream:features',
       ),
     );
@@ -1617,7 +1617,7 @@ class Echo {
     /// Add system handlers for features.
     streamFeatureHandlers.add(
       _addSystemHandler(
-        handler: ([element]) => wrapper(streamFeatureHandlers, element!),
+        (element) => wrapper(streamFeatureHandlers, element),
         namespace: ns['STREAM'],
         name: 'features',
       ),
@@ -1671,7 +1671,7 @@ class Echo {
     /// The function passed to the handler is `_onSessionResultIQ`, which is
     /// responsible for handling the session result.
     _addSystemHandler(
-      handler: ([element]) async => _onSessionResultIQ(element!),
+      (element) async => _onSessionResultIQ(element),
       id: '_session_auth_2',
     );
 
@@ -1860,7 +1860,9 @@ class Echo {
   /// * @param name The stanza name to match.
   /// * @param type The stanza type attribute to match.
   /// * @param id The stanza id attribute to match.
-  Handler _addSystemHandler({
+  Handler _addSystemHandler(
+    /// The user callback.
+    Future<bool> Function(xml.XmlElement)? handler, {
     /// The user callback.
     String? namespace,
 
@@ -1872,13 +1874,10 @@ class Echo {
 
     /// The stanza type.
     dynamic type,
-
-    /// The user callback.
-    Future<bool> Function([xml.XmlElement?])? handler,
   }) {
     /// Create [Handler] for passing to the system handler list.
     final hand = Handler(
-      handler: handler,
+      handler,
       namespace: namespace,
       name: name,
       type: type,
@@ -1907,10 +1906,9 @@ class Echo {
 /// Users will not use Handlers directly, instead they will use
 /// `Echo.addHandler()` or `Echo.deleteHandler()` method.
 class Handler {
-  Handler({
+  Handler(
     /// The function to handle the XMPP stanzas.
-    this.handler,
-
+    this.handler, {
     /// The namespace of the stanzas to match. If null, all namespaces will be
     /// considered a match.
     this.namespace,
@@ -1990,7 +1988,7 @@ class Handler {
   bool user = false;
 
   /// The `function` to handle the XMPP stanzas.
-  final Future<bool> Function([xml.XmlElement? element])? handler;
+  final Future<bool> Function(xml.XmlElement element)? handler;
 
   /// Retrieves the namespacce of an XML element.
   String? getNamespace(xml.XmlElement element) {
