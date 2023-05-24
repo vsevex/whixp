@@ -15,12 +15,14 @@ class EchoBuilder {
     this.name, [
     /// [Map] representation of attribute key-value pairs for the XML element
     /// being constructed.
-    this.attributes = const {},
+    Map<String, dynamic>? attributes,
   ]) {
+    this.attributes = attributes ?? {};
+
     /// Sets correct namespace for jabber:client elements.
     if (name == 'presence' || name == 'message' || name == 'iq') {
-      if (!attributes.containsKey('xmlns')) {
-        attributes['xmlns'] = ns['CLIENT'];
+      if (this.attributes.containsKey('xmlns')) {
+        this.attributes['xmlns'] = ns['CLIENT'];
       }
     }
 
@@ -49,7 +51,7 @@ class EchoBuilder {
 
   /// [Map] representation of attribute key-value pairs for the XML element
   /// being constructed.
-  final Map<String, dynamic> attributes;
+  late Map<String, dynamic> attributes;
 
   xml.XmlElement? nodeTree;
   xml.XmlNode? _node;
@@ -80,7 +82,7 @@ class EchoBuilder {
     /// Iterates all attribute in the attributes [Map].
     for (final attribute in attributes.keys) {
       /// Checks if attributes contain key for verification.
-      if (attributes.containsKey(attributes)) {
+      if (attributes.containsKey(attribute)) {
         if (attributes[attribute] == null) {
           /// If null, then remove attribute from node.
           _node!.removeAttribute(attribute);
