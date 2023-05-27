@@ -87,15 +87,15 @@ class Scram {
       final matches = attribute.firstMatch(passedChallenge);
       passedChallenge = passedChallenge.replaceFirst(matches![0]!, "");
 
-      switch (matches[1]) {
-        case 'r':
-          nonce = matches[2];
-        case 's':
-          salt = Echotils.base64ToArrayBuffer(matches[2]!);
-        case 'i':
-          iter = int.parse(matches[2]!, radix: 10);
-        default:
-          return null;
+      /// TODO: migrate to wildcard pattern
+      if (matches[1] == 'r') {
+        nonce = matches[2];
+      } else if (matches[1] == 's') {
+        salt = Echotils.base64ToArrayBuffer(matches[2]!);
+      } else if (matches[1] == 'i') {
+        iter = int.parse(matches[2]!, radix: 10);
+      } else {
+        return null;
       }
     }
 

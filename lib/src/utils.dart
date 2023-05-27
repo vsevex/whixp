@@ -291,22 +291,18 @@ class Echotils {
 
     if (element.children.isNotEmpty) {
       result += '>';
+
+      /// TODO: migrate to wildcard pattern
       for (final child in element.children) {
-        switch (child.nodeType) {
-          case xml.XmlNodeType.ELEMENT:
-
-            /// Normal element, so recurse
-            result += serialize(child as xml.XmlElement)!;
-          case xml.XmlNodeType.TEXT:
-
-            /// Text element to escape values
-            result += Echotils.xmlEscape(child.value!);
-          case xml.XmlNodeType.CDATA:
-
-            /// cdata section so do not escape values
-            result += '<![CDATA[${child.value}]]>';
-          default:
-            break;
+        if (child.nodeType == xml.XmlNodeType.ELEMENT) {
+          /// Normal element, so recurse
+          result += serialize(child as xml.XmlElement)!;
+        } else if (child.nodeType == xml.XmlNodeType.TEXT) {
+          /// Text element to escape values
+          result += Echotils.xmlEscape(child.value!);
+        } else if (child.nodeType == xml.XmlNodeType.CDATA) {
+          /// cdata section so do not escape values
+          result += '<![CDATA[${child.value}]]>';
         }
       }
       result += '</${element.name.qualified}>';
