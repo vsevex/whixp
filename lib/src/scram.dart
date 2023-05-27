@@ -90,13 +90,10 @@ class Scram {
       switch (matches[1]) {
         case 'r':
           nonce = matches[2];
-          break;
         case 's':
           salt = Echotils.base64ToArrayBuffer(matches[2]!);
-          break;
         case 'i':
           iter = int.parse(matches[2]!, radix: 10);
-          break;
         default:
           return null;
       }

@@ -297,17 +297,14 @@ class Echotils {
 
             /// Normal element, so recurse
             result += serialize(child as xml.XmlElement)!;
-            break;
           case xml.XmlNodeType.TEXT:
 
             /// Text element to escape values
             result += Echotils.xmlEscape(child.value!);
-            break;
           case xml.XmlNodeType.CDATA:
 
             /// cdata section so do not escape values
             result += '<![CDATA[${child.value}]]>';
-            break;
           default:
             break;
         }
