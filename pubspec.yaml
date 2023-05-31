@@ -1,7 +1,7 @@
 name: echo
-description: A starting point for Dart libraries or applications.
-version: 1.0.0
-# repository: https://github.com/my_org/my_repo
+description: Lightweight XMPP client, purely written in dart.
+version: 0.0.1
+repository: https://github.com/vsevex/echo
 
 environment:
   sdk: ">=3.0.2 <4.0.0"
