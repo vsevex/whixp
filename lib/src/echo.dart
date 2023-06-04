@@ -19,6 +19,7 @@ import 'package:web_socket_channel/web_socket_channel.dart' as ws;
 import 'package:xml/xml.dart' as xml;
 
 part '_extension.dart';
+part 'bosh.dart';
 part 'sasl_anon.dart';
 part 'sasl_external.dart';
 part 'sasl_oauthbearer.dart';
