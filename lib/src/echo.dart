@@ -17,6 +17,7 @@ import 'package:echo/src/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
 
+part 'bosh.dart';
 part 'sasl_anon.dart';
 part 'sasl_external.dart';
 part 'sasl_oauthbearer.dart';
