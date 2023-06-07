@@ -1,6 +1,8 @@
 # Echo
 
-ECHO is a lightweight and pure Dart library that allows you to connect to XMPP (Extensible Messaging and Presence Protocol) servers. This package provides a range of fundamental functionalities for XMPP communication. And is built on top of the popular [Strophe.js](https://github.com/strophe/strophejs) library, providing a streamlined and efficient solution for XMPP communication in Dart applications.
+[![License: MIT][license_badge]][license_link]
+
+Echo is a lightweight and pure Dart library that allows you to connect to XMPP (Extensible Messaging and Presence Protocol) servers. This package provides a range of fundamental functionalities for XMPP communication. And is built on top of the popular [Strophe.js](https://github.com/strophe/strophejs) library, providing a streamlined and efficient solution for XMPP communication in Dart applications.
 
 ## XMPP
 
@@ -8,7 +10,7 @@ XMPP is an open source standart protocol widely used for real-time communication
 
 ## Features
 
-**Websocket Connectivity**:  Echo establishes connections to XMPP servers exclusively over the WebSocket protocol, ensuring efficient and reliable communication.
+**WebSocket Connectivity**:  Echo establishes connections to XMPP servers exclusively over the WebSocket protocol, ensuring efficient and reliable communication.
 
 **Authentication Mechanisms**: Provides support for various XMPP authentication mechanisms, including **SASL SCRAM** with encryption options such as SHA-1, SHA-256, SHA-384, SHA-512, XOAUTH-2, OAUTHBEARER, Anonymous, and EXTERNAL.
 
@@ -76,3 +78,6 @@ void main()  {
 ## Contributing to Echo
 
 We welcome and appreciate contributions from the community to enhance the `Echo`. If you have any improvements, bug fixes, or new features to contribute, you can do so by creating a pull request.
+
+[license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[license_link]: https://opensource.org/licenses/MIT
