@@ -1,34 +1,34 @@
 part of 'echo.dart';
 
-/// Websocket connection handler class.
+/// WebSocket connection handler class.
 ///
-/// This class is used internally by [Echo] to encapsulate Websocket sessions.
+/// This class is used internally by [Echo] to encapsulate WebSocket sessions.
 /// It is not meant to be used from user's code.
 ///
-/// A library to enable XMPP over Websocket in [Echo].
+/// A library to enable XMPP over WebSocket in [Echo].
 ///
-/// This file implements XMPP over Websockets for [Echo], If a connection is
-/// established with a websocket url (ws://...) [Echo] will use Websockets.
-class Websocket extends Protocol {
+/// This file implements XMPP over WebSockets for [Echo], If a connection is
+/// established with a websocket url (ws://...) [Echo] will use WebSockets.
+class WebSocket extends Protocol {
   /// Factory method which returns private instance of this class.
-  factory Websocket(Echo connection) => Websocket._instance(connection);
+  factory WebSocket(Echo connection) => WebSocket._instance(connection);
 
   /// Constant instance of private constructor.
-  factory Websocket._instance(Echo connection) => Websocket._(connection);
+  factory WebSocket._instance(Echo connection) => WebSocket._(connection);
 
   /// [Echo] representation of `connection` variable. This is used to run
   /// several methods which is declared inside of this class.
   final Echo connection;
 
-  /// Websocket initialization. This variable assigns pure dart library named
-  /// `io`'s websocket object.
-  io.WebSocket? socket;
+  /// WebSocket initialization. This variable initializes [WebSocketChannel]
+  /// object.
+  ws.WebSocketChannel? socket;
 
   /// Variable for handling listener's onData callback outside of the scope.
   void Function(String message)? _onMessageCallback;
 
   /// Private constructor of the class.
-  Websocket._(this.connection) {
+  WebSocket._(this.connection) {
     /// Retrieve the 'service' property from the connection
     final service = connection.service;
 
@@ -48,17 +48,18 @@ class Websocket extends Protocol {
       }
 
       /// Construct the new service URL using the current host
-      newService += '://${Uri.base.host}';
-
-      /// Append the base path and service if necessary
-      if (newService.indexOf('/') != 0) {
-        newService += Uri.base.path + service;
-      } else {
-        newService += service;
-      }
+      newService += '://${connection.service}';
 
       /// Update the connection's service with the new constructed service URL
       connection.service = newService;
+    }
+
+    /// Check if the URL is valid WebSocket URL, if not then throw
+    /// [InvalidURLException].
+    if (!RegExp(
+      r'^ws(s)?://([a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*(:[0-9]+)?)?(/([a-zA-Z0-9-._~!$&\"()*+,;=:@]+))*$',
+    ).hasMatch(connection.service)) {
+      throw WebSocketException.invalidURL();
     }
   }
 
@@ -146,9 +147,9 @@ class Websocket extends Protocol {
     }
 
     /// The method constructs an error string with the format
-    /// "Websocket stream error: <condition> - <text>" based on the values of
+    /// "WebSocket stream error: <condition> - <text>" based on the values of
     /// `condition` and `text`.
-    String errorString = 'Websocket stream error: ';
+    String errorString = 'WebSocket stream error: ';
     if (condition.isNotEmpty) {
       errorString += condition;
     } else {
@@ -159,7 +160,7 @@ class Websocket extends Protocol {
     }
 
     /// The error string is logged using the `Log().error` method.
-    Log().error(errorString);
+    Log().trigger(LogType.error, errorString);
 
     /// The connection status is changed to the specified `status` and the
     /// error condition is passed as the reason using the
@@ -183,10 +184,10 @@ class Websocket extends Protocol {
     return;
   }
 
-  /// Establish a Websocket connection.
+  /// Establish a WebSocket connection.
   ///
   /// After connection assigns Callbacks to it.
-  /// Does nothing if there already a Websocket.
+  /// Does nothing if there already a WebSocket.
   /// * @return A Future that completes when the WebSocket connection is
   /// established.
   @override
@@ -197,44 +198,48 @@ class Websocket extends Protocol {
     try {
       /// Establish a WebSocket connection using the connection's service URL and
       /// 'xmpp' protocol.
-      socket =
-          await io.WebSocket.connect(connection.service, protocols: ['xmpp']);
+      ///
+      /// Trigger a timeout if establishing a connection exceeds
+      /// [connection._disconnectionTimeout].
+      socket = ws.WebSocketChannel.connect(
+        Uri.parse(connection.service),
+        protocols: ['xmpp'],
+      );
 
-      /// Check the connection is in the `open` state.
-      if (socket!.readyState == 1) {
-        /// Invoke `onOpen` method afterwards.
-        _onOpen.call();
+      socket!.ready.then(
+        (_) {
+          /// Invoke `onOpen` method afterwards.
+          _onOpen.call();
 
-        /// Listen for incoming messages on the socket.
-        socket!.listen(
-          (message) {
-            if (_onMessageCallback == null) {
-              /// Call the `onInitialMessage` callback if `onMessageCallback` is
-              /// not set.
-              _onInitialMessage(message as String);
-            } else {
-              _onMessageCallback!.call(message as String);
-            }
-          },
+          /// Listen for incoming messages on the socket.
+          socket!.stream.listen(
+            (message) {
+              if (_onMessageCallback == null) {
+                /// Call the `onInitialMessage` callback if `onMessageCallback` is
+                /// not set.
+                _onInitialMessage(message as String);
+              } else {
+                _onMessageCallback!.call(message as String);
+              }
+            },
 
-          /// Invoke the `_onClose` callback when the socket is closed.
-          onDone: _onClose,
+            /// Invoke the `_onClose` callback when the socket is closed.
+            onDone: _onClose,
 
-          /// Invoke the `_onError` callback if there is an error.
-          onError: _onError,
+            /// Invoke the `_onError` callback if there is an error.
+            onError: _onError,
 
-          /// Cancel the subscription if an error occurs.
-          cancelOnError: true,
-        );
-      }
-
-      /// Invoke the _onClose callback with the socket's close code when the
-      /// socket is in CLOSING state.
-      else if (socket!.readyState == 2) {
-        _onClose(code: socket!.closeCode);
-      }
+            /// Cancel the subscription if an error occurs.
+            cancelOnError: true,
+          );
+        },
+        onError: (error, trace) {
+          connection._handleError(error);
+          throw WebSocketException.unknown();
+        },
+      );
     } catch (error) {
-      /// TODO: Implement WebsocketError Handlers
+      throw WebSocketException.unknown();
     }
   }
 
@@ -457,7 +462,10 @@ class Websocket extends Protocol {
   @override
   Future<void> nonAuth([Future<void> Function(Echo)? callback]) async {
     /// Log error message.
-    Log().error('Server did not offer a supported authentication mechanism');
+    Log().trigger(
+      LogType.error,
+      'Server did not offer a supported authentication mechanism',
+    );
 
     /// Change the status to the not supported authentication mechanism.
     await connection._changeConnectStatus(
@@ -489,7 +497,7 @@ class Websocket extends Protocol {
   @override
   Future<void> disconnect([xml.XmlElement? presence]) async {
     /// Check if the socket is not null and its state is not equal to 3 (closed).
-    if (socket != null && socket!.readyState != 3) {
+    if (socket != null && await socket!.stream.isEmpty) {
       /// If presence is provided, send the presence using the connection.
       if (presence != null) {
         await connection.send(presence);
@@ -508,13 +516,9 @@ class Websocket extends Protocol {
 
       /// Send the serialized 'close' string using connection's `_rawOutput`.
       connection._rawOutput(closeString);
-      try {
-        /// Add the 'close' string to the socket.
-        socket!.add(closeString);
-      } on WebSocketException catch (error) {
-        /// Log a warning if adding the 'close' string to the socket fails.
-        Log().warn('Could not send <close /> tag: ${error.message}');
-      }
+
+      /// Add the 'close' string to the socket.
+      socket!.sink.add(closeString);
     }
     return connection._doDisconnect();
   }
@@ -523,21 +527,15 @@ class Websocket extends Protocol {
   @override
   Future<void> doDisconnect() async {
     /// Informs user about the method call.
-    Log().info("WebSocket's doDisconnect method is called.");
+    Log().trigger(LogType.info, "WebSocket's doDisconnect method is called.");
 
     /// And calls close socket for returning to the initial state.
-    try {
-      await _closeSocket();
-    } on WebSocketException catch (error) {
-      Log().warn(
-        'An error occured while trying to disconnect from socket: ${error.message}',
-      );
-    }
+    await _closeSocket();
   }
 
   /// Helper function to wrap a stanza in a <stream> tag.
   ///
-  /// This is used, so [Echo] can process stanzas from Websockets like BOSH.
+  /// This is used, so [Echo] can process stanzas from WebSockets like BOSH.
   String _streamWrap(String stanza) => '<wrapper>$stanza</wrapper>';
 
   /// Replaces the message handler callback with the default message handling
@@ -596,7 +594,7 @@ class Websocket extends Protocol {
           connection._rawOutput(rawStanza);
 
           /// Add the raw stanza to the socket.
-          socket!.add(rawStanza);
+          socket!.sink.add(rawStanza);
         }
       }
 
@@ -719,7 +717,7 @@ class Websocket extends Protocol {
   /// is open.
   void _onOpen() {
     /// Before doing other shittos, outputs that the `WebSocket` is working.
-    Log().info('Websocket is open');
+    Log().trigger(LogType.verbose, 'WebSocket is open');
 
     /// It creates and sends an initial XMPP stream to the server, using the
     /// `_buildStream` method.
@@ -738,7 +736,7 @@ class Websocket extends Protocol {
 
     /// Finally, the stream string is sent over the WebSocket connection by
     /// adding it to the socket's buffer.
-    socket!.add(startString);
+    socket!.sink.add(startString);
   }
 
   /// Event handler called when the WebSocket connection is closed.
@@ -763,19 +761,19 @@ class Websocket extends Protocol {
         code != null &&
         code == 1006 &&
         !connection._connected) {
-      Log().error('Websocket closed unexpectedly.');
+      Log().trigger(LogType.error, 'WebSocket closed unexpectedly.');
 
       /// The connection status is updated to a connection failure status with
       /// an appropriate error message using the
       /// `connection._changeConnectStatus` method.
       connection._changeConnectStatus(
         EchoStatus.connectionFailed,
-        'Websocket connection could not be established or was disconnected.',
+        'WebSocket connection could not be established or was disconnected.',
       );
     } else {
       /// If none of the above conditions are met, an informational message is
       /// logged indicating that the `WebSocket` connection was closed.
-      Log().info('Websocket closed');
+      Log().trigger(LogType.info, 'WebSocket closed');
     }
   }
 
@@ -792,7 +790,7 @@ class Websocket extends Protocol {
   /// error message.
   void _onError(dynamic error, dynamic trace) {
     /// Logs out error message using [Log].
-    Log().error('Websocket error occured');
+    Log().trigger(LogType.error, 'WebSocket error occured');
 
     /// Changes the status of the connection.
     connection._changeConnectStatus(
@@ -807,18 +805,9 @@ class Websocket extends Protocol {
   /// * After closing the connection, the socket reference is set to null.
   Future<void> _closeSocket() async {
     if (socket != null) {
-      try {
-        /// It performs a graceful closing of the connection by calling the
-        /// `close()` method on the WebSocket object
-        await socket!.close();
-      } on io.WebSocketException catch (error) {
-        /// If an error occurs during the closing process, an info log is
-        /// generated with the error message.
-        Log().warn(
-          'An ${error.message} occured when trying to close socket connection.',
-        );
-        return;
-      }
+      /// It performs a graceful closing of the connection by calling the
+      /// `close()` method on the WebSocket object
+      await socket!.sink.close();
     }
 
     /// After closing the connection, the socket reference is set to null to
