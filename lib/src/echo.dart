@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' as io;
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -10,11 +8,13 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:echo/src/builder.dart';
 import 'package:echo/src/constants.dart';
 import 'package:echo/src/enums.dart';
+import 'package:echo/src/exception.dart';
 import 'package:echo/src/log.dart';
 import 'package:echo/src/protocol.dart';
 import 'package:echo/src/sasl.dart';
 import 'package:echo/src/utils.dart';
 
+import 'package:web_socket_channel/web_socket_channel.dart' as ws;
 import 'package:xml/xml.dart' as xml;
 
 part 'bosh.dart';
@@ -45,7 +45,18 @@ class Echo {
 
     /// Optional configuration options.
     this.options = const <String, dynamic>{},
+
+    /// Maximum reconnection count.
+    ///
+    /// Defaults to `3`.
+    this.maxReconnectAttempt = 3,
+
+    /// Defaults to `true`.
+    this.debugEnabled = true,
   }) {
+    /// Assign passed `debugEnabled` flag to the [Log].
+    Log().initialize(debugEnabled: debugEnabled);
+
     /// The connected JID
     jid = '';
 
@@ -127,6 +138,9 @@ class Echo {
   /// Configuration options.
   final Map<String, dynamic> options;
 
+  /// [bool] initializer if there is a need for logging the debug information.
+  final bool debugEnabled;
+
   /// Jabber identifier of the user.
   late String jid;
 
@@ -142,6 +156,10 @@ class Echo {
   /// Timeout for indicating when the service need to disconnect. Representing
   /// in milliseconds.
   late int _disconnectionTimeout;
+
+  /// The maximum reconection attempt for WebSocket. If this count exceeds,
+  /// then the current WebSocket is closing.
+  final int maxReconnectAttempt;
 
   /// Disconnect timeout in the type of [_TimedHandler].
   _TimedHandler? _disconnectTimeout;
@@ -320,35 +338,33 @@ class Echo {
   /// See also:
   ///   - [Log.fatal] method in the [Log] class for logging fatal errors.
   ///
-  static void _handleError(dynamic e) {
-    Log().fatal(e.toString());
+  void _handleError(dynamic e) {
+    Log().trigger(LogType.fatal, e.toString());
   }
 
   /// Select protocol based on `options` or `service`.
   ///
   /// Sets the communication protocol based on the provided options. THis can
-  /// be `BOSH` connection (for later updates, not for now), `Websocket`, or
-  /// `WorkerWebsocket` connection.
+  /// be `BOSH` connection (for later updates, not for now), `WebSocket`, or
+  /// `WorkerWebSocket` connection.
   void _setProtocol() {
     /// Try to get protocol from `options`, else assign empty string.
     final protocol = options['protocol'] as String? ?? '';
 
-    /// Check if Websocket implementation should be used.
+    /// Check if WebSocket implementation should be used.
     if (service.startsWith('ws:') ||
         service.startsWith('wss:') ||
         protocol.startsWith('ws')) {
-      /// Set protocol to [Websocket].
-      _protocol = Websocket(this);
+      /// Set protocol to [WebSocket].
+      _protocol = WebSocket(this);
     }
 
-    /// If not using a Websocket, check for websocket worker or secure Websocket
+    /// If not using a WebSocket, check for websocket worker or secure WebSocket
     /// worker service.
     else if (options['worker'] != null && options['worker'] as bool) {
       /// TODO: implement worker web socket.
     } else {
-      Log().warn('No service was found under: $service');
-      _doDisconnect();
-      return;
+      Log().trigger(LogType.warn, 'No service was found under: $service');
     }
   }
 
@@ -449,7 +465,7 @@ class Echo {
   }
 
   /// NOTE: Actually, this method does not have any meaning at the moment due the
-  /// [Echo] only supports messaging through Websockets, so if there will be
+  /// [Echo] only supports messaging through WebSockets, so if there will be
   /// any improvement on the BOSH request in the future, this method can be
   /// used for handling HTTP errors.
   ///
@@ -605,7 +621,10 @@ class Echo {
         await _connectCallback!.call(status, condition, element);
       } catch (error) {
         _handleError(error);
-        Log().error('User connection callback caused an exception: $error');
+        Log().trigger(
+          LogType.error,
+          'User connection callback caused an exception: $error',
+        );
       }
     }
   }
@@ -1030,9 +1049,9 @@ class Echo {
 
     /// Log according to the `reason` value.
     if (reason != null) {
-      Log().warn('Disonnect was called because: $reason');
+      Log().trigger(LogType.warn, 'Disonnect was called because: $reason');
     } else {
-      Log().info('Disconnect was called');
+      Log().trigger(LogType.info, 'Disconnect was called');
     }
 
     /// Proceed if [Echo] is connected to the server.
@@ -1065,7 +1084,10 @@ class Echo {
 
     /// Else proceed to this scope.
     else {
-      Log().warn('Disconnect was called before Echo connected to the server.');
+      Log().trigger(
+        LogType.warn,
+        'Disconnect was called before Echo connected to the server.',
+      );
       _protocol.abortAllRequests();
       await _doDisconnect();
     }
@@ -1091,7 +1113,7 @@ class Echo {
     }
 
     /// Logs the disconnection event.
-    Log().log('_doDisconnect was called');
+    Log().trigger(LogType.info, '_doDisconnect was called');
 
     /// Invokes `doDisconnect` method which is declared as [Protocol] object
     /// method.
@@ -1215,8 +1237,10 @@ class Echo {
           /// If the handler throws an exception, we consider it as false.
           ///
           // if the handler throws an exception, we consider it as false
-          Log()
-              .warn('Removing Echo handlers due to uncaught exception: $error');
+          Log().trigger(
+            LogType.warn,
+            'Removing Echo handlers due to uncaught exception: $error',
+          );
         }
       }
 
@@ -1245,7 +1269,7 @@ class Echo {
   /// advertises the 'urn:ietf:params:xml:ns:xmpp-bind' stream feature.
   Future<void> _bind() async {
     if (!_doBind) {
-      Log().info('Echo bind called but "do_bind" is false');
+      Log().trigger(LogType.info, 'Echo bind called but "do_bind" is false');
       return;
     }
     _addSystemHandler(
@@ -1278,7 +1302,7 @@ class Echo {
   /// * @return false to remove the handler.
   Future<bool> _onResourceBindResultIQ(xml.XmlElement element) async {
     if (element.getAttribute('type') == 'error') {
-      Log().warn('Resource binding failed.');
+      Log().trigger(LogType.warn, 'Resource binding failed.');
       final conflict = element.getElement('conflict');
       String? condition;
       if (conflict != null) {
@@ -1304,7 +1328,7 @@ class Echo {
         }
       }
     } else {
-      Log().warn('Resource binding failed.');
+      Log().trigger(LogType.warn, 'Resource binding failed.');
       await _changeConnectStatus(
         EchoStatus.authenticationFailed,
         null,
@@ -1327,7 +1351,7 @@ class Echo {
     Future<void> Function(Echo)? callback, [
     String? raw,
   ]) async {
-    Log().log('connectCB was called');
+    Log().trigger(LogType.verbose, 'connectCB was called');
     _connected = true;
 
     xml.XmlElement? bodyWrap;
@@ -1588,7 +1612,7 @@ class Echo {
     /// If the server signature is valid, it logs the successful SASL
     /// authentication and invokes the onSuccess callback for the specific SASL
     /// mechanism.
-    Log().info('SASL authentication succeed');
+    Log().trigger(LogType.info, 'SASL authentication succeed');
 
     /// Invoke onSuccess callback for the specific mechanism.
     if (_mechanism != null) {
@@ -1666,7 +1690,8 @@ class Echo {
     /// It first checks if `_doSession` is `false`. If it is, it throws an
     /// exception indicating that the session was not advertised by the server.
     if (!_doSession) {
-      Log().warn(
+      Log().trigger(
+        LogType.warn,
         '_establishSession called but apparently ${ns['SESSION']} was not advertised by the server',
       );
       return;
@@ -1728,7 +1753,7 @@ class Echo {
       _authenticated = false;
 
       /// Logs a warning message using the `Log().warn` function.
-      Log().warn('Session creation failed.');
+      Log().trigger(LogType.warn, 'Session creation failed.');
 
       /// Calls the `_changeConnectStatus` method with the parameters
       /// `EchoStatus.authenticationFailed`, `null`, and the error element.
@@ -1737,6 +1762,7 @@ class Echo {
         null,
         element,
       );
+      _doDisconnect();
 
       /// The method returns `false` in both cases, indicating that the session
       /// result was not successfully handled.
@@ -1764,6 +1790,7 @@ class Echo {
 
     /// Send authentication failed status.
     await _changeConnectStatus(EchoStatus.authenticationFailed, null, element);
+    await _doDisconnect();
     return false;
   }
 
@@ -1956,7 +1983,8 @@ class Handler {
               'ignoreNamespaceFragment': false,
             } {
     if (this.options!.containsKey('matchBare')) {
-      Log().warn(
+      Log().trigger(
+        LogType.warn,
         'The "matchBare" option is deprecated, use "matchBareFromJid" instead.',
       );
       this.options!['matchBareFromJid'] = this.options!['matchBareFromJid']!;

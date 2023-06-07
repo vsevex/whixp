@@ -102,7 +102,8 @@ class Scram {
     /// If the iteration count is less than 4096, log a warning message and
     /// return `null`.
     if (iter == null || iter < 4096) {
-      Log().warn(
+      Log().trigger(
+        LogType.warn,
         'Failing SCRAM authentication because server supplied iteration count < 4096.',
       );
       return null;
@@ -111,7 +112,8 @@ class Scram {
     /// If the salt value is not present, log a warning message and return
     /// `null`.
     if (salt == null) {
-      Log().warn(
+      Log().trigger(
+        LogType.warn,
         'Failing SCRAM authentication because server supplied incorrect salt.',
       );
       return null;
@@ -350,7 +352,8 @@ class Scram {
     if (challengeData == null ||
         (challengeData['nonce'] as String).substring(0, cnonce.length) !=
             cnonce) {
-      Log().warn(
+      Log().trigger(
+        LogType.warn,
         'Failing SCRAM authentication because server supplied incorrect nonce.',
       );
       connection._saslData = {};
