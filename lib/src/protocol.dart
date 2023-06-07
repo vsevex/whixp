@@ -11,7 +11,7 @@ abstract class Protocol {
 
   /// Establishes a connection using the specified protocol.
   ///
-  /// This method establishes a connection (e.g. Websocket) using the service
+  /// This method establishes a connection (e.g. WebSocket) using the service
   /// URL and the 'xmpp' protocol. It closes any existing connection before
   /// creating a new one. Once the connection is established, it listens for
   /// incoming messages on the protocol.
@@ -34,7 +34,7 @@ abstract class Protocol {
 
   /// This method is used to send any pending data to the connection. The
   /// exact implementation of this method may vary depending on the concrete
-  /// protocol implementation. In the case of Websocket, it just flushes the
+  /// protocol implementation. In the case of WebSocket, it just flushes the
   /// queue.
   Future<void> send();
 
