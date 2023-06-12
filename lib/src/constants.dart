@@ -32,6 +32,7 @@ const ns = <String, String>{
   'AUTH': "jabber:iq:auth",
   'ROSTER': "jabber:iq:roster",
   'PROFILE': "jabber:iq:profile",
+  'VCARD': "vcard-temp",
   'DISCO_INFO': "http://jabber.org/protocol/disco#info",
   'DISCO_ITEMS': "http://jabber.org/protocol/disco#items",
   'MUC': "http://jabber.org/protocol/muc",
