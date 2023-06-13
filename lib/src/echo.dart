@@ -9,6 +9,7 @@ import 'package:echo/src/builder.dart';
 import 'package:echo/src/constants.dart';
 import 'package:echo/src/enums.dart';
 import 'package:echo/src/exception.dart';
+import 'package:echo/src/extension.dart';
 import 'package:echo/src/log.dart';
 import 'package:echo/src/protocol.dart';
 import 'package:echo/src/sasl.dart';
@@ -126,7 +127,7 @@ class Echo {
       type: ['get', 'set'],
     );
 
-    /// TODO: implement plugin initialization method in this scope.
+    _extensions = <Extension<dynamic>>[];
   }
 
   /// `version` constant.
@@ -231,6 +232,8 @@ class Echo {
   /// method after a specific duration of idle time. Idle time refers to the
   /// period during which no activity or interaction occurs.
   late Timer _idleTimeout;
+
+  late List<Extension<dynamic>> _extensions;
 
   /// The selected mechanism to provide authentication.
   late SASL? _mechanism;
@@ -340,6 +343,22 @@ class Echo {
   ///
   void _handleError(dynamic e) {
     Log().trigger(LogType.fatal, e.toString());
+  }
+
+  Extension<dynamic>? attachExtension(Extension<dynamic> extension) {
+    if (_extensions.where((ext) => ext.name == extension.name).isNotEmpty) {
+      Log().trigger(
+        LogType.warn,
+        'The given extension is already attached ${extension.name}',
+      );
+      return null;
+    }
+
+    extension.initialize(this);
+
+    _extensions.add(extension);
+
+    return extension;
   }
 
   /// Select protocol based on `options` or `service`.
