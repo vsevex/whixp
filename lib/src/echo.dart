@@ -9,6 +9,7 @@ import 'package:echo/src/builder.dart';
 import 'package:echo/src/constants.dart';
 import 'package:echo/src/enums.dart';
 import 'package:echo/src/exception.dart';
+import 'package:echo/src/extension.dart';
 import 'package:echo/src/log.dart';
 import 'package:echo/src/protocol.dart';
 import 'package:echo/src/sasl.dart';
@@ -17,6 +18,7 @@ import 'package:echo/src/utils.dart';
 import 'package:web_socket_channel/web_socket_channel.dart' as ws;
 import 'package:xml/xml.dart' as xml;
 
+part 'bosh.dart';
 part 'sasl_anon.dart';
 part 'sasl_external.dart';
 part 'sasl_oauthbearer.dart';
@@ -124,8 +126,6 @@ class Echo {
       name: 'iq',
       type: ['get', 'set'],
     );
-
-    /// TODO: implement plugin initialization method in this scope.
   }
 
   /// `version` constant.
@@ -230,6 +230,9 @@ class Echo {
   /// method after a specific duration of idle time. Idle time refers to the
   /// period during which no activity or interaction occurs.
   late Timer _idleTimeout;
+
+  /// Initialize an empty list of [Extension]s.
+  final _extensions = <Extension<dynamic>>[];
 
   /// The selected mechanism to provide authentication.
   late SASL? _mechanism;
@@ -339,6 +342,29 @@ class Echo {
   ///
   void _handleError(dynamic e) {
     Log().trigger(LogType.fatal, e.toString());
+  }
+
+  /// Attaches an extension to the current connection.
+  ///
+  /// The extension is added to the list of attached extensions for this
+  /// connection.
+  ///
+  /// * @param extension The extension to attach to the connection.
+  void attachExtension<T>(Extension<T> extension) {
+    /// Check if the extension is alrady added. If is is already added, then
+    /// warn user about this and do not add again.
+    if (_extensions.where((ext) => ext.name == extension.name).isNotEmpty) {
+      Log().trigger(
+        LogType.warn,
+        'The given extension is already attached ${extension.name}',
+      );
+    }
+
+    /// Initialize for the first time.
+    extension.initialize(this);
+
+    /// Add to the list of extensions.
+    _extensions.add(extension);
   }
 
   /// Select protocol based on `options` or `service`.
@@ -605,16 +631,14 @@ class Echo {
     [
     xml.XmlElement? element,
   ]) async {
-    // for (final k in _connectionPlugins!.keys) {
-    //   final plugin = _connectionPlugins![k];
-    //   if (plugin!.status != status) {
-    //     try {
-    //       plugin.status = status;
-    //     } catch (error) {
-    //       Log().error('$k plugin caused an exception changing status: $error');
-    //     }
-    //   }
-    // }
+    if (status == EchoStatus.authenticationFailed) {
+      /// Check [AuthenticationFailed] condition. if the condition is true,
+      /// then the given message will be printed.
+      Log().trigger(
+        LogType.warn,
+        'Authentication failed. Check the provided credentials.',
+      );
+    }
     if (_connectCallback != null) {
       try {
         await _connectCallback!.call(status, condition, element);
