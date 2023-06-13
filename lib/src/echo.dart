@@ -625,16 +625,14 @@ class Echo {
     [
     xml.XmlElement? element,
   ]) async {
-    // for (final k in _connectionPlugins!.keys) {
-    //   final plugin = _connectionPlugins![k];
-    //   if (plugin!.status != status) {
-    //     try {
-    //       plugin.status = status;
-    //     } catch (error) {
-    //       Log().error('$k plugin caused an exception changing status: $error');
-    //     }
-    //   }
-    // }
+    if (status == EchoStatus.authenticationFailed) {
+      /// Check [AuthenticationFailed] condition. if the condition is true,
+      /// then the given message will be printed.
+      Log().trigger(
+        LogType.warn,
+        'Authentication failed. Check the provided credentials.',
+      );
+    }
     if (_connectCallback != null) {
       try {
         await _connectCallback!.call(status, condition, element);
