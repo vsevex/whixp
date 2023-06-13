@@ -1,31 +1,57 @@
-import 'package:echo/src/builder.dart';
+import 'package:echo/echo.dart';
 import 'package:echo/src/constants.dart';
-
-import 'package:xml/xml.dart' as xml;
-
-import '../extension.dart';
+import 'package:echo/src/extension.dart';
 
 part 'vcard.dart';
 
 class VCardExtension extends Extension<VCard> {
-  VCardExtension(super.echo, {this.handlerID = 'v-card'});
-
-  final String handlerID;
+  VCardExtension() : super('v-card-extension');
 
   @override
-  Future<VCard> trigger(
-    String jid, {
-    void Function(xml.XmlElement)? callback,
-    void Function(xml.XmlElement?)? onError,
-  }) async {
-    final iq = EchoBuilder.iq(
-      attributes: {'type': 'get', 'to': jid},
-    ).c('vCard', attributes: {'xmlns': ns['VCARD']!});
+  void initialize(Echo echo) {
+    this.echo = echo;
+  }
 
-    await echo.sendIQ(
-      element: iq.nodeTree!,
+  @override
+  Future<VCard> get({
+    String? jid,
+    void Function(XmlElement)? callback,
+    void Function(XmlElement?)? onError,
+  }) async {
+    assert(jid != null, 'JID must be given in order to get vCard data');
+    await echo!.sendIQ(
+      element: _buildIQ(
+        'get',
+        jid: jid,
+      ),
       callback: callback,
       onError: onError,
     );
+
+    return const VCard('Anar Bayram');
+  }
+
+  @override
+  Future<void> set({
+    String? jid,
+    XmlElement? vCardElement,
+    void Function(XmlElement)? callback,
+    void Function(XmlElement?)? onError,
+  }) =>
+      echo!.sendIQ(
+        element: _buildIQ('set', jid: jid, element: vCardElement),
+        callback: callback,
+        onError: onError,
+      );
+
+  XmlElement _buildIQ(String type, {String? jid, XmlElement? element}) {
+    final iq = EchoBuilder.iq(
+      attributes: jid == null ? {'type': type} : {'type': type, 'to': jid},
+    ).c('vCard', attributes: {'xmlns': ns['VCARD']!});
+    if (element != null) {
+      iq.cnode(element);
+    }
+
+    return iq.nodeTree!;
   }
 }
