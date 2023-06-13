@@ -126,8 +126,6 @@ class Echo {
       name: 'iq',
       type: ['get', 'set'],
     );
-
-    _extensions = <Extension<dynamic>>[];
   }
 
   /// `version` constant.
@@ -233,7 +231,8 @@ class Echo {
   /// period during which no activity or interaction occurs.
   late Timer _idleTimeout;
 
-  late List<Extension<dynamic>> _extensions;
+  /// Initialize an empty list of [Extension]s.
+  final _extensions = <Extension<dynamic>>[];
 
   /// The selected mechanism to provide authentication.
   late SASL? _mechanism;
@@ -345,20 +344,27 @@ class Echo {
     Log().trigger(LogType.fatal, e.toString());
   }
 
-  Extension<dynamic>? attachExtension(Extension<dynamic> extension) {
+  /// Attaches an extension to the current connection.
+  ///
+  /// The extension is added to the list of attached extensions for this
+  /// connection.
+  ///
+  /// * @param extension The extension to attach to the connection.
+  void attachExtension<T>(Extension<T> extension) {
+    /// Check if the extension is alrady added. If is is already added, then
+    /// warn user about this and do not add again.
     if (_extensions.where((ext) => ext.name == extension.name).isNotEmpty) {
       Log().trigger(
         LogType.warn,
         'The given extension is already attached ${extension.name}',
       );
-      return null;
     }
 
+    /// Initialize for the first time.
     extension.initialize(this);
 
+    /// Add to the list of extensions.
     _extensions.add(extension);
-
-    return extension;
   }
 
   /// Select protocol based on `options` or `service`.
