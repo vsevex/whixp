@@ -34,10 +34,10 @@ class VCardExtension extends Extension<VCard> {
   /// * @param callback Optional callback function to handle the successful
   /// response.
   /// * @param onError Optional callback function to handle errors.
-  /// * @return A [Future] that resolves to the retrieved vCard information.
+  /// * @return A [Future] that returns void.
   /// * @throws AssertionError if the JID is not provided.
   @override
-  Future<VCard> get({
+  Future<void> get({
     String? jid,
     void Function(XmlElement)? callback,
     void Function(XmlElement?)? onError,
@@ -54,6 +54,30 @@ class VCardExtension extends Extension<VCard> {
         jid: jid,
       ),
       callback: (element) {
+        /// Map all children elements of the given element.
+        for (final child in element.descendantElements) {
+          if (child.localName == 'FN') {
+            vCard = vCard.copyWith(fullName: child.innerText);
+          }
+          if (child.localName == 'NICKNAME') {
+            vCard = vCard.copyWith(nickname: child.innerText);
+          }
+          if (child.localName == 'PHOTO') {
+            vCard = vCard.copyWith(photo: child.innerText);
+          }
+          if (child.localName == 'EMAIL') {
+            vCard = vCard.copyWith(email: child.innerText);
+          }
+          if (child.localName == 'TEL') {
+            vCard = vCard.copyWith(phoneNumber: child.innerText);
+          }
+          if (child.localName == 'TZ') {
+            vCard = vCard.copyWith(timezone: child.innerText);
+          }
+        }
+
+        fire(vCard);
+
         /// If the callback is provided, then call this after mapping is done.
         if (callback != null) {
           callback.call(element);
@@ -61,8 +85,6 @@ class VCardExtension extends Extension<VCard> {
       },
       onError: onError,
     );
-
-    return vCard;
   }
 
   /// Sets the vCard information.
