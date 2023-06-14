@@ -1,3 +1,4 @@
+import 'package:echo/extensions/event/event.dart';
 import 'package:echo/src/echo.dart';
 
 /// Abstract base class for XMPP server plugins to work in the associate of
@@ -9,7 +10,10 @@ import 'package:echo/src/echo.dart';
 ///
 /// To create a new extension, you should extend this class and implement the
 /// necessary methods and properties.
-abstract class Extension<T> {
+///
+/// This abstract class extends [Event] class. This helps to notify extension
+/// about new values, helps to add listeners and other functionalities.
+abstract class Extension<T> extends Event<T> {
   /// Creates an instance of the extension with the specified [name].
   ///
   /// ### Usage
@@ -41,9 +45,7 @@ abstract class Extension<T> {
   void initialize(Echo echo);
 
   /// Retrieves the data associated with the extension.
-  ///
-  /// Returns a [Future] that resolves to the retrieved data of type [T].
-  Future<T> get();
+  Future<void> get();
 
   /// Sets the data associated with the extension.
   ///
