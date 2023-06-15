@@ -368,6 +368,15 @@ class Echo {
     _extensions.add(extension);
   }
 
+  /// Responsible for extending the current namespace in [ns]. It takes a key
+  /// and a value with the key being the name of the new namespace.
+  ///
+  /// ### Usage
+  /// final echo = Echo();
+  ///
+  /// echo.addNamespace(namespace, value);
+  void addNamespace(String name, String key) => ns[name] = key;
+
   /// Select protocol based on `options` or `service`.
   ///
   /// Sets the communication protocol based on the provided options. THis can
