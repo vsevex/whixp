@@ -1,5 +1,4 @@
-import 'package:echo/extensions/event/event.dart';
-import 'package:echo/src/echo.dart';
+part of 'echo.dart';
 
 /// Abstract base class for XMPP server plugins to work in the associate of
 /// [Echo] package.
@@ -13,7 +12,7 @@ import 'package:echo/src/echo.dart';
 ///
 /// This abstract class extends [Event] class. This helps to notify extension
 /// about new values, helps to add listeners and other functionalities.
-abstract class Extension<T> extends Event<T> {
+abstract class Extension<T> {
   /// Creates an instance of the extension with the specified [name].
   ///
   /// ### Usage
@@ -28,13 +27,13 @@ abstract class Extension<T> extends Event<T> {
   /// /// performance of the class.
   /// }
   /// ```
-  Extension(this.name);
+  Extension(this._name);
 
   /// Initializes [Echo] class.
-  Echo? echo;
+  late final Echo? echo;
 
   /// Initializes [name] property.
-  final String name;
+  final String _name;
 
   /// Initializes the extension with the provided [echo] instance.
   ///
@@ -55,8 +54,8 @@ abstract class Extension<T> extends Event<T> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Extension && name == other.name && echo == other.echo;
+      other is Extension && _name == other._name && echo == other.echo;
 
   @override
-  int get hashCode => name.hashCode ^ echo.hashCode;
+  int get hashCode => _name.hashCode ^ echo.hashCode;
 }

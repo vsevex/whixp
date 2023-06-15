@@ -13,8 +13,8 @@ class Eventius<P> {
   /// The list of available listeners.
   final _listeners = <EventiusListener<P>>[];
 
-  /// The available callback(s) queue.
-  final _callbacksQueue = <P>[];
+  /// The available payload(s) queue.
+  final _payloadsQueue = <P>[];
 
   /// [bool] indicator that resolves if some event is in action.
   bool _isBusy = false;
@@ -27,21 +27,21 @@ class Eventius<P> {
   /// Uses [delay] to delay firing.
   void notify([Duration? delay]) => fire(null as P, delay: delay);
 
-  /// Fire the callback for all listeners.
+  /// Fire the payload for all listeners.
   ///
   /// Uses [delay] to delay firing.
-  Future<void> fire(P callback, {Duration? delay}) async {
+  Future<void> fire(P payload, {Duration? delay}) async {
     /// Check if [delay] is not null, if it is not null then fire callback after
     /// [delay].
     if (delay != null) await Future.delayed(delay);
 
-    /// Push provided callback to the queue.
-    _callbacksQueue.add(callback);
+    /// Push provided value to the queue.
+    _payloadsQueue.add(payload);
 
     loop();
   }
 
-  /// Call all listeners with the provided callbacks.
+  /// Call all listeners with the provided payloads.
   void loop() {
     /// If current event is busy, then return.
     if (_isBusy) return;
@@ -49,10 +49,11 @@ class Eventius<P> {
     /// Set the current event in busy mode.
     _isBusy = true;
 
-    /// Fire all callbacks.
-    while (_callbacksQueue.isNotEmpty) {
+    /// Fire all payloads.
+    while (_payloadsQueue.isNotEmpty) {
+      final P currentPayload = _payloadsQueue.removeAt(0);
       for (final listener in _listeners) {
-        listener(_callbacksQueue.removeAt(0));
+        listener(currentPayload);
       }
     }
 
@@ -66,8 +67,8 @@ class Eventius<P> {
     EventiusListener<P> listener,
     ListenerFilter<P> filter,
   ) =>
-      addListener((callback) {
-        if (filter(callback)) listener(callback);
+      addListener((payload) {
+        if (filter(payload)) listener(payload);
       });
 
   /// Add [listener] to _listeners.
