@@ -1,4 +1,4 @@
-import 'package:echo/echo.dart';
+part of 'vcard_extension.dart';
 
 /// [VCard] represents a vCard containing personal information.
 ///
