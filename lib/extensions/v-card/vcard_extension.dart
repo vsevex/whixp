@@ -41,7 +41,6 @@ class VCardExtension extends Extension<VCard> {
   /// * @param onError Optional callback function to handle errors.
   /// * @return A [Future] that returns void.
   /// * @throws AssertionError if the JID is not provided.
-  @override
   Future<void> get({
     String? jid,
     void Function(XmlElement)? callback,
@@ -102,7 +101,6 @@ class VCardExtension extends Extension<VCard> {
   /// * @param onError Optional callback function to handle errors.
   /// * @return A [Future] that resolves to the retrieved vCard information.
   /// * @throws AssertionError if the vCard is not provided.
-  @override
   Future<void> set({
     VCard? vCard,
     void Function(XmlElement)? callback,

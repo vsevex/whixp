@@ -43,14 +43,6 @@ abstract class Extension<T> {
   /// [echo] instance.
   void initialize(Echo echo);
 
-  /// Retrieves the data associated with the extension.
-  Future<void> get();
-
-  /// Sets the data associated with the extension.
-  ///
-  /// Returns a [Future] that completes once the data is successfully set.
-  Future<void> set();
-
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
