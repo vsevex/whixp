@@ -1,6 +1,7 @@
 import 'package:echo/echo.dart';
 import 'package:echo/extensions/event/event.dart';
 import 'package:echo/src/constants.dart';
+import 'package:echo/src/exception.dart';
 
 part 'vcard.dart';
 
@@ -137,5 +138,12 @@ class VCardExtension extends Extension<VCard> {
     }
 
     return iq.nodeTree!;
+  }
+
+  /// This method is not implemented and will not be affected in the use of this
+  /// extension.
+  @override
+  void changeStatus(EchoStatus status, String? condition) {
+    throw ExtensionException.notImplementedFeature('VCard');
   }
 }
