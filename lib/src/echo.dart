@@ -649,6 +649,22 @@ class Echo {
         'Authentication failed. Check the provided credentials.',
       );
     }
+
+    /// Checks if there is an implementation of `changeStatus` method in the
+    /// given extension list.
+    ///
+    /// If there is a logic implemented under this method, then it runs the
+    /// corresponding method.
+    for (final extension in _extensions) {
+      try {
+        extension.changeStatus(status, condition);
+      } on EchoException catch (error) {
+        /// If the method is not implemented properly, then it will give info
+        /// about the situation.
+        Log().trigger(LogType.info, error.message);
+      }
+    }
+
     if (_connectCallback != null) {
       try {
         await _connectCallback!.call(status, condition, element);
