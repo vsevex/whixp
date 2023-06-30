@@ -43,6 +43,10 @@ abstract class Extension<T> {
   /// [echo] instance.
   void initialize(Echo echo);
 
+  /// If there will be any logic that needs to be done on the specific status
+  /// change, then this method will come to help.
+  void changeStatus(EchoStatus status, String? condition);
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
