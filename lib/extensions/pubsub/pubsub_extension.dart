@@ -1,8 +1,8 @@
 import 'package:echo/echo.dart';
 import 'package:echo/src/constants.dart';
 
-class PubSub extends Extension {
-  PubSub() : super('pubsub') {
+class PubSubExtension extends Extension {
+  PubSubExtension() : super('pubsub-extension') {
     const pubsubNS = 'http://jabber.org/protocol/pubsub';
 
     echo!
@@ -34,14 +34,22 @@ class PubSub extends Extension {
       ..addNamespace('ATOM', 'http://www.w3.org/2005/Atom');
   }
 
-  String? jid;
-  String? service;
-  bool? _autoService;
-  final handler = <String, List<Handler>>{};
+  String? _jid;
+  String? _service;
+  bool _autoService = true;
+  final _handler = <String, List<Handler>>{};
 
   @override
   void initialize(Echo echo) {
     super.echo = echo;
+  }
+
+  @override
+  void changeStatus(EchoStatus status, String? condition) {
+    if (_autoService && status == EchoStatus.connected) {
+      _service = 'pubsub.${Echotils().getDomainFromJID(_jid!)}';
+      _jid = echo!.jid;
+    }
   }
 
   void connect(String jid, {String? service}) {
@@ -51,21 +59,21 @@ class PubSub extends Extension {
       inJid = null;
     }
 
-    this.jid = inJid ?? echo!.jid;
-    this.service = service;
+    _jid = inJid ?? echo!.jid;
+    _service = service;
     _autoService = false;
   }
 
   void storeHandler(String node, Handler handler) {
-    if (!this.handler.containsKey(node) || this.handler[node] == null) {
-      this.handler[node] = [];
+    if (!_handler.containsKey(node) || _handler[node] == null) {
+      _handler[node] = [];
     }
-    this.handler[node]!.add(handler);
+    _handler[node]!.add(handler);
   }
 
   void removeHandler(String node) {
-    final temp = handler[node];
-    handler[node] = [];
+    final temp = _handler[node];
+    _handler[node] = [];
 
     if (temp != null && temp.isNotEmpty) {
       for (int i = 0; i < temp.length; i++) {
@@ -83,8 +91,8 @@ class PubSub extends Extension {
 
     final iq = EchoBuilder.iq(
       attributes: {
-        'from': jid,
-        'to': service,
+        'from': _jid,
+        'to': _service,
         'type': 'set',
         'id': id,
       },
@@ -110,8 +118,8 @@ class PubSub extends Extension {
     final id = echo!.getUniqueId('pubsubdeletenode');
     final iq = EchoBuilder.iq(
       attributes: {
-        'from': jid,
-        'to': service,
+        'from': _jid,
+        'to': _service,
         'type': 'set',
         'id': id,
       },
@@ -131,9 +139,9 @@ class PubSub extends Extension {
     void Function(XmlElement?)? onFailure,
     int? timeout,
   }) {
-    final iq =
-        EchoBuilder.iq(attributes: {'from': jid, 'to': service, 'type': 'get'})
-            .c('query', attributes: {'xmlns': ns['DISCO_ITEMS']!});
+    final iq = EchoBuilder.iq(
+            attributes: {'from': _jid, 'to': _service, 'type': 'get'})
+        .c('query', attributes: {'xmlns': ns['DISCO_ITEMS']!});
 
     return echo!.sendIQ(
       element: iq.nodeTree!,
@@ -150,7 +158,7 @@ class PubSub extends Extension {
     final id = echo!.getUniqueId('pubsubconfigurenode');
 
     final iq = EchoBuilder.iq(
-      attributes: {'from': jid, 'to': service, 'type': 'get', 'id': id},
+      attributes: {'from': _jid, 'to': _service, 'type': 'get', 'id': id},
     ).c('pubsub', attributes: {'xmlns': ns['PUBSUB_OWNER']!}).c(
       'configure',
       attributes: {'node': node},
@@ -168,7 +176,7 @@ class PubSub extends Extension {
     final id = echo!.getUniqueId('pubsubdefaultnodeconfig');
 
     final iq = EchoBuilder.iq(
-      attributes: {'from': jid, 'to': service, 'type': 'get', 'id': id},
+      attributes: {'from': _jid, 'to': _service, 'type': 'get', 'id': id},
     ).c('pubsub', attributes: {'xmlns': ns['PUBSUB_OWNER']!}).c('default');
 
     echo!.addHandler(callback, name: 'iq', id: id);
@@ -186,7 +194,7 @@ class PubSub extends Extension {
     void Function(XmlElement?)? onError,
   }) async {
     final id = echo!.getUniqueId('subscribenode');
-    String jid = this.jid!;
+    String jid = _jid!;
 
     if (bareJid != null) {
       jid = Echotils().getBareJIDFromJID(jid)!;
@@ -195,7 +203,7 @@ class PubSub extends Extension {
     final iq = EchoBuilder.iq(
       attributes: {
         'from': jid,
-        'to': service,
+        'to': _service,
         'type': 'set',
         'id': id,
       },
@@ -227,8 +235,8 @@ class PubSub extends Extension {
 
     final iq = EchoBuilder.iq(
       attributes: {
-        'from': this.jid,
-        'to': service,
+        'from': _jid,
+        'to': _service,
         'type': 'set',
         'id': id,
       },
@@ -255,12 +263,12 @@ class PubSub extends Extension {
     final id = echo!.getUniqueId('pubsubpublishnode');
 
     final iq = EchoBuilder.iq(
-      attributes: {'from': jid, 'to': service, 'type': 'set', 'id': id},
+      attributes: {'from': _jid, 'to': _service, 'type': 'set', 'id': id},
     ).c('pubsub', attributes: {'xmlns': ns['PUBSUB']!}).c(
       'publish',
       attributes: {
         'node': node,
-        'jid': jid!,
+        'jid': _jid!,
       },
     ).list('item', items);
 
@@ -276,9 +284,9 @@ class PubSub extends Extension {
     void Function(XmlElement?)? onFailure,
     int? timeout,
   }) {
-    final iq =
-        EchoBuilder.iq(attributes: {'from': jid, 'to': service, 'type': 'get'})
-            .c('pubsub', attributes: {'xmlns': ns['PUBSUB']!}).c(
+    final iq = EchoBuilder.iq(
+            attributes: {'from': _jid, 'to': _service, 'type': 'get'})
+        .c('pubsub', attributes: {'xmlns': ns['PUBSUB']!}).c(
       'items',
       attributes: {'node': node},
     );
@@ -298,8 +306,8 @@ class PubSub extends Extension {
 
     final iq = EchoBuilder.iq(
       attributes: {
-        'from': jid,
-        'to': service,
+        'from': _jid,
+        'to': _service,
         'type': 'get',
         'id': id,
       },
@@ -318,7 +326,7 @@ class PubSub extends Extension {
     final id = echo!.getUniqueId('pubsubsubscriptions');
 
     final iq = EchoBuilder.iq(
-      attributes: {'from': jid, 'to': service, 'type': 'get', 'id': id},
+      attributes: {'from': _jid, 'to': _service, 'type': 'get', 'id': id},
     ).c('pubsub', attributes: {'xmlns': ns['PUBSUB_OWNER']!}).c(
       'subscriptions',
       attributes: {'node': node},
@@ -339,14 +347,14 @@ class PubSub extends Extension {
 
     final iq = EchoBuilder.iq(
       attributes: {
-        'from': jid,
-        'to': service,
+        'from': _jid,
+        'to': _service,
         'type': 'get',
         'id': id,
       },
     ).c('pubsub', attributes: {'xmlns': ns['PUBSUB']!}).c(
       'options',
-      attributes: {'node': node, 'jid': jid!},
+      attributes: {'node': node, 'jid': _jid!},
     );
 
     echo!.addHandler(callback, name: 'iq', id: id);
