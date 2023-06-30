@@ -480,7 +480,7 @@ class Echo {
   ///
   /// * @param suffix A optional suffix to append to the unique id.
   /// * @return The generated unique ID.
-  String _getUniqueId(dynamic suffix) {
+  String getUniqueId(dynamic suffix) {
     /// It follows the format specified by the UUID version 4 standart.
     final uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
         .replaceAllMapped(RegExp('[xy]'), (match) {
@@ -816,7 +816,7 @@ class Echo {
     _TimedHandler? timeoutHandler;
     String? id = element.getAttribute('id');
     if (id == null) {
-      id = _getUniqueId('sendIQ');
+      id = getUniqueId('sendIQ');
       element.setAttribute('id', id);
     }
 
