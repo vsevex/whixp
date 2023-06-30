@@ -1,5 +1,3 @@
-import 'dart:math';
-
 /// The given given class is a custom written [Exception] class for [Echo].
 ///
 /// This abstract class provides a way to encapsulate all possible exceptions
