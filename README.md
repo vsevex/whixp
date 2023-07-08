@@ -1,6 +1,7 @@
 # Echo
 
 [![License: MIT][license_badge]][license_link]
+![GitHub Repo stars][star_count]
 
 Echo is a lightweight and pure Dart library that allows you to connect to XMPP (Extensible Messaging and Presence Protocol) servers. This package provides a range of fundamental functionalities for XMPP communication. And is built on top of the popular [Strophe.js](https://github.com/strophe/strophejs) library, providing a streamlined and efficient solution for XMPP communication in Dart applications.
 
@@ -22,11 +23,14 @@ XMPP is an open source standart protocol widely used for real-time communication
 
 **Lightweight**: Echo is designed to be lightweight, providing a streamlined solution for XMPP connectivity without unnecessary dependencies or overhead.
 
+## Supported Extensions
+
+**V-Card**: (XEP-0054) The vCard plugin in the XMPP server refers to a feature that allows users to create and manage virtual business cards within the XMPP communication protocol.
+For more information please navigate to `lib/extensions/v-card/`.
+
+**Publish-Subscribe**: (XEP-0060, XEP-0248) The Pubsub (Publish-Subscribe) plugin in XMPP server support is a feature that enables the distribution and dissemination of published information to interested subscribers within the XMPP network. It is a key component of the XMPP protocol for building real-time messaging and notification systems.
+
 ## Up-Coming Features
-
-**BOSH**: At the moment, the package does not support BOSH (Bidirectional-streams Over Synchronous HTTP) connections, which provides an alternative method for connecting to the server. But in future updates, HTTP-binding will be enabled, stay tuned. (XEP-0124)
-
-**vCard Support**: Which are used to represent and exchange personal information in XMPP. Later on, you can easily manage vCards for users, including creating, updating, retrieving, and deleting information.
 
 **Isolated WebSosket(s)** This isolation allows for focused and dedicated WebSocket connectivity, enabling efficient and reliable real-time communication between the client and the XMPP server.
 
@@ -81,3 +85,4 @@ We welcome and appreciate contributions from the community to enhance the `Echo`
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
+[star_count]: https://img.shields.io/github/stars/vsevex/echo
