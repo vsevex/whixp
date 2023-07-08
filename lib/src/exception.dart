@@ -24,6 +24,23 @@ abstract class EchoException implements Exception {
       ''' Exception: $message code: ${code ?? 'NOT DECLARED'} ''';
 }
 
+/// Concrete implementation of the [EchoException] class. It represents an
+/// exception for Extensions that will be used in the building of the client.
+class ExtensionException extends EchoException {
+  /// Constructs a [ExtensionException] object by calling the superclass
+  /// constructor [EchoException] with the provided `message` and optional
+  /// `code`.
+  const ExtensionException(super.message, [super.code]);
+
+  /// Factory constructor for creating an [ExtensionException] when a feature
+  /// is not implemented.
+  factory ExtensionException.notImplementedFeature(String extensionName) =>
+      ExtensionException(
+        'This feature is not implemented for the $extensionName extension',
+        404,
+      );
+}
+
 /// It is a concrete implementation of the [EchoException] class. It represents
 /// an exception specific to WebSocket errors in the [Echo] application.
 class WebSocketException extends EchoException {
