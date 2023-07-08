@@ -25,7 +25,7 @@ import 'package:echo/src/enums.dart';
 /// * _ns[SESSION]_ - XMPP Session namespace from RFC 3920.
 /// * _ns[XHTML_IM]_ - XHTML-IM namespace from XEP 71.
 /// * _ns[XHTML]_ - XHTML body namespace from XEP 71.
-const ns = <String, String>{
+final ns = <String, String>{
   'HTTPBIND': "http://jabber.org/protocol/httpbind",
   'BOSH': "urn:xmpp:xbosh",
   'CLIENT': "jabber:client",

@@ -1,6 +1,7 @@
 import 'package:echo/echo.dart';
 import 'package:echo/extensions/event/event.dart';
 import 'package:echo/src/constants.dart';
+import 'package:echo/src/exception.dart';
 
 part 'vcard.dart';
 
@@ -41,7 +42,6 @@ class VCardExtension extends Extension<VCard> {
   /// * @param onError Optional callback function to handle errors.
   /// * @return A [Future] that returns void.
   /// * @throws AssertionError if the JID is not provided.
-  @override
   Future<void> get({
     String? jid,
     void Function(XmlElement)? callback,
@@ -102,7 +102,6 @@ class VCardExtension extends Extension<VCard> {
   /// * @param onError Optional callback function to handle errors.
   /// * @return A [Future] that resolves to the retrieved vCard information.
   /// * @throws AssertionError if the vCard is not provided.
-  @override
   Future<void> set({
     VCard? vCard,
     void Function(XmlElement)? callback,
@@ -139,5 +138,12 @@ class VCardExtension extends Extension<VCard> {
     }
 
     return iq.nodeTree!;
+  }
+
+  /// This method is not implemented and will not be affected in the use of this
+  /// extension.
+  @override
+  void changeStatus(EchoStatus status, String? condition) {
+    throw ExtensionException.notImplementedFeature('VCard');
   }
 }

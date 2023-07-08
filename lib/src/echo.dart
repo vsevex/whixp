@@ -18,6 +18,7 @@ import 'package:echo/src/utils.dart';
 import 'package:web_socket_channel/web_socket_channel.dart' as ws;
 import 'package:xml/xml.dart' as xml;
 
+part '_extension.dart';
 part 'bosh.dart';
 part '_extension.dart';
 part 'sasl_anon.dart';
@@ -368,6 +369,15 @@ class Echo {
     _extensions.add(extension);
   }
 
+  /// Responsible for extending the current namespace in [ns]. It takes a key
+  /// and a value with the key being the name of the new namespace.
+  ///
+  /// ### Usage
+  /// final echo = Echo();
+  ///
+  /// echo.addNamespace(namespace, value);
+  void addNamespace(String name, String key) => ns[name] = key;
+
   /// Select protocol based on `options` or `service`.
   ///
   /// Sets the communication protocol based on the provided options. THis can
@@ -472,7 +482,7 @@ class Echo {
   ///
   /// * @param suffix A optional suffix to append to the unique id.
   /// * @return The generated unique ID.
-  String _getUniqueId(dynamic suffix) {
+  String getUniqueId(dynamic suffix) {
     /// It follows the format specified by the UUID version 4 standart.
     final uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
         .replaceAllMapped(RegExp('[xy]'), (match) {
@@ -640,6 +650,22 @@ class Echo {
         'Authentication failed. Check the provided credentials.',
       );
     }
+
+    /// Checks if there is an implementation of `changeStatus` method in the
+    /// given extension list.
+    ///
+    /// If there is a logic implemented under this method, then it runs the
+    /// corresponding method.
+    for (final extension in _extensions) {
+      try {
+        extension.changeStatus(status, condition);
+      } on EchoException catch (error) {
+        /// If the method is not implemented properly, then it will give info
+        /// about the situation.
+        Log().trigger(LogType.info, error.message);
+      }
+    }
+
     if (_connectCallback != null) {
       try {
         await _connectCallback!.call(status, condition, element);
@@ -808,7 +834,7 @@ class Echo {
     _TimedHandler? timeoutHandler;
     String? id = element.getAttribute('id');
     if (id == null) {
-      id = _getUniqueId('sendIQ');
+      id = getUniqueId('sendIQ');
       element.setAttribute('id', id);
     }
 
@@ -967,7 +993,7 @@ class Echo {
   /// * @return A reference to the handler that can be used to remove it.
   Handler addHandler(
     /// The user callback.
-    Future<bool> Function(xml.XmlElement)? handler, {
+    FutureOr<bool> Function(xml.XmlElement)? handler, {
     /// The user callback.
     String? namespace,
 
@@ -1920,7 +1946,7 @@ class Echo {
   /// * @param id The stanza id attribute to match.
   Handler _addSystemHandler(
     /// The user callback.
-    Future<bool> Function(xml.XmlElement)? handler, {
+    FutureOr<bool> Function(xml.XmlElement)? handler, {
     /// The user callback.
     String? namespace,
 
@@ -2047,7 +2073,7 @@ class Handler {
   bool user = false;
 
   /// The `function` to handle the XMPP stanzas.
-  final Future<bool> Function(xml.XmlElement element)? handler;
+  final FutureOr<bool> Function(xml.XmlElement element)? handler;
 
   /// Retrieves the namespacce of an XML element.
   String? getNamespace(xml.XmlElement element) {
