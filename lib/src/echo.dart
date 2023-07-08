@@ -20,6 +20,7 @@ import 'package:xml/xml.dart' as xml;
 
 part '_extension.dart';
 part 'bosh.dart';
+part '_extension.dart';
 part 'sasl_anon.dart';
 part 'sasl_external.dart';
 part 'sasl_oauthbearer.dart';
