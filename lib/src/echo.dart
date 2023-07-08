@@ -992,7 +992,7 @@ class Echo {
   /// * @return A reference to the handler that can be used to remove it.
   Handler addHandler(
     /// The user callback.
-    Future<bool> Function(xml.XmlElement)? handler, {
+    FutureOr<bool> Function(xml.XmlElement)? handler, {
     /// The user callback.
     String? namespace,
 
@@ -1945,7 +1945,7 @@ class Echo {
   /// * @param id The stanza id attribute to match.
   Handler _addSystemHandler(
     /// The user callback.
-    Future<bool> Function(xml.XmlElement)? handler, {
+    FutureOr<bool> Function(xml.XmlElement)? handler, {
     /// The user callback.
     String? namespace,
 
@@ -2072,7 +2072,7 @@ class Handler {
   bool user = false;
 
   /// The `function` to handle the XMPP stanzas.
-  final Future<bool> Function(xml.XmlElement element)? handler;
+  final FutureOr<bool> Function(xml.XmlElement element)? handler;
 
   /// Retrieves the namespacce of an XML element.
   String? getNamespace(xml.XmlElement element) {
