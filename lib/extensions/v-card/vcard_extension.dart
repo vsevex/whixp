@@ -1,6 +1,8 @@
 import 'package:echo/echo.dart';
+import 'package:echo/extensions/event/event.dart';
 import 'package:echo/src/constants.dart';
-import 'package:echo/src/extension.dart';
+
+part 'vcard.dart';
 
 /// Extension class for vCard functionality in the XMPP server.
 ///
@@ -21,6 +23,9 @@ class VCardExtension extends Extension<VCard> {
   /// /// ...for more information please refer to `attachExtension` method.
   /// ```
   VCardExtension() : super('v-card-extension');
+
+  /// Initialize [vCardEvent] object to listen later changes of the current card.
+  final vCardEvent = Eventius<VCard>(name: 'v-card');
 
   /// Initializer method for [Extension].
   @override
@@ -76,7 +81,8 @@ class VCardExtension extends Extension<VCard> {
           }
         }
 
-        fire(vCard);
+        /// Send gathered vCard information to notify event listener.
+        vCardEvent.fire(vCard);
 
         /// If the callback is provided, then call this after mapping is done.
         if (callback != null) {

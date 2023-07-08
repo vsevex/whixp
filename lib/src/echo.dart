@@ -4,12 +4,12 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:echo/extensions/event/event.dart';
 
 import 'package:echo/src/builder.dart';
 import 'package:echo/src/constants.dart';
 import 'package:echo/src/enums.dart';
 import 'package:echo/src/exception.dart';
-import 'package:echo/src/extension.dart';
 import 'package:echo/src/log.dart';
 import 'package:echo/src/protocol.dart';
 import 'package:echo/src/sasl.dart';
@@ -19,6 +19,7 @@ import 'package:web_socket_channel/web_socket_channel.dart' as ws;
 import 'package:xml/xml.dart' as xml;
 
 part 'bosh.dart';
+part '_extension.dart';
 part 'sasl_anon.dart';
 part 'sasl_external.dart';
 part 'sasl_oauthbearer.dart';
@@ -353,10 +354,10 @@ class Echo {
   void attachExtension<T>(Extension<T> extension) {
     /// Check if the extension is alrady added. If is is already added, then
     /// warn user about this and do not add again.
-    if (_extensions.where((ext) => ext.name == extension.name).isNotEmpty) {
+    if (_extensions.where((ext) => ext._name == extension._name).isNotEmpty) {
       Log().trigger(
         LogType.warn,
-        'The given extension is already attached ${extension.name}',
+        'The given extension is already attached $extension',
       );
     }
 
