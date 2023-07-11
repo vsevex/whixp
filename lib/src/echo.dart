@@ -110,8 +110,8 @@ class Echo {
     /// This is a fallback handler which gets called when no other handler was
     /// called for a received IQ 'set' or 'get'.
     _iqFallbackHandler = Handler(
-      (iq) async {
-        await send(
+      (iq) {
+        send(
           EchoBuilder.iq(
             attributes: {
               'type': 'error',
@@ -252,7 +252,7 @@ class Echo {
 
   /// This variable represents a function that can be assigned to handle the
   /// connection status and related data after a connection attempt.
-  late final Future Function(EchoStatus, [String?, xml.XmlElement?])?
+  late final FutureOr Function(EchoStatus, [String?, xml.XmlElement?])?
       _connectCallback;
 
   /// This variable holds an instance of the [Handler] class that serves as a
@@ -538,10 +538,6 @@ class Echo {
   /// triggered multiple times with the status updates. The callback should take
   /// two arguments - the status code and the error condition.
   ///
-  /// The status will be one of the values in [Status] enums. The error
-  /// condition will be one of the conditions defined in RFC 3920 or the
-  /// condition `strope-parsererror`.
-  ///
   /// * @param jid - The user's JID. This may be a bare JID, or a full JID. If
   /// a node supplied, `SASL OAUTHBEARER` or `SASL ANONYMOUS` authentication
   /// will be attempted (OAUTHBEARER will process the provided password value
@@ -790,7 +786,7 @@ class Echo {
   ///
   /// The message type can be [xml.XmlElement], or list of [xml.XmlElement], or
   /// just [EchoBuilder].
-  Future<void> send(dynamic message) async {
+  void send(dynamic message) {
     /// If the message is null or empty, exit from the function.
     if (message == null) return;
 
@@ -813,7 +809,7 @@ class Echo {
     }
 
     /// Run the protocol send function to flush all the available data.
-    await _protocol.send();
+    return _protocol.send();
   }
 
   /// Helper function to send IQ stanzas.
@@ -824,12 +820,12 @@ class Echo {
   /// On timeout, the stanza will be null.
   /// * @param timeout The time specified in milliseconds for a timeout to
   /// occur.
-  Future<String> sendIQ({
+  String sendIQ({
     required xml.XmlElement element,
     void Function(xml.XmlElement element)? callback,
     void Function(xml.XmlElement? element)? onError,
     int? timeout,
-  }) async {
+  }) {
     _TimedHandler? timeoutHandler;
     String? id = element.getAttribute('id');
     if (id == null) {
@@ -838,7 +834,7 @@ class Echo {
     }
 
     final handler = addHandler(
-      (stanza) async {
+      (stanza) {
         if (timeoutHandler != null) {
           deleteTimedHandler(timeoutHandler);
         }
@@ -874,7 +870,8 @@ class Echo {
         return false;
       });
     }
-    await send(element);
+
+    send(element);
     return id;
   }
 
@@ -1316,7 +1313,7 @@ class Echo {
   ///
   /// Otherwise it will be called automatically as soon as the XMPP server
   /// advertises the 'urn:ietf:params:xml:ns:xmpp-bind' stream feature.
-  Future<void> _bind() async {
+  void _bind() {
     if (!_doBind) {
       Log().trigger(LogType.info, 'Echo bind called but "do_bind" is false');
       return;
@@ -1327,7 +1324,7 @@ class Echo {
     );
     final resource = Echotils().getResourceFromJID(jid);
     if (resource != null) {
-      await send(
+      send(
         EchoBuilder.iq(
           attributes: {'type': 'set', 'id': '_bind_auth_2'},
         )
@@ -1337,7 +1334,7 @@ class Echo {
             .nodeTree,
       );
     } else {
-      await send(
+      send(
         EchoBuilder.iq(
           attributes: {'type': 'set', 'id': '_bind_auth_2'},
         ).c('bind', attributes: {'xmlns': ns['BIND']!}).nodeTree,
@@ -1466,7 +1463,7 @@ class Echo {
   }
 
   Future<void> _authenticate(List<SASL?> mechanisms) async {
-    if (!await _attemptSASLAuth(mechanisms)) {
+    if (!_attemptSASLAuth(mechanisms)) {
       await _attemptLegacyAuth();
     }
   }
@@ -1497,7 +1494,7 @@ class Echo {
   /// * @param mechanisms List of [SASL] mechanisms.
   /// * @return [bool] true or false, depending on whether a valid SASL
   /// mechanism was found with which authentication could be started.
-  Future<bool> _attemptSASLAuth(List<SASL?> mechanisms) async {
+  bool _attemptSASLAuth(List<SASL?> mechanisms) {
     final mechs = _sortMechanismsByPriority(mechanisms);
     bool mechanismFound = false;
     for (int i = 0; i < mechs.length; i++) {
@@ -1528,21 +1525,21 @@ class Echo {
         final response = _mechanism!.clientChallenge();
         requestAuthExchange.t(Echotils.btoa(response));
       }
-      await send(requestAuthExchange.nodeTree);
+      send(requestAuthExchange.nodeTree);
       mechanismFound = true;
       break;
     }
     return mechanismFound;
   }
 
-  Future<bool> _saslChallengeCB(xml.XmlElement element) async {
+  bool _saslChallengeCB(xml.XmlElement element) {
     final challenge = Echotils.atob(Echotils.getText(element));
     final response = _mechanism?.onChallenge(challenge: challenge);
     final stanza = EchoBuilder('response', {'xmlns': ns['SASL']});
     if (response!.isNotEmpty) {
       stanza.t(Echotils.btoa(response));
     }
-    await send(stanza.nodeTree);
+    send(stanza.nodeTree);
 
     return true;
   }
@@ -1566,7 +1563,7 @@ class Echo {
         id: '_auth_1',
       );
 
-      await send(
+      send(
         EchoBuilder.iq(
           attributes: {'type': 'get', 'to': _domain, 'id': '_auth_1'},
         )
@@ -1584,7 +1581,7 @@ class Echo {
   ///
   /// * @param element The stanza that triggered the callback.
   /// * @return false to remove the handler.
-  Future<bool> _onLegacyAuthIQResult() async {
+  bool _onLegacyAuthIQResult() {
     /// Generate IQ stanza with the id of `_auth_2`.
     final iq = EchoBuilder.iq(
       attributes: {'type': 'set', 'id': '_auth_2'},
@@ -1608,7 +1605,7 @@ class Echo {
       (element) async => _auth2CB(element),
       id: '_auth_2',
     );
-    await send(iq.nodeTree);
+    send(iq.nodeTree);
     return false;
   }
 
@@ -1724,7 +1721,7 @@ class Echo {
       return false;
     } else if (options['explicitResourceBinding'] == null ||
         (options['explicitResourceBinding'] as bool) != true) {
-      await _bind();
+      _bind();
     } else {
       await _changeConnectStatus(EchoStatus.bindingRequired, null);
     }
@@ -1762,7 +1759,7 @@ class Echo {
     /// attributes such as 'type' (set) and 'id' ('_session_auth_2').
     /// The IQ request also includes a 'session' element with the 'xmlns'
     /// attribute set to the value of `urn:ietf:params:xml:ns:xmpp-session`.
-    await send(
+    send(
       EchoBuilder.iq(
         attributes: {
           'type': 'set',
@@ -2138,7 +2135,7 @@ class Handler {
   /// * @param element The XML element to process.
   /// * @return The result of the handler function, if available.
   /// Otherwise returns null.
-  Future<bool>? run(xml.XmlElement element) async {
+  FutureOr<bool>? run(xml.XmlElement element) async {
     bool? result;
     try {
       result = await handler!.call(element);

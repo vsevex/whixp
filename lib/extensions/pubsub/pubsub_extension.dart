@@ -149,22 +149,22 @@ class PubSubExtension extends Extension {
   /// using options such as pubsub#collection or pubsub#node_type.
   /// * @param callback Optional Function parameter to invoke a method when
   /// there is a received response for the IQ stanza.
-  /// * @return A [Future] resolves to the ID of the sent IQ stanza.This ID can
+  /// * @return A [String] resolves to the ID of the sent IQ stanza.This ID can
   /// be used to track the response or correlate it with the original request.
   ///
   /// ### Usage
   /// ```dart
   /// final nodeID = await pubsub.createNode('exampleNode', callback: (element) {
-  ///   log('Node deleted.');
+  ///   log('Node created.');
   ///
   ///   return true;
   /// });
   /// ```
-  Future<String> createNode(
+  String createNode(
     String node, {
     Map<String, String>? options,
     FutureOr<bool> Function(XmlElement)? callback,
-  }) async {
+  }) {
     final id = echo!.getUniqueId('pubsubcreatenode');
 
     final iq = EchoBuilder.iq(
@@ -183,8 +183,8 @@ class PubSubExtension extends Extension {
       iq.up().c('configure').form(ns['PUBSUB_NODE_CONFIG']!, options);
     }
 
-    echo!.addHandler(callback, name: 'iq', id: id);
-    await echo!.send(iq.nodeTree);
+    echo!.addHandler(callback, name: 'iq', id: id, type: ['error']);
+    echo!.send(iq.nodeTree);
 
     return id;
   }
@@ -205,10 +205,10 @@ class PubSubExtension extends Extension {
   ///   return true;
   /// });
   /// ```
-  Future<String> deleteNode(
+  String deleteNode(
     String node, [
     FutureOr<bool> Function(XmlElement)? callback,
-  ]) async {
+  ]) {
     final id = echo!.getUniqueId('pubsubdeletenode');
     final iq = EchoBuilder.iq(
       attributes: {
@@ -223,7 +223,7 @@ class PubSubExtension extends Extension {
     );
 
     echo!.addHandler(callback, name: 'iq', id: id);
-    await echo!.send(iq.nodeTree);
+    echo!.send(iq.nodeTree);
 
     return id;
   }
@@ -255,9 +255,9 @@ class PubSubExtension extends Extension {
   ///   }
   /// );
   /// ```
-  Future<void> discoverNodes({
-    void Function(XmlElement)? onSuccess,
-    void Function(XmlElement?)? onFailure,
+  String discoverNodes({
+    FutureOr<bool> Function(XmlElement)? onSuccess,
+    FutureOr<bool> Function(XmlElement?)? onFailure,
     int? timeout,
   }) {
     /// Creates IQ stanza to send for the discovery of currently available
@@ -282,12 +282,12 @@ class PubSubExtension extends Extension {
   /// configuration is requested.
   /// * @param callback Optional Function parameter to invoke a method when
   /// there is a received response for the IQ stanza.
-  /// * @return A [Future] resolves to the ID of the sent IQ stanza.This ID can
+  /// * @return A [String] resolves to the ID of the sent IQ stanza.This ID can
   /// be used to track the response or correlate it with the original request.
-  Future<String> getConfig(
+  String getConfig(
     String node, [
     FutureOr<bool> Function(XmlElement)? callback,
-  ]) async {
+  ]) {
     final id = echo!.getUniqueId('pubsubconfigurenode');
 
     final iq = EchoBuilder.iq(
@@ -298,7 +298,7 @@ class PubSubExtension extends Extension {
     );
 
     echo!.addHandler(callback, name: 'iq', id: id);
-    await echo!.send(iq.nodeTree);
+    echo!.send(iq.nodeTree);
 
     return id;
   }
@@ -311,11 +311,11 @@ class PubSubExtension extends Extension {
   /// a response to the IQ stanza is received. This callback can be used to
   /// process the response or perform additional actions based on the received
   /// data.
-  /// * @return A [Future] resolves to the ID of the sent IQ stanza.This ID can
+  /// * @return A [String] resolves to the ID of the sent IQ stanza.This ID can
   /// be used to track the response or correlate it with the original request.
-  Future<String> getDefaultNodeConfig([
+  String getDefaultNodeConfig([
     FutureOr<bool> Function(XmlElement)? callback,
-  ]) async {
+  ]) {
     final id = echo!.getUniqueId('pubsubdefaultnodeconfig');
 
     final iq = EchoBuilder.iq(
@@ -323,7 +323,7 @@ class PubSubExtension extends Extension {
     ).c('pubsub', attributes: {'xmlns': ns['PUBSUB_OWNER']!}).c('default');
 
     echo!.addHandler(callback, name: 'iq', id: id);
-    await echo!.send(iq.nodeTree);
+    echo!.send(iq.nodeTree);
 
     return id;
   }
@@ -346,20 +346,20 @@ class PubSubExtension extends Extension {
   /// a successful response to the IQ stanza is received.
   /// * @param onError An optional callback function that will be invoked when
   /// an error response or no response to the IQ stanza is received.
-  /// * @return A [Future] that resolves to the ID of the sent IQ stanza.
+  /// * @return A [String] that resolves to the ID of the sent IQ stanza.
   ///
   /// ### Usage
   /// ```dart
   /// final subscriptionID = await pubsub.subscribe('exampleNode');
   /// ```
-  Future<String> subscribe(
+  String subscribe(
     String node, {
     Map<String, String>? options,
     bool bareJID = false,
     FutureOr<bool> Function(XmlElement)? callback,
-    void Function(XmlElement)? onSuccess,
-    void Function(XmlElement?)? onError,
-  }) async {
+    FutureOr<bool> Function(XmlElement)? onSuccess,
+    FutureOr<bool> Function(XmlElement?)? onError,
+  }) {
     final id = echo!.getUniqueId('subscribenode');
     String jid = _jid!;
 
@@ -386,8 +386,7 @@ class PubSubExtension extends Extension {
     final handler = echo!.addHandler(callback, name: 'message');
     storeHandler(node, handler);
 
-    await echo!
-        .sendIQ(element: iq.nodeTree!, callback: onSuccess, onError: onError);
+    echo!.sendIQ(element: iq.nodeTree!, callback: onSuccess, onError: onError);
 
     return id;
   }
@@ -407,14 +406,14 @@ class PubSubExtension extends Extension {
   /// a successful response to the IQ stanza is received.
   /// * @param onError An optional callback function that will be invoked when
   /// an error response or no response to the IQ stanza is received.
-  /// * @return A [Future] that resolves to the ID of the sent IQ stanza.
-  Future<String> unsubsribe(
+  /// * @return A [String] that resolves to the ID of the sent IQ stanza.
+  String unsubsribe(
     String node,
     String jid, {
     String? subID,
-    void Function(XmlElement)? onSuccess,
-    void Function(XmlElement?)? onError,
-  }) async {
+    FutureOr<bool> Function(XmlElement)? onSuccess,
+    FutureOr<bool> Function(XmlElement?)? onError,
+  }) {
     final id = echo!.getUniqueId('pubsubunsubscribenode');
 
     final iq = EchoBuilder.iq(
@@ -433,8 +432,7 @@ class PubSubExtension extends Extension {
       iq.addAttributes({'subid': subID});
     }
 
-    await echo!
-        .sendIQ(element: iq.nodeTree!, callback: onSuccess, onError: onError);
+    echo!.sendIQ(element: iq.nodeTree!, callback: onSuccess, onError: onError);
     removeHandler(node);
     return id;
   }
@@ -452,7 +450,7 @@ class PubSubExtension extends Extension {
   /// (For further information refer to the [PubSubItem] class)
   /// * @param callback An optional callback function that will be invoked when
   /// a response to the IQ stanza is received.
-  /// * @return A [Future] that resolves to the ID of the published item.
+  /// * @return A [String] that resolves to the ID of the published item.
   ///
   /// ### Usage
   /// ```dart
@@ -461,11 +459,11 @@ class PubSubExtension extends Extension {
   ///          data: Echotils.xmlElement('element', text: 'data'),
   ///        )]);
   /// ```
-  Future<String> publish(
+  String publish(
     String node,
     List<PubSubItem> items, [
     FutureOr<bool> Function(XmlElement)? callback,
-  ]) async {
+  ]) {
     final id = echo!.getUniqueId('pubsubpublishnode');
 
     final iq = EchoBuilder.iq(
@@ -479,7 +477,7 @@ class PubSubExtension extends Extension {
     ).list('item', items);
 
     echo!.addHandler(callback, name: 'iq', id: id);
-    await echo!.send(iq);
+    echo!.send(iq);
 
     return id;
   }
@@ -513,10 +511,10 @@ class PubSubExtension extends Extension {
   ///   timeout: 1000,
   /// );
   /// ```
-  Future<void> getItems(
+  String getItems(
     String node, {
-    void Function(XmlElement)? onSuccess,
-    void Function(XmlElement?)? onFailure,
+    FutureOr<bool> Function(XmlElement)? onSuccess,
+    FutureOr<bool> Function(XmlElement?)? onFailure,
     int? timeout,
   }) {
     final iq = EchoBuilder.iq(
@@ -542,7 +540,7 @@ class PubSubExtension extends Extension {
   /// invoked when a response to the IQ stanza is received. This callback can
   /// be used to process the response or perform additional actions based on the
   /// data.
-  /// * @return A [Future] that resolves to the ID of the sent IQ stanza.
+  /// * @return A [String] that resolves to the ID of the sent IQ stanza.
   ///
   /// ### Usage
   /// ```dart
@@ -552,9 +550,9 @@ class PubSubExtension extends Extension {
   ///   return true;
   /// });
   /// ```
-  Future<String> getSubscriptions([
+  String getSubscriptions([
     FutureOr<bool> Function(XmlElement)? callback,
-  ]) async {
+  ]) {
     final id = echo!.getUniqueId('pubsubsubscriptions');
 
     final iq = EchoBuilder.iq(
@@ -567,7 +565,7 @@ class PubSubExtension extends Extension {
     ).c('pubsub', attributes: {'xmlns': ns['PUBSUB']!}).c('subscriptions');
 
     echo!.addHandler(callback, name: 'iq', id: id);
-    await echo!.send(iq.nodeTree);
+    echo!.send(iq.nodeTree);
 
     return id;
   }
@@ -582,7 +580,7 @@ class PubSubExtension extends Extension {
   /// invoked when a response to the IQ stanza is received. This callback can
   /// be used to process the response or perform additional actions based on
   /// the received data.
-  /// * @return A [Future] that resolves to the ID of the sent IQ stanza.
+  /// * @return A [String] that resolves to the ID of the sent IQ stanza.
   ///
   /// ### Usage
   /// ```dart
@@ -592,10 +590,10 @@ class PubSubExtension extends Extension {
   ///   return true;
   /// });
   /// ```
-  Future<String> getNodeSubscriptions(
+  String getNodeSubscriptions(
     String node, [
     FutureOr<bool> Function(XmlElement)? callback,
-  ]) async {
+  ]) {
     final id = echo!.getUniqueId('pubsubsubscriptions');
 
     final iq = EchoBuilder.iq(
@@ -606,7 +604,7 @@ class PubSubExtension extends Extension {
     );
 
     echo!.addHandler(callback, name: 'iq', id: id);
-    await echo!.send(iq.nodeTree);
+    echo!.send(iq.nodeTree);
 
     return id;
   }
@@ -623,7 +621,7 @@ class PubSubExtension extends Extension {
   /// * @param callback (Function) An optional callback function which returns
   /// bool or Future<bool>. This callback can be used to process the response or
   /// perform additional actions based on the received data.
-  /// * @return A [Future] that resolves to the ID of the sent IQ stanza.
+  /// * @return A [String] that resolves to the ID of the sent IQ stanza.
   ///
   /// ### Usage
   /// ```dart
@@ -636,11 +634,11 @@ class PubSubExtension extends Extension {
   ///   },
   /// );
   /// ```
-  Future<String> getSubscriptionOptions(
+  String getSubscriptionOptions(
     String node, {
     String? subID,
     FutureOr<bool> Function(XmlElement)? callback,
-  }) async {
+  }) {
     final id = echo!.getUniqueId('pubsubsuboptions');
 
     final iq = EchoBuilder.iq(
@@ -660,7 +658,7 @@ class PubSubExtension extends Extension {
     }
 
     echo!.addHandler(callback, name: 'iq', id: id);
-    await echo!.send(iq.nodeTree);
+    echo!.send(iq.nodeTree);
 
     return id;
   }

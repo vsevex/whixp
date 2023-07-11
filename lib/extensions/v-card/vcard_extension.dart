@@ -53,7 +53,7 @@ class VCardExtension extends Extension<VCard> {
     VCard vCard = const VCard();
 
     /// Sends initial get response to the server with the corresponding JID.
-    await echo!.sendIQ(
+    echo!.sendIQ(
       element: _buildIQ(
         'get',
         jid: jid,
@@ -100,9 +100,10 @@ class VCardExtension extends Extension<VCard> {
   /// * @param callback Optional callback function to handle the successful
   /// response.
   /// * @param onError Optional callback function to handle errors.
-  /// * @return A [Future] that resolves to the retrieved vCard information.
+  /// * @return A [String] that resolves to the retrieved vCard information
+  /// stanza ID.
   /// * @throws AssertionError if the vCard is not provided.
-  Future<void> set({
+  String set({
     VCard? vCard,
     void Function(XmlElement)? callback,
     void Function(XmlElement?)? onError,
