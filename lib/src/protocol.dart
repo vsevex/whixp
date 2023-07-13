@@ -36,7 +36,7 @@ abstract class Protocol {
   /// exact implementation of this method may vary depending on the concrete
   /// protocol implementation. In the case of WebSocket, it just flushes the
   /// queue.
-  Future<void> send();
+  void send();
 
   /// Performs a non-authenticated operation.
   ///
