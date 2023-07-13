@@ -4,8 +4,8 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
-import 'package:echo/extensions/event/event.dart';
 
+import 'package:echo/extensions/extensions.dart';
 import 'package:echo/src/builder.dart';
 import 'package:echo/src/constants.dart';
 import 'package:echo/src/enums.dart';
@@ -127,6 +127,10 @@ class Echo {
       name: 'iq',
       type: ['get', 'set'],
     );
+
+    /// Initialize [DiscoExtension] class and attach to the current [Echo].
+    disco = DiscoExtension();
+    attachExtension(disco);
   }
 
   /// `version` constant.
@@ -234,6 +238,9 @@ class Echo {
 
   /// Initialize an empty list of [Extension]s.
   final _extensions = <Extension<dynamic>>[];
+
+  /// Late initialization of [DiscoExtension].
+  late final DiscoExtension disco;
 
   /// The selected mechanism to provide authentication.
   late SASL? _mechanism;
