@@ -125,6 +125,12 @@ class WebSocket extends Protocol {
     String condition = '';
     String text = '';
 
+    /// Indicate the type of current error.
+    final type = error.getAttribute('type');
+
+    /// Initialize null [ExceptionMapper].
+    // EchoExceptionMapper? exception;
+
     /// The method iterates through the child elements of the error element
     /// and checks if their "xmlns" attribute matches the expected namespace
     /// ("urn:ietf:params:xml:ns:xmpp-streams").
@@ -146,6 +152,30 @@ class WebSocket extends Protocol {
       }
     }
 
+    /// Declare stanza namespace, so the iteration can now that the error
+    /// caused for stanza.
+    // const stanzaNamespace = 'urn:ietf:params:xml:ns:xmpp-stanzas';
+
+    // /// The method iterates through the child elements of the error element
+    // /// and checks if their "xmlns" attribute matches the expected namespace
+    // /// ("urn:ietf:params:xml:ns:xmpp-stanzas").
+    // for (final e in error.descendantElements) {
+    //   /// If the attribute does not match, the iteration is stopped.
+    //   if (e.getAttribute('xmlns') != stanzaNamespace) {
+    //     break;
+    //   }
+
+    //   /// If an element with the local name "text" is found, its inner text is
+    //   /// assigned to the `text` variable.
+    //   if (e.nodeType == xml.XmlNodeType.ELEMENT && e.name.local == 'text') {
+    //     text = e.innerText;
+    //   } else {
+    //     /// Otherwise, the local name of the first child element is assigned to
+    //     /// the `condition` variable.
+    //     condition = e.localName;
+    //   }
+    // }
+
     /// The method constructs an error string with the format
     /// "WebSocket stream error: <condition> - <text>" based on the values of
     /// `condition` and `text`.
@@ -159,17 +189,44 @@ class WebSocket extends Protocol {
       errorString += ' - $text';
     }
 
+    /// Iterate the `condition` over switch case and match the extension
+    /// during this.
+    // switch (condition) {
+    //   case 'bad-request':
+    //     exception = EchoExceptionMapper.badRequest();
+    //   case 'not-authorized':
+    //     exception = EchoExceptionMapper.notAuthorized();
+    //   case 'forbidden':
+    //     exception = EchoExceptionMapper.forbidden();
+    //   case 'not-allowed':
+    //     exception = EchoExceptionMapper.notAllowed();
+    //   case 'registration-required':
+    //     exception = EchoExceptionMapper.registrationRequired();
+    //   case 'remote-server-timeout':
+    //     exception = EchoExceptionMapper.requestTimedOut();
+    //   case 'conflict':
+    //     exception = EchoExceptionMapper.conflict();
+    //   case 'internal-server-error':
+    //     exception = EchoExceptionMapper.internalServerError();
+    //   case 'service-unavailable':
+    //     exception = EchoExceptionMapper.serviceUnavailable();
+    //   case 'disconnected':
+    //     exception = EchoExceptionMapper.disconnected();
+    // }
+
     /// The error string is logged using the `Log().error` method.
     Log().trigger(LogType.error, errorString);
 
-    /// The connection status is changed to the specified `status` and the
-    /// error condition is passed as the reason using the
-    /// `connection._changeConnectStatus` method.
+    /// The connection status is changed to the specified `status`, the error
+    /// condition and exception (if there is one) is passed as the reason using
+    /// the `connection._changeConnectStatus` method.
     await connection._changeConnectStatus(status, condition);
 
     /// The connection is then disconnected using the `connection.doDisconnect`
     /// method.
-    await connection._doDisconnect();
+    if (type == 'cancel' || type == 'auth') {
+      await connection._doDisconnect();
+    }
 
     /// The method returns `true`, indicting that stream errors were encountered
     /// and handled.
@@ -500,7 +557,7 @@ class WebSocket extends Protocol {
     if (socket != null && await socket!.stream.isEmpty) {
       /// If presence is provided, send the presence using the connection.
       if (presence != null) {
-        await connection.send(presence);
+        connection.send(presence);
       }
 
       /// Create a 'close' XML element using [EchoBuilder] with 'xlmns'
@@ -638,45 +695,13 @@ class WebSocket extends Protocol {
       connection._xmlInput(message);
 
       /// Check if connection is in the `disconnecting` state.
-      if (connection._disconnecting) {
+      if (!connection._disconnecting) {
         /// If yes, then disconnect from it.
         await connection._doDisconnect();
-      } else if (message.contains('<open ')) {
-        element = xml.XmlDocument.parse(message).rootElement;
-        if (!_handleStreamStart(element)) {
-          return;
-        }
-      } else {
-        final data = _streamWrap(message);
-        element = xml.XmlDocument.parse(data).rootElement;
       }
-
-      if (await _checkStreamError(element!, EchoStatus.error)) {
-        return;
-      }
-
-      if (connection._disconnecting &&
-          element.firstChild!.value == 'presence' &&
-          element.firstChild!.getAttribute('type') == 'unavailable') {
-        connection._xmlInput(element);
-        connection._rawInput(Echotils.serialize(element));
-
-        /// If we are already disconnecting we will ignore the unavailable
-        /// stanza and wait for the </stream:stream> tag before we close the
-        /// connection,
-        return;
-      }
-
-      await connection._dataReceived(element, message);
-    }
-
-    /// If the message starts with `<open`, it is parsed into an XML element
-    /// using `xml.XmlDocument.parse()`.
-    else if (message.startsWith('<open ')) {
-      /// Parse element from `message`.
+      return;
+    } else if (message.contains('<open ')) {
       element = xml.XmlDocument.parse(message).rootElement;
-
-      /// Method is then called to handle the start of the XMPP stream.
       if (!_handleStreamStart(element)) {
         return;
       }
@@ -689,8 +714,6 @@ class WebSocket extends Protocol {
       element = xml.XmlDocument.parse(data).rootElement;
     }
 
-    /// The method checks if there is a stream error by calling
-    /// `_checkStreamError`.
     if (await _checkStreamError(element, EchoStatus.error)) {
       return;
     }
@@ -699,16 +722,17 @@ class WebSocket extends Protocol {
     /// is unavailable, then log the last gathered element and exit from the
     /// function.
     if (connection._disconnecting &&
-        element.firstChild!.nodeType == xml.XmlNodeType.ELEMENT &&
+        element.firstChild!.value == 'presence' &&
         element.firstChild!.getAttribute('type') == 'unavailable') {
       connection._xmlInput(element);
       connection._rawInput(Echotils.serialize(element));
+
       // if we are already disconnecting we will ignore the unavailable stanza and
       // wait for the </stream:stream> tag before we close the connection
       return;
     }
 
-    connection._dataReceived(element, message);
+    await connection._dataReceived(element, message);
   }
 
   /// Event handler called when the WebSocket connection is successfully opened.
@@ -743,7 +767,7 @@ class WebSocket extends Protocol {
   ///
   /// This method checks the state of the connection and performs different
   /// actions based on the state.
-  void _onClose({int? code}) {
+  Future<void> _onClose({int? code}) async {
     /// If the connection is currently connected and not in the process of
     /// disconnecting,
     if (connection._connected && !connection._disconnecting) {
@@ -766,7 +790,7 @@ class WebSocket extends Protocol {
       /// The connection status is updated to a connection failure status with
       /// an appropriate error message using the
       /// `connection._changeConnectStatus` method.
-      connection._changeConnectStatus(
+      await connection._changeConnectStatus(
         EchoStatus.connectionFailed,
         'WebSocket connection could not be established or was disconnected.',
       );
@@ -788,12 +812,12 @@ class WebSocket extends Protocol {
   /// It then calls the `connection._changeConnectStatus` method to update the
   /// connection status with a connection failure status and an appropriate
   /// error message.
-  void _onError(dynamic error, dynamic trace) {
+  Future<void> _onError(dynamic error, dynamic trace) {
     /// Logs out error message using [Log].
     Log().trigger(LogType.error, 'WebSocket error occured');
 
     /// Changes the status of the connection.
-    connection._changeConnectStatus(
+    return connection._changeConnectStatus(
       EchoStatus.connectionFailed,
       'The websocket connection could not be established or was disconnected.',
     );
@@ -819,7 +843,7 @@ class WebSocket extends Protocol {
   ///
   /// Just flushes the messages that are in the queue.
   @override
-  Future<void> send() async => connection.flush();
+  void send() => connection.flush();
 
   /// Method to get a stanza out of a request.
   ///
