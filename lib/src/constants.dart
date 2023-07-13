@@ -73,33 +73,33 @@ const xhtml = <String, dynamic>{
     'ul',
     'body'
   ],
-  'attributes': <String, List<String>>{
-    'a': ['href'],
-    'blockquote': ['style'],
-    'br': [],
-    'cite': ['style'],
-    'em': [],
-    'img': ['src', 'alt', 'style', 'height', 'width'],
-    'li': ['style'],
-    'ol': ['style'],
-    'p': ['style'],
-    'span': ['style'],
-    'strong': [],
-    'ul': ['style'],
-    'body': []
-  },
-  'css': <String>[
-    'background-color',
-    'color',
-    'font-family',
-    'font-size',
-    'font-style',
-    'font-weight',
-    'margin-left',
-    'margin-right',
-    'text-align',
-    'text-decoration'
-  ],
+  // 'attributes': <String, List<String>>{
+  //   'a': ['href'],
+  //   'blockquote': ['style'],
+  //   'br': [],
+  //   'cite': ['style'],
+  //   'em': [],
+  //   'img': ['src', 'alt', 'style', 'height', 'width'],
+  //   'li': ['style'],
+  //   'ol': ['style'],
+  //   'p': ['style'],
+  //   'span': ['style'],
+  //   'strong': [],
+  //   'ul': ['style'],
+  //   'body': []
+  // },
+  // 'css': <String>[
+  //   'background-color',
+  //   'color',
+  //   'font-family',
+  //   'font-size',
+  //   'font-style',
+  //   'font-weight',
+  //   'margin-left',
+  //   'margin-right',
+  //   'text-align',
+  //   'text-decoration'
+  // ],
 };
 
 /// ### Connection status constants
@@ -140,14 +140,3 @@ const errorCondition = {
   'NO_AUTH_MECH': "no-auth-mech",
   'UNKNOWN_REASON': "unknown",
 };
-
-/// __Timeout multiplier__. A waiting request will be considered failed after
-/// `Math.floor(timeout * wait)` seconds have elapsed. This defaults to `1.1`,
-/// and with default wait, `66` seconds.
-const timeout = 1.1;
-
-/// __SecondaryTimeout multiplier__. In cases where `Echo` can detect early
-/// failure, it will consider the request failed if it does not return after
-/// `Math.floor(secondaryTimeout * wait)` seconds have elapsed. This defaults
-/// to `0.1`, and with default wait, `6` seconds.
-const secondaryTimeout = .1;

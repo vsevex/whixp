@@ -48,35 +48,35 @@ class Echotils {
   /// per XEP-0071.
   ///
   /// XHTML attribute names are case sensitive and must be lower case.
-  static bool isAttributeValid(String tag, String attribute) {
-    /// Final variable that equals to `attributes` list from constants.
-    final attributes = xhtml['attributes'] as Map<String, List<String>>;
+  // static bool isAttributeValid(String tag, String attribute) {
+  //   /// Final variable that equals to `attributes` list from constants.
+  //   final attributes = xhtml['attributes'] as Map<String, List<String>>;
 
-    /// Check if attribute for the dedicated tag is not null and length
-    /// is greater than 0.
-    if (attributes[tag] != null && attributes[tag]!.isNotEmpty) {
-      for (int i = 0; i < attributes[tag]!.length; i++) {
-        if (attribute == attributes[tag]![i]) {
-          return true;
-        }
-      }
-    }
+  //   /// Check if attribute for the dedicated tag is not null and length
+  //   /// is greater than 0.
+  //   if (attributes[tag] != null && attributes[tag]!.isNotEmpty) {
+  //     for (int i = 0; i < attributes[tag]!.length; i++) {
+  //       if (attribute == attributes[tag]![i]) {
+  //         return true;
+  //       }
+  //     }
+  //   }
 
-    return false;
-  }
+  //   return false;
+  // }
 
   /// Utility method to determine whether an css style is allowed as recommended
   /// per XEP-0071.
-  static bool isCSSValid(String style) {
-    final styles = xhtml['css'] as List<String>;
-    for (int i = 0; i < styles.length; i++) {
-      if (style.contains(styles[i])) {
-        return true;
-      }
-    }
+  // static bool isCSSValid(String style) {
+  //   final styles = xhtml['css'] as List<String>;
+  //   for (int i = 0; i < styles.length; i++) {
+  //     if (style.contains(styles[i])) {
+  //       return true;
+  //     }
+  //   }
 
-    return false;
-  }
+  //   return false;
+  // }
 
   /// Adds a new namespace to the current namespaces in `ns`.
   /// <br /> @param [String] name - The name under which the namespace will be

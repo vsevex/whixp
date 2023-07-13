@@ -6,30 +6,30 @@ import 'package:test/test.dart';
 import 'package:xml/xml.dart' as xml;
 
 void main() {
-  group('XHTML Attribute Validation Test', () {
-    test('Must return valid attribute true', () {
-      expect(Echotils.isAttributeValid('a', 'href'), isTrue);
-      expect(Echotils.isAttributeValid('img', 'src'), isTrue);
-      expect(Echotils.isAttributeValid('cite', 'style'), isTrue);
-    });
+  // group('XHTML Attribute Validation Test', () {
+  //   test('Must return valid attribute true', () {
+  //     expect(Echotils.isAttributeValid('a', 'href'), isTrue);
+  //     expect(Echotils.isAttributeValid('img', 'src'), isTrue);
+  //     expect(Echotils.isAttributeValid('cite', 'style'), isTrue);
+  //   });
 
-    test('Must return invalid attribute false', () {
-      expect(Echotils.isAttributeValid('a', 'class'), isFalse);
-      expect(Echotils.isAttributeValid('img', 'href'), isFalse);
-      expect(Echotils.isAttributeValid('cite', 'value'), isFalse);
-    });
-  });
+  //   test('Must return invalid attribute false', () {
+  //     expect(Echotils.isAttributeValid('a', 'class'), isFalse);
+  //     expect(Echotils.isAttributeValid('img', 'href'), isFalse);
+  //     expect(Echotils.isAttributeValid('cite', 'value'), isFalse);
+  //   });
+  // });
 
-  group('XHTML CSS Validation Test', () {
-    test('Must return valid CSS true', () {
-      final result = Echotils.isCSSValid('color: red');
-      expect(result, isTrue);
-    });
-    test('Must return invalid CSS style false', () {
-      final result = Echotils.isCSSValid('foo: 100%');
-      expect(result, isFalse);
-    });
-  });
+  // group('XHTML CSS Validation Test', () {
+  //   test('Must return valid CSS true', () {
+  //     final result = Echotils.isCSSValid('color: red');
+  //     expect(result, isTrue);
+  //   });
+  //   test('Must return invalid CSS style false', () {
+  //     final result = Echotils.isCSSValid('foo: 100%');
+  //     expect(result, isFalse);
+  //   });
+  // });
   group(
     'XHTML Tag Validation Test',
     () => {
