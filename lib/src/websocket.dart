@@ -94,125 +94,26 @@ class WebSocket extends Protocol {
     xml.XmlElement bodyWrap,
     EchoStatus status,
   ) async {
-    /// The method begins by declaring a `List<xml.XmlElement>` variable named
-    /// `errors` to store the stream error elements found in the XML document.
-    ///
-    List<xml.XmlElement>? errors;
+    /// Map errors depending on the given [xml.XmlElement] body;
+    final mapped = _mapErrors(bodyWrap);
 
-    /// The method searches for stream error elements using the `findElements`
-    /// method of the `bodyWrap` XML document. It looks for elements with the
-    /// XML namespace specified by `ns['STREAM']` and the namespace "error".
-    errors = bodyWrap
-        .findAllElements(
-          ns['STREAM']!,
-          namespace: 'error',
-        )
-        .toList();
-
-    /// If no elements are found, it falls back to searching for elements
-    /// with the name "error" without a specific namespace.
-    if (errors.isEmpty) errors = bodyWrap.findAllElements('error').toList();
-
-    /// If no stream error elements are found, the method returns `false`,
-    /// indicating that no errors were encountered.
-    if (errors.isEmpty) return false;
-
-    /// If stream error elements are found, the method retrieves the first error
-    /// element.
-    final error = errors[0];
-
-    /// Extracts the condition and text values associated with the error.
-    String condition = '';
-    String text = '';
-
-    /// Indicate the type of current error.
-    final type = error.getAttribute('type');
-
-    /// Initialize null [ExceptionMapper].
-    // EchoExceptionMapper? exception;
-
-    /// The method iterates through the child elements of the error element
-    /// and checks if their "xmlns" attribute matches the expected namespace
-    /// ("urn:ietf:params:xml:ns:xmpp-streams").
-    const namespace = "urn:ietf:params:xml:ns:xmpp-streams";
-    for (final e in error.descendantElements) {
-      /// If the attribute does not match, the iteration is stopped.
-      if (e.getAttribute('xmlns') != namespace) {
-        break;
-      }
-
-      /// If an element with the local name "text" is found, its inner text is
-      /// assigned to the `text` variable.
-      if (e.nodeType == xml.XmlNodeType.ELEMENT && e.name.local == 'text') {
-        text = e.innerText;
-      } else {
-        /// Otherwise, the local name of the first child element is assigned to
-        /// the `condition` variable.
-        condition = e.localName;
-      }
+    /// If the mapped errors are null, then exit from the function with false.
+    if (mapped == null) {
+      return false;
     }
-
-    /// Declare stanza namespace, so the iteration can now that the error
-    /// caused for stanza.
-    // const stanzaNamespace = 'urn:ietf:params:xml:ns:xmpp-stanzas';
-
-    // /// The method iterates through the child elements of the error element
-    // /// and checks if their "xmlns" attribute matches the expected namespace
-    // /// ("urn:ietf:params:xml:ns:xmpp-stanzas").
-    // for (final e in error.descendantElements) {
-    //   /// If the attribute does not match, the iteration is stopped.
-    //   if (e.getAttribute('xmlns') != stanzaNamespace) {
-    //     break;
-    //   }
-
-    //   /// If an element with the local name "text" is found, its inner text is
-    //   /// assigned to the `text` variable.
-    //   if (e.nodeType == xml.XmlNodeType.ELEMENT && e.name.local == 'text') {
-    //     text = e.innerText;
-    //   } else {
-    //     /// Otherwise, the local name of the first child element is assigned to
-    //     /// the `condition` variable.
-    //     condition = e.localName;
-    //   }
-    // }
 
     /// The method constructs an error string with the format
     /// "WebSocket stream error: <condition> - <text>" based on the values of
     /// `condition` and `text`.
     String errorString = 'WebSocket stream error: ';
-    if (condition.isNotEmpty) {
-      errorString += condition;
+    if (mapped.value1.isNotEmpty) {
+      errorString += mapped.value1;
     } else {
       errorString += 'unknown';
     }
-    if (text.isNotEmpty) {
-      errorString += ' - $text';
+    if (mapped.value2.isNotEmpty) {
+      errorString += ' - ${mapped.value2}';
     }
-
-    /// Iterate the `condition` over switch case and match the extension
-    /// during this.
-    // switch (condition) {
-    //   case 'bad-request':
-    //     exception = EchoExceptionMapper.badRequest();
-    //   case 'not-authorized':
-    //     exception = EchoExceptionMapper.notAuthorized();
-    //   case 'forbidden':
-    //     exception = EchoExceptionMapper.forbidden();
-    //   case 'not-allowed':
-    //     exception = EchoExceptionMapper.notAllowed();
-    //   case 'registration-required':
-    //     exception = EchoExceptionMapper.registrationRequired();
-    //   case 'remote-server-timeout':
-    //     exception = EchoExceptionMapper.requestTimedOut();
-    //   case 'conflict':
-    //     exception = EchoExceptionMapper.conflict();
-    //   case 'internal-server-error':
-    //     exception = EchoExceptionMapper.internalServerError();
-    //   case 'service-unavailable':
-    //     exception = EchoExceptionMapper.serviceUnavailable();
-    //   case 'disconnected':
-    //     exception = EchoExceptionMapper.disconnected();
-    // }
 
     /// The error string is logged using the `Log().error` method.
     Log().trigger(LogType.error, errorString);
@@ -220,13 +121,14 @@ class WebSocket extends Protocol {
     /// The connection status is changed to the specified `status`, the error
     /// condition and exception (if there is one) is passed as the reason using
     /// the `connection._changeConnectStatus` method.
-    await connection._changeConnectStatus(status, condition);
+    await connection._changeConnectStatus(status, mapped.value1);
 
     /// The connection is then disconnected using the `connection.doDisconnect`
     /// method.
-    if (type == 'cancel' || type == 'auth') {
-      await connection._doDisconnect();
+    if (mapped.value3 != 'auth') {
+      return false;
     }
+    await connection._doDisconnect();
 
     /// The method returns `true`, indicting that stream errors were encountered
     /// and handled.
@@ -857,4 +759,101 @@ class WebSocket extends Protocol {
     connection._idleTimeout.cancel();
     connection._onIdle();
   }
+}
+
+/// Helper function to be used across the package.
+///
+/// Due the stanza errors can not be handled using [throw], incoming stanzas
+/// should be passed inside of this method to be filtered errors.
+///
+/// Uses [Tuple] as return type where all of three types of generic are [String].
+///
+/// The first [String] refers to the condition of the error stanza
+/// (e.g. conflict, bad-request, etc.). The second one refers to the text if
+/// there is a one inside of the stanza. And last but not least, type of the
+/// error. This can be `cancel`, `modify` and like so.
+Tuple3<String, String, String>? _mapErrors(xml.XmlElement bodyWrap) {
+  /// The method begins by declaring a `List<xml.XmlElement>` variable named
+  /// `errors` to store the stream error elements found in the XML document.
+  ///
+  List<xml.XmlElement>? errors;
+
+  /// The method searches for stream error elements using the `findElements`
+  /// method of the `bodyWrap` XML document. It looks for elements with the
+  /// XML namespace specified by `ns['STREAM']` and the namespace "error".
+  errors = bodyWrap
+      .findAllElements(
+        ns['STREAM']!,
+        namespace: 'error',
+      )
+      .toList();
+
+  /// If no elements are found, it falls back to searching for elements
+  /// with the name "error" without a specific namespace.
+  if (errors.isEmpty) errors = bodyWrap.findAllElements('error').toList();
+
+  /// If no stream error elements are found, the method returns `false`,
+  /// indicating that no errors were encountered.
+  if (errors.isEmpty) return null;
+
+  /// If stream error elements are found, the method retrieves the first error
+  /// element.
+  final error = errors[0];
+
+  /// Extracts the condition and text values associated with the error.
+  String condition = '';
+  String text = '';
+
+  /// Indicate the type of current error.
+  final type = error.getAttribute('type') ?? '';
+
+  /// Initialize null [ExceptionMapper].
+  // EchoExceptionMapper? exception;
+
+  /// The method iterates through the child elements of the error element
+  /// and checks if their "xmlns" attribute matches the expected namespace
+  /// ("urn:ietf:params:xml:ns:xmpp-streams").
+  const namespace = "urn:ietf:params:xml:ns:xmpp-streams";
+  for (final e in error.descendantElements) {
+    /// If the attribute does not match, the iteration is stopped.
+    if (e.getAttribute('xmlns') != namespace) {
+      break;
+    }
+
+    /// If an element with the local name "text" is found, its inner text is
+    /// assigned to the `text` variable.
+    if (e.nodeType == xml.XmlNodeType.ELEMENT && e.name.local == 'text') {
+      text = e.innerText;
+    } else {
+      /// Otherwise, the local name of the first child element is assigned to
+      /// the `condition` variable.
+      condition = e.localName;
+    }
+  }
+
+  /// Declare stanza namespace, so the iteration can now that the error
+  /// caused for stanza.
+  const stanzaNamespace = 'urn:ietf:params:xml:ns:xmpp-stanzas';
+
+  /// The method iterates through the child elements of the error element
+  /// and checks if their "xmlns" attribute matches the expected namespace
+  /// ("urn:ietf:params:xml:ns:xmpp-stanzas").
+  for (final e in error.descendantElements) {
+    /// If the attribute does not match, the iteration is stopped.
+    if (e.getAttribute('xmlns') != stanzaNamespace) {
+      break;
+    }
+
+    /// If an element with the local name "text" is found, its inner text is
+    /// assigned to the `text` variable.
+    if (e.nodeType == xml.XmlNodeType.ELEMENT && e.name.local == 'text') {
+      text = e.innerText;
+    } else {
+      /// Otherwise, the local name of the first child element is assigned to
+      /// the `condition` variable.
+      condition = e.localName;
+    }
+  }
+
+  return Tuple3(condition, text, type);
 }
