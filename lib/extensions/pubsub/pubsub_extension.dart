@@ -164,6 +164,8 @@ class PubSubExtension extends Extension {
     String node, {
     Map<String, String>? options,
     FutureOr<bool> Function(XmlElement)? callback,
+    FutureOr<void> Function(XmlElement)? resultCallback,
+    FutureOr<void> Function(EchoException?)? errorCallback,
   }) {
     final id = echo!.getUniqueId('pubsubcreatenode');
 
@@ -183,8 +185,11 @@ class PubSubExtension extends Extension {
       iq.up().c('configure').form(ns['PUBSUB_NODE_CONFIG']!, options);
     }
 
-    echo!.addHandler(callback, name: 'iq', id: id, type: ['error']);
-    echo!.send(iq.nodeTree);
+    echo!.sendIQ(
+      element: iq.nodeTree!,
+      resultCallback: resultCallback,
+      errorCallback: errorCallback,
+    );
 
     return id;
   }
@@ -206,9 +211,11 @@ class PubSubExtension extends Extension {
   /// });
   /// ```
   String deleteNode(
-    String node, [
+    String node, {
     FutureOr<bool> Function(XmlElement)? callback,
-  ]) {
+    FutureOr<void> Function(XmlElement)? resultCallback,
+    FutureOr<void> Function(EchoException?)? errorCallback,
+  }) {
     final id = echo!.getUniqueId('pubsubdeletenode');
     final iq = EchoBuilder.iq(
       attributes: {
@@ -222,8 +229,11 @@ class PubSubExtension extends Extension {
       attributes: {'node': node},
     );
 
-    echo!.addHandler(callback, name: 'iq', id: id);
-    echo!.send(iq.nodeTree);
+    echo!.sendIQ(
+      element: iq.nodeTree!,
+      resultCallback: resultCallback,
+      errorCallback: errorCallback,
+    );
 
     return id;
   }
@@ -232,8 +242,8 @@ class PubSubExtension extends Extension {
   /// The main responsibility of this method is to get all nodes that currently
   /// exist.
   ///
-  /// * @param onSuccess Used to determine if node discovery is successful and
-  /// if there is data to show.
+  /// * @param successCallback Used to determine if node discovery is successful
+  /// and if there is data to show.
   /// * @param onFailure Used to determine if there is an error while getting
   /// existing nodes.
   ///
@@ -256,8 +266,8 @@ class PubSubExtension extends Extension {
   /// );
   /// ```
   String discoverNodes({
-    FutureOr<bool> Function(XmlElement)? onSuccess,
-    FutureOr<bool> Function(XmlElement?)? onFailure,
+    FutureOr<void> Function(XmlElement)? successCallback,
+    FutureOr<void> Function(EchoException?)? failureCallback,
     int? timeout,
   }) {
     /// Creates IQ stanza to send for the discovery of currently available
@@ -268,8 +278,8 @@ class PubSubExtension extends Extension {
 
     return echo!.sendIQ(
       element: iq.nodeTree!,
-      callback: onSuccess,
-      onError: onFailure,
+      resultCallback: successCallback,
+      errorCallback: failureCallback,
       timeout: timeout,
     );
   }
@@ -287,6 +297,8 @@ class PubSubExtension extends Extension {
   String getConfig(
     String node, [
     FutureOr<bool> Function(XmlElement)? callback,
+    FutureOr<void> Function(XmlElement)? resultCallback,
+    FutureOr<void> Function(EchoException?)? errorCallback,
   ]) {
     final id = echo!.getUniqueId('pubsubconfigurenode');
 
@@ -297,8 +309,11 @@ class PubSubExtension extends Extension {
       attributes: {'node': node},
     );
 
-    echo!.addHandler(callback, name: 'iq', id: id);
-    echo!.send(iq.nodeTree);
+    echo!.sendIQ(
+      element: iq.nodeTree!,
+      resultCallback: resultCallback,
+      errorCallback: errorCallback,
+    );
 
     return id;
   }
@@ -342,10 +357,11 @@ class PubSubExtension extends Extension {
   /// * @param callback An optional callback function that will be invoked when
   /// a related event occurs, such as receiving a notification or update related
   /// to the subscription.
-  /// * @param onSuccess An optional callback function that will be invoked when
-  /// a successful response to the IQ stanza is received.
-  /// * @param onError An optional callback function that will be invoked when
-  /// an error response or no response to the IQ stanza is received.
+  /// * @param messageCallback An optional callback function that will be
+  /// invoked when a successful response to the IQ stanza is received.
+  /// * @param messageErrorCallback An optional callback function that will be
+  /// invoked when an error response or no response to the IQ stanza is
+  /// received.
   /// * @return A [String] that resolves to the ID of the sent IQ stanza.
   ///
   /// ### Usage
@@ -357,8 +373,8 @@ class PubSubExtension extends Extension {
     Map<String, String>? options,
     bool bareJID = false,
     FutureOr<bool> Function(XmlElement)? callback,
-    FutureOr<bool> Function(XmlElement)? onSuccess,
-    FutureOr<bool> Function(XmlElement?)? onError,
+    FutureOr<bool> Function(XmlElement)? messageCallback,
+    FutureOr<bool> Function(EchoException?)? messageErrorCallback,
   }) {
     final id = echo!.getUniqueId('subscribenode');
     String jid = _jid!;
@@ -383,10 +399,14 @@ class PubSubExtension extends Extension {
       iq.up().c('options').form(ns['PUBSUB_SUBSCRIBE_OPTIONS']!, options);
     }
 
-    final handler = echo!.addHandler(callback, name: 'message');
+    final handler = echo!.addHandler(
+      callback,
+      name: 'message',
+      resultCallback: messageCallback,
+      errorCallback: messageErrorCallback,
+    );
     storeHandler(node, handler);
-
-    echo!.sendIQ(element: iq.nodeTree!, callback: onSuccess, onError: onError);
+    echo!.sendIQ(element: iq.nodeTree!);
 
     return id;
   }
@@ -402,17 +422,17 @@ class PubSubExtension extends Extension {
   /// subscription to be unsubscribed. If provided, only the specified
   /// subscription will be unsubscribed. If not provided, all subscriptions for
   /// the specified JID on the given node will be unsubscribed.
-  /// * @param onSuccess An optional callback function that will be invoked when
-  /// a successful response to the IQ stanza is received.
-  /// * @param onError An optional callback function that will be invoked when
-  /// an error response or no response to the IQ stanza is received.
+  /// * @param successCallback An optional callback function that will be
+  /// invoked when a successful response to the IQ stanza is received.
+  /// * @param errorCallback An optional callback function that will be invoked
+  /// when an error response or no response to the IQ stanza is received.
   /// * @return A [String] that resolves to the ID of the sent IQ stanza.
   String unsubsribe(
     String node,
     String jid, {
     String? subID,
-    FutureOr<bool> Function(XmlElement)? onSuccess,
-    FutureOr<bool> Function(XmlElement?)? onError,
+    FutureOr<bool> Function(XmlElement)? successCallback,
+    FutureOr<bool> Function(EchoException?)? errorCallback,
   }) {
     final id = echo!.getUniqueId('pubsubunsubscribenode');
 
@@ -432,7 +452,11 @@ class PubSubExtension extends Extension {
       iq.addAttributes({'subid': subID});
     }
 
-    echo!.sendIQ(element: iq.nodeTree!, callback: onSuccess, onError: onError);
+    echo!.sendIQ(
+      element: iq.nodeTree!,
+      resultCallback: successCallback,
+      errorCallback: errorCallback,
+    );
     removeHandler(node);
     return id;
   }
@@ -463,6 +487,8 @@ class PubSubExtension extends Extension {
     String node,
     List<PubSubItem> items, [
     FutureOr<bool> Function(XmlElement)? callback,
+    FutureOr<void> Function(XmlElement)? resultCallback,
+    FutureOr<void> Function(EchoException?)? errorCallback,
   ]) {
     final id = echo!.getUniqueId('pubsubpublishnode');
 
@@ -476,7 +502,13 @@ class PubSubExtension extends Extension {
       },
     ).list('item', items);
 
-    echo!.addHandler(callback, name: 'iq', id: id);
+    echo!.addHandler(
+      callback,
+      name: 'iq',
+      id: id,
+      resultCallback: resultCallback,
+      errorCallback: errorCallback,
+    );
     echo!.send(iq);
 
     return id;
@@ -488,12 +520,12 @@ class PubSubExtension extends Extension {
   ///
   /// * @param node The identifier of the PubSub node for which the items are
   /// requested.
-  /// * @param onSuccess (Function) An optional callback function that will be
-  /// invoked when a successful response to the IQ stanza is received. It can
-  /// be used to process the received items XML and perform any necessary
+  /// * @param successCallback (Function) An optional callback function that
+  /// will be invoked when a successful response to the IQ stanza is received.
+  /// It can be used to process the received items XML and perform any necessary
   /// actions.
-  /// * @param onFailure An optional callback function that will be invoked when
-  /// an error response or no response to the IQ stanza is received.
+  /// * @param errorCallback An optional callback function that will be invoked
+  /// when an error response or no response to the IQ stanza is received.
   /// * @param timeout An optional timeout value (in milliseconds) to specify
   /// the maximum amount of time to wait for a response to the IQ stanza.
   ///
@@ -513,8 +545,8 @@ class PubSubExtension extends Extension {
   /// ```
   String getItems(
     String node, {
-    FutureOr<bool> Function(XmlElement)? onSuccess,
-    FutureOr<bool> Function(XmlElement?)? onFailure,
+    FutureOr<bool> Function(XmlElement)? successCallback,
+    FutureOr<bool> Function(EchoException?)? errorCallback,
     int? timeout,
   }) {
     final iq = EchoBuilder.iq(
@@ -526,8 +558,8 @@ class PubSubExtension extends Extension {
 
     return echo!.sendIQ(
       element: iq.nodeTree!,
-      callback: onSuccess,
-      onError: onFailure,
+      resultCallback: successCallback,
+      errorCallback: errorCallback,
       timeout: timeout,
     );
   }
@@ -552,6 +584,8 @@ class PubSubExtension extends Extension {
   /// ```
   String getSubscriptions([
     FutureOr<bool> Function(XmlElement)? callback,
+    FutureOr<void> Function(XmlElement)? resultCallback,
+    FutureOr<void> Function(EchoException?)? errorCallback,
   ]) {
     final id = echo!.getUniqueId('pubsubsubscriptions');
 
@@ -564,8 +598,11 @@ class PubSubExtension extends Extension {
       },
     ).c('pubsub', attributes: {'xmlns': ns['PUBSUB']!}).c('subscriptions');
 
-    echo!.addHandler(callback, name: 'iq', id: id);
-    echo!.send(iq.nodeTree);
+    echo!.sendIQ(
+      element: iq.nodeTree!,
+      resultCallback: resultCallback,
+      errorCallback: errorCallback,
+    );
 
     return id;
   }

@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:echo/echo.dart';
 import 'package:echo/src/constants.dart';
-import 'package:echo/src/exception.dart';
 
 part 'identity.dart';
 part 'item.dart';
@@ -102,8 +103,8 @@ class DiscoExtension extends Extension {
   void info(
     String jid, {
     String? node,
-    void Function(XmlElement)? onSuccess,
-    void Function(XmlElement?)? onError,
+    FutureOr<void> Function(XmlElement)? onSuccess,
+    FutureOr<void> Function(EchoException?)? onError,
     int? timeout,
   }) {
     final attributes = <String, String>{'xmlns': ns['DISCO_INFO']!};
@@ -118,8 +119,8 @@ class DiscoExtension extends Extension {
 
     echo!.sendIQ(
       element: info.nodeTree!,
-      callback: onSuccess,
-      onError: onError,
+      resultCallback: onSuccess,
+      errorCallback: onError,
       timeout: timeout,
     );
   }
@@ -137,8 +138,8 @@ class DiscoExtension extends Extension {
   void items(
     String jid, {
     String? node,
-    void Function(XmlElement)? onSuccess,
-    void Function(XmlElement?)? onError,
+    FutureOr<void> Function(XmlElement)? onSuccess,
+    FutureOr<void> Function(EchoException?)? onError,
     int? timeout,
   }) {
     final attributes = <String, String>{'xmlns': ns['DISCO_ITEMS']!};
@@ -153,8 +154,8 @@ class DiscoExtension extends Extension {
 
     echo!.sendIQ(
       element: items.nodeTree!,
-      callback: onSuccess,
-      onError: onError,
+      resultCallback: onSuccess,
+      errorCallback: onError,
       timeout: timeout,
     );
   }
