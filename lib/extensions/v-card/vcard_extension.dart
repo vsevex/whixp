@@ -1,7 +1,6 @@
 import 'package:echo/echo.dart';
 import 'package:echo/extensions/event/event.dart';
 import 'package:echo/src/constants.dart';
-import 'package:echo/src/exception.dart';
 
 part 'vcard.dart';
 
@@ -12,7 +11,7 @@ part 'vcard.dart';
 ///
 /// It allows retrieving and updating vCard information for specfic Jabber IDs
 /// in the server.
-class VCardExtension extends Extension<VCard> {
+class VCardExtension extends Extension {
   /// Creates an instance of the [VCard] extension class.
   ///
   /// ### Usage
@@ -39,13 +38,13 @@ class VCardExtension extends Extension<VCard> {
   /// * @param jid The JID for which to retrieve the vCard.
   /// * @param callback Optional callback function to handle the successful
   /// response.
-  /// * @param onError Optional callback function to handle errors.
+  /// * @param onErrorCallback Optional callback function to handle errors.
   /// * @return A [Future] that returns void.
   /// * @throws AssertionError if the JID is not provided.
   Future<void> get({
     String? jid,
-    void Function(XmlElement)? callback,
-    void Function(XmlElement?)? onError,
+    void Function(VCard)? callback,
+    void Function(EchoException?)? onErrorCallback,
   }) async {
     assert(jid != null, 'JID must be provided in order to get vCard.');
 
@@ -58,7 +57,7 @@ class VCardExtension extends Extension<VCard> {
         'get',
         jid: jid,
       ),
-      callback: (element) {
+      resultCallback: (element) {
         /// Map all children elements of the given element.
         for (final child in element.descendantElements) {
           if (child.localName == 'FN') {
@@ -81,15 +80,12 @@ class VCardExtension extends Extension<VCard> {
           }
         }
 
-        /// Send gathered vCard information to notify event listener.
-        vCardEvent.fire(vCard);
-
         /// If the callback is provided, then call this after mapping is done.
         if (callback != null) {
-          callback.call(element);
+          callback.call(vCard);
         }
       },
-      onError: onError,
+      errorCallback: onErrorCallback,
     );
   }
 
@@ -99,21 +95,21 @@ class VCardExtension extends Extension<VCard> {
   /// payload format. See the usage of payload in [VCard].
   /// * @param callback Optional callback function to handle the successful
   /// response.
-  /// * @param onError Optional callback function to handle errors.
+  /// * @param errorCallback Optional callback function to handle errors.
   /// * @return A [String] that resolves to the retrieved vCard information
   /// stanza ID.
   /// * @throws AssertionError if the vCard is not provided.
   String set({
     VCard? vCard,
     void Function(XmlElement)? callback,
-    void Function(XmlElement?)? onError,
+    void Function(EchoException?)? errorCallback,
   }) {
     assert(vCard != null, 'vCard must be provided.');
 
     return echo!.sendIQ(
       element: _buildIQ('set', vCard: vCard),
-      callback: callback,
-      onError: onError,
+      resultCallback: callback,
+      errorCallback: errorCallback,
     );
   }
 
@@ -134,7 +130,7 @@ class VCardExtension extends Extension<VCard> {
     /// Checks if vCard is not null. Then add as a text node.
     if (vCard != null) {
       for (final element in vCard.payload) {
-        iq.cnode(element);
+        iq.cnode(element).up();
       }
     }
 

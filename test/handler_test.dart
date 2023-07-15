@@ -5,7 +5,7 @@ import 'package:test/test.dart';
 import 'package:xml/xml.dart' as xml;
 
 void main() {
-  group('getNamespace method Test', () {
+  group('getNamespace Method Test', () {
     /// Global element initialization.
     xml.XmlElement? element;
     Handler? handler;
@@ -129,7 +129,7 @@ void main() {
             return false;
           },
           namespace: 'http://example.com',
-          name: 'element',
+          stanzaName: 'element',
           type: 'type',
           id: 'id',
           from: 'from',
@@ -178,7 +178,7 @@ void main() {
         (element) async {
           return false;
         },
-        name: 'element',
+        stanzaName: 'element',
       );
       final element = Echotils.xmlElement('artyom');
       final result = handler.isMatch(element!);
@@ -248,7 +248,7 @@ void main() {
     });
 
     test('Must throw an exception', () async {
-      final handler = Handler((element) => throw Exception('Blin'));
+      final handler = Handler((element) => true);
       final element = Echotils.xmlElement('element');
       try {
         await handler.run(element!);

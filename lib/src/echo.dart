@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:dartz/dartz.dart';
+import 'package:echo/extensions/event/event.dart';
 
 import 'package:echo/extensions/extensions.dart';
 import 'package:echo/src/builder.dart';
@@ -124,7 +126,7 @@ class Echo {
         );
         return true;
       },
-      name: 'iq',
+      stanzaName: 'iq',
       type: ['get', 'set'],
     );
 
@@ -822,15 +824,16 @@ class Echo {
   /// Helper function to send IQ stanzas.
   ///
   /// * @param element The stanza to send.
-  /// * @param callback The callback function for a successful request.
-  /// * @param onError The callback function for a failed or timed out request.
+  /// * @param resultCallback The callback function for a successful request.
+  /// * @param errorCallback The callback function for a failed or timed out
+  /// request.
   /// On timeout, the stanza will be null.
   /// * @param timeout The time specified in milliseconds for a timeout to
   /// occur.
   String sendIQ({
     required xml.XmlElement element,
-    void Function(xml.XmlElement element)? callback,
-    void Function(xml.XmlElement? element)? onError,
+    FutureOr<void> Function(xml.XmlElement element)? resultCallback,
+    FutureOr<void> Function(EchoException? exception)? errorCallback,
     int? timeout,
   }) {
     _TimedHandler? timeoutHandler;
@@ -845,23 +848,17 @@ class Echo {
         if (timeoutHandler != null) {
           deleteTimedHandler(timeoutHandler);
         }
-        final iqType = stanza.getAttribute('type');
-        if (iqType == 'result') {
-          if (callback != null) {
-            callback.call(stanza);
-          }
-        } else if (iqType == 'error') {
-          if (onError != null) {
-            onError.call(stanza);
-          }
-        } else {
-          throw Exception('Got bad IQ type of $iqType');
-        }
-        return false;
+        // final iqType = stanza.getAttribute('type');
+        // if (iqType != 'result' || iqType != 'error') {
+        //   throw Exception('Got bad IQ type of $iqType');
+        // }
+        return true;
       },
+      resultCallback: resultCallback,
+      errorCallback: errorCallback,
       name: 'iq',
       id: id,
-      type: ['error', 'result'],
+      type: ['result', 'error'],
     );
 
     /// If timeout specified, set up a timeout handler.
@@ -870,10 +867,9 @@ class Echo {
         /// Get rid of normal handler.
         deleteHandler(handler);
 
-        /// If onError is not null, then call onError with null identifier.
-        if (onError != null) {
-          onError.call(null);
-        }
+        /// If onError is not null, then call errorCallback with null identifier.
+        errorCallback?.call(null);
+
         return false;
       });
     }
@@ -986,6 +982,10 @@ class Echo {
   /// `deleteHandler()`.
   ///
   /// * @param handler The user callback.
+  /// * @param resultCallback The user callback when incoming stanza is
+  /// `result`.
+  /// * @param errorCallback The user callback for when incoming stanza contains
+  /// error.
   /// * @param namespace The namespace to match.
   /// * @param name The stanza name to match.
   /// * @param type The stanza type (or types if an array) to match. This can be
@@ -996,7 +996,15 @@ class Echo {
   /// * @return A reference to the handler that can be used to remove it.
   Handler addHandler(
     /// The user callback.
+    ///
+    /// TODO: Can be required param in the next updates.
     FutureOr<bool> Function(xml.XmlElement)? handler, {
+    /// The function to handle the XMPP stanzas.
+    FutureOr<void> Function(xml.XmlElement)? resultCallback,
+
+    /// The function to handle the XMPP `error` stanzas.
+    FutureOr<void> Function(EchoException)? errorCallback,
+
     /// The user callback.
     String? namespace,
 
@@ -1018,13 +1026,22 @@ class Echo {
     /// Create new [Handler] object.
     final hand = Handler(
       handler,
-      name: name,
+      stanzaName: name,
       namespace: namespace,
       type: type,
       id: id,
       from: from,
       options: options,
     );
+
+    /// When `fire` is triggered from the [Handler] class which extends [Event]
+    /// this method will be triggered and run what is passed to the function.
+    hand.event.addListener((either) {
+      either.fold(
+        (stanza) => resultCallback?.call(stanza),
+        (exception) => errorCallback?.call(exception),
+      );
+    });
 
     /// Add handlers to the list.
     _addHandlers.add(hand);
@@ -1949,7 +1966,13 @@ class Echo {
   /// * @param id The stanza id attribute to match.
   Handler _addSystemHandler(
     /// The user callback.
-    FutureOr<bool> Function(xml.XmlElement)? handler, {
+    FutureOr<bool> Function(xml.XmlElement) handler, {
+    /// The user callback when incoming stanza is `result`. Defaults to `null`.
+    FutureOr<void> Function(xml.XmlElement)? resultCallback,
+
+    /// The user callback when incoming stanza is `error`. Defaults to `null`.
+    FutureOr<void> Function(EchoException)? errorCallback,
+
     /// The user callback.
     String? namespace,
 
@@ -1966,9 +1989,18 @@ class Echo {
     final hand = Handler(
       handler,
       namespace: namespace,
-      name: name,
+      stanzaName: name,
       type: type,
       id: id,
+    );
+
+    /// When `fire` is triggered from the [Handler] class which extends [Event]
+    /// this method will be triggered and run what is passed to the function.
+    hand.event.addListener(
+      (either) => either.fold(
+        (stanza) => resultCallback?.call(stanza),
+        (exception) => errorCallback?.call(exception),
+      ),
     );
 
     /// Equal to false for indicating that this is system handler.
@@ -1992,9 +2024,9 @@ class Echo {
 ///
 /// Users will not use Handlers directly, instead they will use
 /// `Echo.addHandler()` or `Echo.deleteHandler()` method.
-class Handler {
+class Handler extends Event<Either<xml.XmlElement, EchoException>> {
   Handler(
-    /// The function to handle the XMPP stanzas.
+    /// Required for executing when `run` is triggered.
     this.handler, {
     /// The namespace of the stanzas to match. If null, all namespaces will be
     /// considered a match.
@@ -2002,7 +2034,7 @@ class Handler {
 
     /// The name of the stanzas to match. If null, all names will be considered
     /// a match.
-    this.name,
+    this.stanzaName,
 
     /// The type of the stanzas to match. If null, all types will be considered
     /// a match.
@@ -2019,7 +2051,7 @@ class Handler {
     /// Additional options for the handler.
     ///
     Map<String, bool>? options,
-  }) : options = options ??
+  })  : options = options ??
             {
               /// If set to true, it indicates that the from attribute should
               /// be matched with the bare JID (Jabber ID) instead of the full
@@ -2034,7 +2066,8 @@ class Handler {
               ///
               /// Default is false.
               'ignoreNamespaceFragment': false,
-            } {
+            },
+        super(name: id ?? 'generated-handler') {
     if (this.options!.containsKey('matchBare')) {
       Log().trigger(
         LogType.warn,
@@ -2061,7 +2094,7 @@ class Handler {
   final String? namespace;
 
   /// The `name` of the stanzas to match.
-  final String? name;
+  final String? stanzaName;
 
   /// The `type` of the stanzas to match. Can be used as [String] or [List].
   final dynamic type;
@@ -2072,11 +2105,11 @@ class Handler {
   /// Additional `options` for the handler.
   final Map<String, bool>? options;
 
+  /// The [Function] executor needs to be run when needed.
+  final FutureOr<bool> Function(xml.XmlElement)? handler;
+
   /// Authentication flag for the handler.
   bool user = false;
-
-  /// The `function` to handle the XMPP stanzas.
-  final FutureOr<bool> Function(xml.XmlElement element)? handler;
 
   /// Retrieves the namespacce of an XML element.
   String? getNamespace(xml.XmlElement element) {
@@ -2124,7 +2157,7 @@ class Handler {
     }
     final elementType = element.getAttribute('type');
     if (namespaceMatch(element) &&
-        (name == null || Echotils.isTagEqual(element, name!)) &&
+        (stanzaName == null || Echotils.isTagEqual(element, stanzaName!)) &&
         (type == null ||
             (type is List
                 ? (type! as List).contains(elementType)
@@ -2144,17 +2177,58 @@ class Handler {
   /// Otherwise returns null.
   FutureOr<bool>? run(xml.XmlElement element) async {
     bool? result;
-    try {
+
+    /// If handler is not null, then execute the passed function.
+    if (handler != null) {
       result = await handler!.call(element);
-    } catch (error) {
+    }
+
+    if (element.getAttribute('type') == 'error') {
+      /// Initialize null [EchoException].
+      EchoException? exception;
+
+      /// Iterate the `condition` over switch case and match the extension
+      /// during this.
+      switch (_mapErrors(element)!.value1) {
+        case 'bad-request':
+          exception = EchoExceptionMapper.badRequest();
+        case 'not-authorized':
+          exception = EchoExceptionMapper.notAuthorized();
+        case 'forbidden':
+          exception = EchoExceptionMapper.forbidden();
+        case 'not-allowed':
+          exception = EchoExceptionMapper.notAllowed();
+        case 'registration-required':
+          exception = EchoExceptionMapper.registrationRequired();
+        case 'remote-server-timeout':
+          exception = EchoExceptionMapper.requestTimedOut();
+        case 'conflict':
+          exception = EchoExceptionMapper.conflict();
+        case 'internal-server-error':
+          exception = EchoExceptionMapper.internalServerError();
+        case 'service-unavailable':
+          exception = EchoExceptionMapper.serviceUnavailable();
+        case 'disconnected':
+          exception = EchoExceptionMapper.disconnected();
+      }
+
+      /// If there is not [EchoException] catched, then fire [Right] side of
+      /// the [Event].
+      if (exception != null) {
+        fire(Right(exception));
+      }
       return false;
     }
-    return result;
+
+    /// If there is not any [EchoException] catched, then fire [Left] side of
+    /// the [Event].
+    fire(Left(element));
+    return result ?? true;
   }
 
   @override
   String toString() =>
-      '{Handler: $handler (name: $name, id: $id, namespace: $namespace type: $type options: $options)}';
+      '{Handler: $handler (name: $stanzaName, id: $id, namespace: $namespace type: $type options: $options)}';
 }
 
 /// Private helper class for managing timed handlers.
