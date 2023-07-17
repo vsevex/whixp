@@ -364,21 +364,22 @@ class Scram {
     String? clientKey;
     String? serverKey;
 
-    if (connection._password is Map) {
-      final password = connection._password as Map<String, dynamic>;
+    // if (connection._password is Map) {
+    //   final password = connection._password as Map<String, dynamic>;
 
-      /// Check if the password matches with the challenge.
-      if (password['name'] == hashName &&
-          password['salt'] ==
-              Echotils.arrayBufferToBase64(
-                challengeData['salt'] as Uint8List,
-              ) &&
-          password['iter'] == challengeData['iteration']) {
-        clientKey = Echotils.atob(password['ck'] as String);
-        serverKey = Echotils.atob(password['sk'] as String);
-      }
-    } else if (connection._password is String) {
-      final password = connection._password as String?;
+    //   /// Check if the password matches with the challenge.
+    //   if (password['name'] == hashName &&
+    //       password['salt'] ==
+    //           Echotils.arrayBufferToBase64(
+    //             challengeData['salt'] as Uint8List,
+    //           ) &&
+    //       password['iter'] == challengeData['iteration']) {
+    //     clientKey = Echotils.atob(password['ck'] as String);
+    //     serverKey = Echotils.atob(password['sk'] as String);
+    //   }
+    // }
+    if (connection._password is String) {
+      final password = connection._password;
 
       /// If not, derive keys using the provided password.
       if (password != null) {
