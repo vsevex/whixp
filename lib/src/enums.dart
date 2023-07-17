@@ -7,6 +7,8 @@ enum EchoStatus {
   authenticating,
   authenticationFailed,
   connected,
+  registrationFailed,
+  register,
   disconnected,
   disconnecting,
   attached,
