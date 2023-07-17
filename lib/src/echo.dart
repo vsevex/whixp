@@ -20,6 +20,7 @@ import 'package:echo/src/utils.dart';
 import 'package:web_socket_channel/web_socket_channel.dart' as ws;
 import 'package:xml/xml.dart' as xml;
 
+part '../extensions/registration/registration_extension.dart';
 part '_extension.dart';
 part 'bosh.dart';
 part 'sasl_anon.dart';
@@ -57,6 +58,15 @@ class Echo {
 
     /// Defaults to `true`.
     this.debugEnabled = true,
+
+    /// The purpose of this variable is to provide a mechanism for conditional
+    /// user registration.
+    ///
+    /// Defaults to `false`. When set to `true`, the client will attempt to
+    /// automatically register a user who tries to access the server with the
+    /// given JID and password. Conversely, when set to `false`, the client
+    /// will require users to be registered manually before accessing the server.
+    this.registerIfUserNotExist = false,
   }) {
     /// Assign passed `debugEnabled` flag to the [Log].
     Log().initialize(debugEnabled: debugEnabled);
@@ -136,7 +146,7 @@ class Echo {
   }
 
   /// `version` constant.
-  final String version = '1.0.0';
+  final String version = '1.0';
 
   /// The service URL.
   late String service;
@@ -189,11 +199,18 @@ class Echo {
 
   late bool _doAuthentication;
   late bool _authenticated;
+  late bool _registering;
+  late bool _registered;
   late bool _connected;
   late bool _disconnecting;
   late bool _paused;
   late bool _doBind;
   late bool _doSession;
+
+  /// Late initializator for [bool] variable. It is used to control whether a
+  /// user should be automatically registered in a system or application if the
+  /// user does not already exist in the system.
+  late final bool registerIfUserNotExist;
 
   /// Data holder for sending later on. The data it can hold is can be [String]
   /// or [xml.XmlElement].
@@ -594,6 +611,9 @@ class Echo {
     /// Authorization identity.
     this.jid = jid;
 
+    addNamespace('REGISTER', 'jabber:iq:register');
+    disco.addFeature(ns['REGISTER']!);
+
     /// Authorization identity (username).
     _authzid = Echotils().getBareJIDFromJID(jid);
 
@@ -607,14 +627,20 @@ class Echo {
     _connectCallback =
         (status, [condition, element]) async => callback!.call(status);
 
-    /// Make `disconnectin` false.
+    /// Make `disconnecting` false initially.
     _disconnecting = false;
 
-    /// Make `authentication` false.
+    /// Make `authentication` false initially.
     _authenticated = false;
 
-    /// Make `connected` false.
+    /// Make `registered` false initially.
+    _registered = false;
+
+    /// Make `connected` false initially.
     _connected = false;
+
+    /// Make `registering` true initially.
+    _registering = true;
 
     /// Make global `disconnectionTimeout` value to be equal to passed one.
     _disconnectionTimeout = disconnectionTimeout;
@@ -1119,7 +1145,7 @@ class Echo {
 
     /// Log according to the `reason` value.
     if (reason != null) {
-      Log().trigger(LogType.warn, 'Disonnect was called because: $reason');
+      Log().trigger(LogType.warn, 'Disconnect was called because: $reason');
     } else {
       Log().trigger(LogType.info, 'Disconnect was called');
     }
@@ -1412,7 +1438,7 @@ class Echo {
   /// Private `connectCB` method.
   ///
   /// SASL authentication will be attempted if available, otherwise the code
-  /// will fall back to legaacy authentication.
+  /// will fall back to legacy authentication.
   ///
   /// * @param request The current request
   /// * @param callback Low level (xmpp) connect callback function.
@@ -1425,15 +1451,25 @@ class Echo {
     _connected = true;
 
     xml.XmlElement? bodyWrap;
-    try {
-      bodyWrap = _protocol.reqToData(request);
-    } catch (error) {
-      await _changeConnectStatus(
-        EchoStatus.connectionFailed,
-        errorCondition['BAD_FORMAT'],
-      );
-      await _doDisconnect(errorCondition['BAD_FORMAT']);
+
+    if (registerIfUserNotExist && _registering) {
+      if (await _registerCallback(request, callback, raw)) {
+        _registering = false;
+      }
+      return;
     }
+
+    /// For now, try-catch block does not mean anything to implement due only
+    /// `WebSocket` connection is available.
+    // try {
+    bodyWrap = _protocol.reqToData(request);
+    // } catch (error) {
+    //   await _changeConnectStatus(
+    //     EchoStatus.connectionFailed,
+    //     errorCondition['BAD_FORMAT'],
+    //   );
+    //   await _doDisconnect(errorCondition['BAD_FORMAT']);
+    // }
 
     if (bodyWrap == null) return;
     if (bodyWrap.name.qualified == _protocol.strip &&
@@ -1483,7 +1519,55 @@ class Echo {
         return;
       }
     }
+
     if (_doAuthentication) await _authenticate(matched);
+  }
+
+  Future<bool> _registerCallback(
+    xml.XmlElement request,
+    Future<void> Function(Echo)? callback, [
+    String? raw,
+  ]) async {
+    Log().trigger(LogType.info, 'registerCallback was called');
+    _connected = true;
+
+    final bodyWrap = _protocol.reqToData(request);
+
+    if (bodyWrap == null) return false;
+    if (bodyWrap.name.local == _protocol.strip &&
+        bodyWrap.descendantElements.isNotEmpty) {
+      _xmlInput(bodyWrap.descendantElements.first);
+    } else {
+      _xmlInput(bodyWrap);
+    }
+    if (raw != null) {
+      _rawInput(raw);
+    } else {
+      _rawInput(Echotils.serialize(bodyWrap));
+    }
+    final connectionCheck = await _protocol.connectCB(bodyWrap);
+    if (connectionCheck == status[EchoStatus.connectionFailed]) {
+      return false;
+    }
+
+    _addSystemHandler(_getRegisterCallback);
+
+    return true;
+  }
+
+  bool _getRegisterCallback(xml.XmlElement stanza) {
+    final query = stanza.findElements('query');
+
+    if (query.isEmpty) {
+      _changeConnectStatus(EchoStatus.authenticationFailed, 'unknown');
+      return false;
+    }
+
+    Echotils.forEachChild(query.first, 'instructions', (stanza) {
+      print(stanza);
+    });
+
+    return false;
   }
 
   Future<void> _authenticate(List<SASL?> mechanisms) async {
@@ -1593,7 +1677,7 @@ class Echo {
         )
             .c('query', attributes: {'xmlns': ns['AUTH']!})
             .c('username')
-            .t(Echotils().getNodeFromJID(jid)!)
+            .t(Echotils().getNodeFromJID(jid) ?? '')
             .nodeTree,
       );
     }
