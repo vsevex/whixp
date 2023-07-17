@@ -58,15 +58,6 @@ class Echo {
 
     /// Defaults to `true`.
     this.debugEnabled = true,
-
-    /// The purpose of this variable is to provide a mechanism for conditional
-    /// user registration.
-    ///
-    /// Defaults to `false`. When set to `true`, the client will attempt to
-    /// automatically register a user who tries to access the server with the
-    /// given JID and password. Conversely, when set to `false`, the client
-    /// will require users to be registered manually before accessing the server.
-    this.registerIfUserNotExist = false,
   }) {
     /// Assign passed `debugEnabled` flag to the [Log].
     Log().initialize(debugEnabled: debugEnabled);
@@ -189,7 +180,7 @@ class Echo {
   // Handler? iqFallbackHandler;
 
   /// dynamic type password. This can be either [String] or [Map].
-  dynamic _password;
+  late String? _password;
 
   /// Values can be either [String] or a [Map].
   late final Map<String, dynamic>? _saslData;
@@ -199,22 +190,33 @@ class Echo {
 
   late bool _doAuthentication;
   late bool _authenticated;
-  late bool _registering;
-  late bool _registered;
   late bool _connected;
   late bool _disconnecting;
+  late bool _registering;
   late bool _paused;
   late bool _doBind;
   late bool _doSession;
 
-  /// Late initializator for [bool] variable. It is used to control whether a
-  /// user should be automatically registered in a system or application if the
-  /// user does not already exist in the system.
-  late final bool registerIfUserNotExist;
+  /// Used for registration process which is declared using extension list.
+  late bool _processedFeatures;
 
   /// Data holder for sending later on. The data it can hold is can be [String]
   /// or [xml.XmlElement].
   late final List _data = <dynamic>[];
+
+  /// When attached [RegisterExtension] in client, this variable refers to
+  /// specific steps or information required for the registration process.
+  ///
+  /// This can be used by users afterwards to know which fields are required
+  /// by the server in order to use `in-band registration` functionality.
+  ///
+  /// But non-final, cause' it will be initialized later.
+  late String registrationInstructions;
+
+  /// In the context of `in-band registration` this variable is the pieces of
+  /// information that the XMPP server requires from the user during the
+  /// registration process.
+  final _fields = <String, String>{};
 
   /// The SASL SCRAM client and server keys. This variable will be populated
   /// with a non-null object of the above described form after a successful
@@ -478,6 +480,17 @@ class Echo {
 
     /// Is do session enabled or not holder. Resets to false.
     _doSession = false;
+
+    /// Check if extension list contains [RegistrationExtension].
+    if (_extensions
+        .where((extension) => extension._name == 'registration-extension')
+        .isNotEmpty) {
+      /// Reset instructions to initial state.
+      registrationInstructions = '';
+
+      /// Reset fields variable to its initial state.
+      _fields.clear();
+    }
   }
 
   /// Pause the request manager.
@@ -595,7 +608,10 @@ class Echo {
     required String jid,
 
     /// The user's password.
-    dynamic password,
+    ///
+    /// For anonymous logins, this variable will be passed as empty string to
+    /// the server.
+    String password = '',
 
     /// The connection callback function.
     Future<void> Function(EchoStatus)? callback,
@@ -610,9 +626,6 @@ class Echo {
     ///
     /// Authorization identity.
     this.jid = jid;
-
-    addNamespace('REGISTER', 'jabber:iq:register');
-    disco.addFeature(ns['REGISTER']!);
 
     /// Authorization identity (username).
     _authzid = Echotils().getBareJIDFromJID(jid);
@@ -634,19 +647,35 @@ class Echo {
     _authenticated = false;
 
     /// Make `registered` false initially.
-    _registered = false;
+    // _registered = false;
 
     /// Make `connected` false initially.
     _connected = false;
 
     /// Make `registering` true initially.
-    _registering = true;
+    // _registering = true;
 
     /// Make global `disconnectionTimeout` value to be equal to passed one.
     _disconnectionTimeout = disconnectionTimeout;
 
     /// Parse `jid` for domain.
     _domain = Echotils().getDomainFromJID(jid);
+
+    /// Check if [RegistrationExtension] is attached to the client, then
+    /// initialize the required variables to its initial values.
+    if (_extensions
+        .where((extension) => extension._name == 'registration-extension')
+        .isNotEmpty) {
+      /// Instructions equals to empty string.
+      registrationInstructions = '';
+
+      /// Equal required and passed fields depending on the connection details.
+      _fields['username'] = jid;
+      _fields['password'] = _password!;
+
+      /// Late initializator of the variable `registering` equals false.
+      _registering = true;
+    }
 
     /// Change the status of connection to `connecting`.
     _changeConnectStatus(EchoStatus.connecting, null);
@@ -677,7 +706,7 @@ class Echo {
       /// then the given message will be printed.
       Log().trigger(
         LogType.warn,
-        'Authentication failed. Check the provided credentials.',
+        'Authentication failed. Check the provided credentials or attach RegistrationExtension to register JID.',
       );
     }
 
@@ -1452,11 +1481,22 @@ class Echo {
 
     xml.XmlElement? bodyWrap;
 
-    if (registerIfUserNotExist && _registering) {
-      if (await _registerCallback(request, callback, raw)) {
-        _registering = false;
+    if (_extensions
+        .where((extension) => extension._name == 'registration-extension')
+        .isNotEmpty) {
+      if (!_registering) {
+        if (_processedFeatures) {
+          _processedFeatures = false;
+        } else {
+          _connectCB(request, callback, raw);
+        }
+      } else {
+        if (await _registerCallback(request, callback, raw)) {
+          _processedFeatures = true;
+          _registering = false;
+        }
+        return;
       }
-      return;
     }
 
     /// For now, try-catch block does not mean anything to implement due only
@@ -1524,49 +1564,74 @@ class Echo {
   }
 
   Future<bool> _registerCallback(
-    xml.XmlElement request,
+    xml.XmlElement stanza,
     Future<void> Function(Echo)? callback, [
     String? raw,
   ]) async {
-    Log().trigger(LogType.info, 'registerCallback was called');
+    Log().trigger(LogType.info, '_registerCallback was called');
     _connected = true;
 
-    final bodyWrap = _protocol.reqToData(request);
+    final bodyWrap = _protocol.reqToData(stanza);
+    if (bodyWrap == null) {
+      return false;
+    }
 
-    if (bodyWrap == null) return false;
-    if (bodyWrap.name.local == _protocol.strip &&
-        bodyWrap.descendantElements.isNotEmpty) {
-      _xmlInput(bodyWrap.descendantElements.first);
+    if (bodyWrap.name.qualified == _protocol.strip &&
+        bodyWrap.children.isNotEmpty) {
+      _xmlInput(bodyWrap.children.first);
     } else {
       _xmlInput(bodyWrap);
     }
+
     if (raw != null) {
       _rawInput(raw);
     } else {
       _rawInput(Echotils.serialize(bodyWrap));
     }
+
     final connectionCheck = await _protocol.connectCB(bodyWrap);
     if (connectionCheck == status[EchoStatus.connectionFailed]) {
       return false;
     }
 
-    _addSystemHandler(_getRegisterCallback);
+    final register = bodyWrap.findAllElements('register');
+    final mechanisms = bodyWrap.findAllElements('mechanism');
+    if (register.isEmpty && mechanisms.isEmpty) {
+      _protocol.nonAuth(callback);
+      return false;
+    }
+
+    if (register.isEmpty) {
+      _changeConnectStatus(EchoStatus.registrationFailed, null);
+      return true;
+    }
+
+    _addSystemHandler(_getRegisterCallback, name: 'iq');
+    sendIQ(
+      element: EchoBuilder.iq(attributes: {'type': 'get'})
+          .c('query', attributes: {'xmlns': ns['REGISTER']!}).nodeTree!,
+    );
 
     return true;
   }
 
   bool _getRegisterCallback(xml.XmlElement stanza) {
-    final query = stanza.findElements('query');
+    final query = stanza.findAllElements('query');
 
     if (query.isEmpty) {
-      _changeConnectStatus(EchoStatus.authenticationFailed, 'unknown');
+      _changeConnectStatus(EchoStatus.registrationFailed, null);
       return false;
     }
 
-    Echotils.forEachChild(query.first, 'instructions', (stanza) {
-      print(stanza);
-    });
+    for (int i = 0; i < query.first.descendantElements.length; i++) {
+      final field = query.first.descendantElements.toList()[i];
+      if (field.name.local.toLowerCase() == 'instructions') {
+        registrationInstructions = Echotils.getText(field);
+      }
+      _fields[field.name.local] = Echotils.getText(field);
+    }
 
+    _changeConnectStatus(EchoStatus.register, null);
     return false;
   }
 
@@ -1699,7 +1764,7 @@ class Echo {
         .t(Echotils().getNodeFromJID(jid)!)
         .up()
         .c('password')
-        .t(_password as String);
+        .t(_password!);
 
     if (Echotils().getResourceFromJID(jid) == null) {
       /// Since the user has not supplied a resource, we pick a default one
