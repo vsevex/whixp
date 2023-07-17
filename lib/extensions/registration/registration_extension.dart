@@ -7,7 +7,10 @@ class RegistrationExtension extends Extension {
   /// extension.
   @override
   void changeStatus(EchoStatus status, String? condition) {
-    throw ExtensionException.notImplementedFeature('Registration');
+    // throw ExtensionException.notImplementedFeature(
+    //   'Registration',
+    //   'Changing Connection Status',
+    // );
   }
 
   /// Do not manually edit this method. This [Extension] differs from other
@@ -52,6 +55,7 @@ class RegistrationExtension extends Extension {
         }
         return false;
       },
+      name: 'iq',
       resultCallback: resultCallback,
       errorCallback: errorCallback,
     );

@@ -30,7 +30,10 @@ class DiscoExtension extends Extension {
   /// extension.
   @override
   void changeStatus(EchoStatus status, String? condition) {
-    throw ExtensionException.notImplementedFeature('Disco');
+    // throw ExtensionException.notImplementedFeature(
+    //   'Disco',
+    //   'Changing Connection Status',
+    // );
   }
 
   @override
