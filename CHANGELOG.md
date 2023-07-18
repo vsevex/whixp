@@ -1,12 +1,12 @@
-# 0.0.55 - 2023-07-08
+# 0.0.6 - 2023-07-18
 
-- Added Extension Attachment support.
-- Added `vCard` support.
-- Added `pubsub` support.
+- Added `Disco` extension support.
+- Added `Registration` extension support.
 
 ## Changed
 
-- N/A
+- Improved WebSocket connectivity for better reliability and performance.
+- Enhanced exception handling to provide more informative error messages.
 
 ## Deprecated
 
@@ -15,6 +15,16 @@
 ## Removed
 
 - N/A
+
+## Breaking
+
+- `Handler` class implementation changed. `resultCallback` and `errorCallback` methods were added to accept incoming stanzas in an efficient way and used an FP package named `dartz`.
+
+## 0.0.55 - 2023-07-08
+
+- Added Extension Attachment support.
+- Added `vCard` support.
+- Added `pubsub` support.
 
 ### Fixed
 
