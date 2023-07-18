@@ -51,11 +51,6 @@ class Echo {
     /// Optional configuration options.
     this.options = const <String, dynamic>{},
 
-    /// Maximum reconnection count.
-    ///
-    /// Defaults to `3`.
-    this.maxReconnectAttempt = 3,
-
     /// Defaults to `true`.
     this.debugEnabled = true,
   }) {
@@ -163,10 +158,6 @@ class Echo {
   /// Timeout for indicating when the service need to disconnect. Representing
   /// in milliseconds.
   late int _disconnectionTimeout;
-
-  /// The maximum reconection attempt for WebSocket. If this count exceeds,
-  /// then the current WebSocket is closing.
-  final int maxReconnectAttempt;
 
   /// Disconnect timeout in the type of [_TimedHandler].
   _TimedHandler? _disconnectTimeout;
@@ -552,8 +543,7 @@ class Echo {
   ///
   /// ### Example usage
   /// ```dart
-  /// final connection = Echo('http://example.com/http-bind');
-  /// connection.addProtocolErrorHandler('HTTP', 500, onError);
+  /// final connection = Echo('wss://example.com:5443/ws');
   /// /// Triggers HTTP 500 error and onError handler will be called.
   /// connection.connect('jid@incorrect_jabber', 'secret', onConnect);
   /// ```
@@ -569,7 +559,7 @@ class Echo {
   // ) =>
   //     _protocolErrorHandlers![protocol]![statusCode] = callback;
 
-  /// The main function of this class.
+  /// The main function of this package.
   ///
   /// Starts the connection process.
   ///
@@ -581,7 +571,11 @@ class Echo {
   /// a node supplied, `SASL OAUTHBEARER` or `SASL ANONYMOUS` authentication
   /// will be attempted (OAUTHBEARER will process the provided password value
   /// as an access token.)
-  /// * @param password The user's password, or an object containing the users
+  /// * @param password The user's password. ---->
+  ///
+  /// (POSTPONED) ------------------------------------------------- (POSTPONED)
+  ///
+  /// Or an object containing the users
   /// SCRAM client and server keys, in a fashion described as follows:
   /// ```dart
   /// {
@@ -592,6 +586,8 @@ class Echo {
   ///   'sk': /// String, the base64 encoding of the SCRAM server key
   /// }
   /// ```
+  /// (POSTPONED) ------------------------------------------------- (POSTPONED)
+  ///
   /// * @param callback The connect callback function.
   /// * @param authcid The optional alternative authentication identity
   /// (username) if intending to impersonate another user.
@@ -646,9 +642,6 @@ class Echo {
     /// Make `authentication` false initially.
     _authenticated = false;
 
-    /// Make `registered` false initially.
-    // _registered = false;
-
     /// Make `connected` false initially.
     _connected = false;
 
@@ -669,9 +662,8 @@ class Echo {
       /// Instructions equals to empty string.
       registrationInstructions = '';
 
-      /// Equal required and passed fields depending on the connection details.
-      _fields['username'] = jid;
-      _fields['password'] = _password!;
+      /// Clear fields to return its initial state.
+      _fields.clear();
 
       /// Late initializator of the variable `registering` equals false.
       _registering = true;
@@ -721,7 +713,7 @@ class Echo {
       } on EchoException catch (error) {
         /// If the method is not implemented properly, then it will give info
         /// about the situation.
-        Log().trigger(LogType.info, error.message);
+        Log().trigger(LogType.warn, error.message);
       }
     }
 
@@ -737,17 +729,6 @@ class Echo {
       }
     }
   }
-
-  /// Attach to an already created an authenticated BOSH session.
-  // void attach(
-  //   String jid,
-  //   String sid,
-  //   String rid,
-  //   void Function() callback,
-  // ) {}
-
-  /// Attempt to restore a cached BOSH session.
-  // void restore() {}
 
   /// User overrideable function that receives XML data coming into the
   /// connection.
@@ -812,19 +793,6 @@ class Echo {
     if (rawOutput != null) {
       rawOutput?.call(data);
     }
-    return;
-  }
-
-  /// User overrideable function that receives the new valid rid.
-  ///
-  /// The default function does nothing. User can override this with:
-  /// ```dart
-  /// echo.nextValidRid = (rid) {
-  ///   /// ...user code
-  /// }
-  /// ```
-  /// * @param rid The next valid rid
-  void nextValidRid(num rid) {
     return;
   }
 
@@ -1051,10 +1019,8 @@ class Echo {
   /// * @return A reference to the handler that can be used to remove it.
   Handler addHandler(
     /// The user callback.
-    ///
-    /// TODO: Can be required param in the next updates.
     FutureOr<bool> Function(xml.XmlElement)? handler, {
-    /// The function to handle the XMPP stanzas.
+    /// The function to handle the XMPP `result` stanzas.
     FutureOr<void> Function(xml.XmlElement)? resultCallback,
 
     /// The function to handle the XMPP `error` stanzas.
@@ -1481,6 +1447,9 @@ class Echo {
 
     xml.XmlElement? bodyWrap;
 
+    /// Check list of extensions which are stacked under the list named
+    /// `_extensions`. If `register` extension is implemented, then process
+    /// the registration process.
     if (_extensions
         .where((extension) => extension._name == 'registration-extension')
         .isNotEmpty) {
@@ -1563,6 +1532,18 @@ class Echo {
     if (_doAuthentication) await _authenticate(matched);
   }
 
+  /// Is used internally to handle the registration process by processing the
+  /// response stanza received from the server after sending initial
+  /// connection IQ request.
+  ///
+  /// * @param stanza Represents the response stanza received from the initial
+  /// IQ request.
+  /// * @param callback An optional callback function that will be used in the
+  /// case where non-authenticated data is received in the response. If present,
+  /// this callback will be executed.
+  /// * @param raw An optional [String] representing the raw XML data of the
+  /// response stanza. If provided, this raw data will be used in processing the
+  /// response.
   Future<bool> _registerCallback(
     xml.XmlElement stanza,
     Future<void> Function(Echo)? callback, [
@@ -1607,6 +1588,8 @@ class Echo {
     }
 
     _addSystemHandler(_getRegisterCallback, name: 'iq');
+
+    /// Send initial registration IQ stanza to the server.
     sendIQ(
       element: EchoBuilder.iq(attributes: {'type': 'get'})
           .c('query', attributes: {'xmlns': ns['REGISTER']!}).nodeTree!,
@@ -1615,8 +1598,16 @@ class Echo {
     return true;
   }
 
+  /// In this method, the received stanza is searched for a `query` element,
+  /// and the registration fields and instructions are extracted from the
+  /// `query` element. The `registrationInstructions` and registration fields
+  /// are updated accordingly.
+  ///
+  /// If the `username` or `password` fields are empty, the method populates
+  /// them with appropriate values from the internal `_fields` or `_password`
+  /// variables, respectively.
   bool _getRegisterCallback(xml.XmlElement stanza) {
-    final query = stanza.findAllElements('query');
+    final query = stanza.findElements('query');
 
     if (query.isEmpty) {
       _changeConnectStatus(EchoStatus.registrationFailed, null);
@@ -1631,6 +1622,20 @@ class Echo {
       _fields[field.name.local] = Echotils.getText(field);
     }
 
+    if (_fields.containsKey('username')) {
+      if (_fields['username']!.isEmpty) {
+        _fields['username'] = Echotils().getNodeFromJID(jid)!;
+      }
+    }
+
+    if (_fields.containsKey('password')) {
+      if (_fields['password']!.isEmpty) {
+        _fields['password'] = _password!;
+      }
+    }
+
+    /// Finally, the connection status is updated to 'EchoStatus.register',
+    /// indicating that the user data can be `submit`ted.
     _changeConnectStatus(EchoStatus.register, null);
     return false;
   }
@@ -2364,14 +2369,26 @@ class Handler extends Event<Either<xml.XmlElement, EchoException>> {
       /// If there is not [EchoException] catched, then fire [Right] side of
       /// the [Event].
       if (exception != null) {
-        fire(Right(exception));
+        /// Check if there is any inner error text associated with the server
+        /// message, if yes, then continue to print that code to the output.
+        if (element.getElement('error')!.getElement('text') != null &&
+            element
+                .getElement('error')!
+                .getElement('text')!
+                .innerText
+                .isNotEmpty) {
+          exception = exception.copyWith(
+            message: element.getElement('error')!.getElement('text')!.innerText,
+          );
+        }
+        fire(Right(exception.copyWith()));
       }
-      return false;
+    } else {
+      /// If there is not any [EchoException] catched, then fire [Left] side of
+      /// the [Event].
+      fire(Left(element));
     }
 
-    /// If there is not any [EchoException] catched, then fire [Left] side of
-    /// the [Event].
-    fire(Left(element));
     return result ?? true;
   }
 

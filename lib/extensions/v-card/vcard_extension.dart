@@ -141,6 +141,9 @@ class VCardExtension extends Extension {
   /// extension.
   @override
   void changeStatus(EchoStatus status, String? condition) {
-    throw ExtensionException.notImplementedFeature('VCard');
+    // throw ExtensionException.notImplementedFeature(
+    //   'VCard',
+    //   'Changing Connection Status',
+    // );
   }
 }
