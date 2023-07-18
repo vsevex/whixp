@@ -2,6 +2,7 @@
 
 [![License: MIT][license_badge]][license_link]
 ![GitHub Repo stars][star_count]
+![GitHub last commit (main)][last_commit]
 
 Echo is a lightweight and pure Dart library that allows you to connect to XMPP (Extensible Messaging and Presence Protocol) servers. This package provides a range of fundamental functionalities for XMPP communication. And is built on top of the popular [Strophe.js](https://github.com/strophe/strophejs) library, providing a streamlined and efficient solution for XMPP communication in Dart applications.
 
@@ -11,7 +12,7 @@ XMPP is an open source standart protocol widely used for real-time communication
 
 ## Features
 
-**WebSocket Connectivity**:  Echo establishes connections to XMPP servers exclusively over the WebSocket protocol, ensuring efficient and reliable communication.
+**WebSocket Connectivity**: Echo establishes connections to XMPP servers exclusively over the WebSocket protocol, ensuring efficient and reliable communication.
 
 **Authentication Mechanisms**: Provides support for various XMPP authentication mechanisms, including **SASL SCRAM** with encryption options such as SHA-1, SHA-256, SHA-384, SHA-512, XOAUTH-2, OAUTHBEARER, Anonymous, and EXTERNAL.
 
@@ -25,10 +26,14 @@ XMPP is an open source standart protocol widely used for real-time communication
 
 ## Supported Extensions
 
-**V-Card**: (XEP-0054) The vCard plugin in the XMPP server refers to a feature that allows users to create and manage virtual business cards within the XMPP communication protocol.
+**V-Card**: (XEP-0054) The vCard extension in the XMPP server refers to a feature that allows users to create and manage virtual business cards within the XMPP communication protocol.
 For more information please navigate to `lib/extensions/v-card/`.
 
-**Publish-Subscribe**: (XEP-0060, XEP-0248) The Pubsub (Publish-Subscribe) plugin in XMPP server support is a feature that enables the distribution and dissemination of published information to interested subscribers within the XMPP network. It is a key component of the XMPP protocol for building real-time messaging and notification systems.
+**Publish-Subscribe**: (XEP-0060, XEP-0248) The Pubsub (Publish-Subscribe) extension in XMPP server support is a feature that enables the distribution and dissemination of published information to interested subscribers within the XMPP network. It is a key component of the XMPP protocol for building real-time messaging and notification systems.
+
+**Disco**: (XEP-0030) The Service Discovery extension provides enhanced functionality for discovering services within an XMPP network. The rest of doc provides a brief of the extension and its features.
+
+**Registration**: (XEP-0077) The registration extension allows users to register new accounts on an XMPP server directly from the client, streamlining the registration process.
 
 ## Up-Coming Features
 
@@ -73,7 +78,7 @@ import 'package:echo/echo.dart';
 void main()  {
   const jid = 'vsevex@localhost';
   final domain = Echotils().getDomainFromJID(jid);
-  
+
   log(domain); /// output: localhost
 }
 
@@ -86,3 +91,4 @@ We welcome and appreciate contributions from the community to enhance the `Echo`
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
 [star_count]: https://img.shields.io/github/stars/vsevex/echo
+[last_commit]: https://img.shields.io/github/last-commit/vsevex/echo/main
