@@ -20,6 +20,7 @@ import 'package:echo/src/utils.dart';
 import 'package:web_socket_channel/web_socket_channel.dart' as ws;
 import 'package:xml/xml.dart' as xml;
 
+part '../extensions/registration/registration_extension.dart';
 part '_extension.dart';
 part 'bosh.dart';
 part 'sasl_anon.dart';
@@ -136,7 +137,7 @@ class Echo {
   }
 
   /// `version` constant.
-  final String version = '1.0.0';
+  final String version = '1.0';
 
   /// The service URL.
   late String service;
@@ -179,7 +180,7 @@ class Echo {
   // Handler? iqFallbackHandler;
 
   /// dynamic type password. This can be either [String] or [Map].
-  dynamic _password;
+  late String? _password;
 
   /// Values can be either [String] or a [Map].
   late final Map<String, dynamic>? _saslData;
@@ -191,13 +192,31 @@ class Echo {
   late bool _authenticated;
   late bool _connected;
   late bool _disconnecting;
+  late bool _registering;
   late bool _paused;
   late bool _doBind;
   late bool _doSession;
 
+  /// Used for registration process which is declared using extension list.
+  late bool _processedFeatures;
+
   /// Data holder for sending later on. The data it can hold is can be [String]
   /// or [xml.XmlElement].
   late final List _data = <dynamic>[];
+
+  /// When attached [RegisterExtension] in client, this variable refers to
+  /// specific steps or information required for the registration process.
+  ///
+  /// This can be used by users afterwards to know which fields are required
+  /// by the server in order to use `in-band registration` functionality.
+  ///
+  /// But non-final, cause' it will be initialized later.
+  late String registrationInstructions;
+
+  /// In the context of `in-band registration` this variable is the pieces of
+  /// information that the XMPP server requires from the user during the
+  /// registration process.
+  final _fields = <String, String>{};
 
   /// The SASL SCRAM client and server keys. This variable will be populated
   /// with a non-null object of the above described form after a successful
@@ -461,6 +480,17 @@ class Echo {
 
     /// Is do session enabled or not holder. Resets to false.
     _doSession = false;
+
+    /// Check if extension list contains [RegistrationExtension].
+    if (_extensions
+        .where((extension) => extension._name == 'registration-extension')
+        .isNotEmpty) {
+      /// Reset instructions to initial state.
+      registrationInstructions = '';
+
+      /// Reset fields variable to its initial state.
+      _fields.clear();
+    }
   }
 
   /// Pause the request manager.
@@ -578,7 +608,10 @@ class Echo {
     required String jid,
 
     /// The user's password.
-    dynamic password,
+    ///
+    /// For anonymous logins, this variable will be passed as empty string to
+    /// the server.
+    String password = '',
 
     /// The connection callback function.
     Future<void> Function(EchoStatus)? callback,
@@ -607,20 +640,42 @@ class Echo {
     _connectCallback =
         (status, [condition, element]) async => callback!.call(status);
 
-    /// Make `disconnectin` false.
+    /// Make `disconnecting` false initially.
     _disconnecting = false;
 
-    /// Make `authentication` false.
+    /// Make `authentication` false initially.
     _authenticated = false;
 
-    /// Make `connected` false.
+    /// Make `registered` false initially.
+    // _registered = false;
+
+    /// Make `connected` false initially.
     _connected = false;
+
+    /// Make `registering` true initially.
+    // _registering = true;
 
     /// Make global `disconnectionTimeout` value to be equal to passed one.
     _disconnectionTimeout = disconnectionTimeout;
 
     /// Parse `jid` for domain.
     _domain = Echotils().getDomainFromJID(jid);
+
+    /// Check if [RegistrationExtension] is attached to the client, then
+    /// initialize the required variables to its initial values.
+    if (_extensions
+        .where((extension) => extension._name == 'registration-extension')
+        .isNotEmpty) {
+      /// Instructions equals to empty string.
+      registrationInstructions = '';
+
+      /// Equal required and passed fields depending on the connection details.
+      _fields['username'] = jid;
+      _fields['password'] = _password!;
+
+      /// Late initializator of the variable `registering` equals false.
+      _registering = true;
+    }
 
     /// Change the status of connection to `connecting`.
     _changeConnectStatus(EchoStatus.connecting, null);
@@ -651,7 +706,7 @@ class Echo {
       /// then the given message will be printed.
       Log().trigger(
         LogType.warn,
-        'Authentication failed. Check the provided credentials.',
+        'Authentication failed. Check the provided credentials or attach RegistrationExtension to register JID.',
       );
     }
 
@@ -1119,7 +1174,7 @@ class Echo {
 
     /// Log according to the `reason` value.
     if (reason != null) {
-      Log().trigger(LogType.warn, 'Disonnect was called because: $reason');
+      Log().trigger(LogType.warn, 'Disconnect was called because: $reason');
     } else {
       Log().trigger(LogType.info, 'Disconnect was called');
     }
@@ -1412,7 +1467,7 @@ class Echo {
   /// Private `connectCB` method.
   ///
   /// SASL authentication will be attempted if available, otherwise the code
-  /// will fall back to legaacy authentication.
+  /// will fall back to legacy authentication.
   ///
   /// * @param request The current request
   /// * @param callback Low level (xmpp) connect callback function.
@@ -1425,15 +1480,36 @@ class Echo {
     _connected = true;
 
     xml.XmlElement? bodyWrap;
-    try {
-      bodyWrap = _protocol.reqToData(request);
-    } catch (error) {
-      await _changeConnectStatus(
-        EchoStatus.connectionFailed,
-        errorCondition['BAD_FORMAT'],
-      );
-      await _doDisconnect(errorCondition['BAD_FORMAT']);
+
+    if (_extensions
+        .where((extension) => extension._name == 'registration-extension')
+        .isNotEmpty) {
+      if (!_registering) {
+        if (_processedFeatures) {
+          _processedFeatures = false;
+        } else {
+          _connectCB(request, callback, raw);
+        }
+      } else {
+        if (await _registerCallback(request, callback, raw)) {
+          _processedFeatures = true;
+          _registering = false;
+        }
+        return;
+      }
     }
+
+    /// For now, try-catch block does not mean anything to implement due only
+    /// `WebSocket` connection is available.
+    // try {
+    bodyWrap = _protocol.reqToData(request);
+    // } catch (error) {
+    //   await _changeConnectStatus(
+    //     EchoStatus.connectionFailed,
+    //     errorCondition['BAD_FORMAT'],
+    //   );
+    //   await _doDisconnect(errorCondition['BAD_FORMAT']);
+    // }
 
     if (bodyWrap == null) return;
     if (bodyWrap.name.qualified == _protocol.strip &&
@@ -1483,7 +1559,80 @@ class Echo {
         return;
       }
     }
+
     if (_doAuthentication) await _authenticate(matched);
+  }
+
+  Future<bool> _registerCallback(
+    xml.XmlElement stanza,
+    Future<void> Function(Echo)? callback, [
+    String? raw,
+  ]) async {
+    Log().trigger(LogType.info, '_registerCallback was called');
+    _connected = true;
+
+    final bodyWrap = _protocol.reqToData(stanza);
+    if (bodyWrap == null) {
+      return false;
+    }
+
+    if (bodyWrap.name.qualified == _protocol.strip &&
+        bodyWrap.children.isNotEmpty) {
+      _xmlInput(bodyWrap.children.first);
+    } else {
+      _xmlInput(bodyWrap);
+    }
+
+    if (raw != null) {
+      _rawInput(raw);
+    } else {
+      _rawInput(Echotils.serialize(bodyWrap));
+    }
+
+    final connectionCheck = await _protocol.connectCB(bodyWrap);
+    if (connectionCheck == status[EchoStatus.connectionFailed]) {
+      return false;
+    }
+
+    final register = bodyWrap.findAllElements('register');
+    final mechanisms = bodyWrap.findAllElements('mechanism');
+    if (register.isEmpty && mechanisms.isEmpty) {
+      _protocol.nonAuth(callback);
+      return false;
+    }
+
+    if (register.isEmpty) {
+      _changeConnectStatus(EchoStatus.registrationFailed, null);
+      return true;
+    }
+
+    _addSystemHandler(_getRegisterCallback, name: 'iq');
+    sendIQ(
+      element: EchoBuilder.iq(attributes: {'type': 'get'})
+          .c('query', attributes: {'xmlns': ns['REGISTER']!}).nodeTree!,
+    );
+
+    return true;
+  }
+
+  bool _getRegisterCallback(xml.XmlElement stanza) {
+    final query = stanza.findAllElements('query');
+
+    if (query.isEmpty) {
+      _changeConnectStatus(EchoStatus.registrationFailed, null);
+      return false;
+    }
+
+    for (int i = 0; i < query.first.descendantElements.length; i++) {
+      final field = query.first.descendantElements.toList()[i];
+      if (field.name.local.toLowerCase() == 'instructions') {
+        registrationInstructions = Echotils.getText(field);
+      }
+      _fields[field.name.local] = Echotils.getText(field);
+    }
+
+    _changeConnectStatus(EchoStatus.register, null);
+    return false;
   }
 
   Future<void> _authenticate(List<SASL?> mechanisms) async {
@@ -1593,7 +1742,7 @@ class Echo {
         )
             .c('query', attributes: {'xmlns': ns['AUTH']!})
             .c('username')
-            .t(Echotils().getNodeFromJID(jid)!)
+            .t(Echotils().getNodeFromJID(jid) ?? '')
             .nodeTree,
       );
     }
@@ -1615,7 +1764,7 @@ class Echo {
         .t(Echotils().getNodeFromJID(jid)!)
         .up()
         .c('password')
-        .t(_password as String);
+        .t(_password!);
 
     if (Echotils().getResourceFromJID(jid) == null) {
       /// Since the user has not supplied a resource, we pick a default one
