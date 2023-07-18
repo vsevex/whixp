@@ -456,7 +456,7 @@ class WebSocket extends Protocol {
   @override
   Future<void> disconnect([xml.XmlElement? presence]) async {
     /// Check if the socket is not null and its state is not equal to 3 (closed).
-    if (socket != null && await socket!.stream.isEmpty) {
+    if (socket != null) {
       /// If presence is provided, send the presence using the connection.
       if (presence != null) {
         connection.send(presence);
