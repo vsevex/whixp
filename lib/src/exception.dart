@@ -19,8 +19,11 @@ abstract class EchoException implements Exception {
   /// A [String] containing the error message associated with the exception.
   final String message;
 
+  /// Embedded `copyWith` method in the abstraction of [EchoException].
+  EchoException copyWith({String? message, int? code});
+
   @override
-  String toString() => ''' Exception: $message ''';
+  String toString() => '''Exception: $message (code: $code)''';
 }
 
 /// [EchoExceptionMapper] is a custom exception class that extends [EchoException].
@@ -113,6 +116,11 @@ class EchoExceptionMapper extends EchoException {
         'Service is currently unavailable, so disconnection occured. Please try again later.',
         510,
       );
+
+  /// Overridden `copyWith` method.
+  @override
+  EchoException copyWith({String? message, int? code}) =>
+      EchoExceptionMapper(message ?? this.message, code ?? this.code);
 }
 
 /// Concrete implementation of the [EchoException] class. It represents an
@@ -124,12 +132,21 @@ class ExtensionException extends EchoException {
   const ExtensionException(super.message, [super.code]);
 
   /// Factory constructor for creating an [ExtensionException] when a feature
-  /// is not implemented.
-  factory ExtensionException.notImplementedFeature(String extensionName) =>
+  /// is not implemented. [String] feature contains a text about which feature
+  /// is not implemented for this extension.
+  factory ExtensionException.notImplementedFeature(
+    String extensionName,
+    String feature,
+  ) =>
       ExtensionException(
-        'This feature is not implemented for the $extensionName extension',
+        '$feature feature is not implemented for the $extensionName extension',
         404,
       );
+
+  /// Overridden `copyWith` method.
+  @override
+  EchoException copyWith({String? message, int? code}) =>
+      ExtensionException(message ?? this.message, code ?? this.code);
 }
 
 /// It is a concrete implementation of the [EchoException] class. It represents
@@ -156,4 +173,10 @@ class WebSocketException extends EchoException {
   /// allowed time limit.
   factory WebSocketException.timedOut() =>
       WebSocketException('WebSocket connection timed out.', 22);
+
+  /// Does not need any implementation at the moment.
+  @override
+  EchoException copyWith({String? message, int? code}) {
+    throw UnimplementedError();
+  }
 }
