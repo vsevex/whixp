@@ -104,7 +104,7 @@ class Scram {
     if (iter == null || iter < 4096) {
       Log().trigger(
         LogType.warn,
-        'Failing SCRAM authentication because server supplied iteration count < 4096.',
+        'Failing SCRAM authentication because server supplied iteration count < 4096',
       );
       return null;
     }
@@ -114,7 +114,7 @@ class Scram {
     if (salt == null) {
       Log().trigger(
         LogType.warn,
-        'Failing SCRAM authentication because server supplied incorrect salt.',
+        'Failing SCRAM authentication because server supplied incorrect salt',
       );
       return null;
     }
@@ -354,10 +354,10 @@ class Scram {
             cnonce) {
       Log().trigger(
         LogType.warn,
-        'Failing SCRAM authentication because server supplied incorrect nonce.',
+        'Failing SCRAM authentication because server supplied incorrect nonce',
       );
       connection._saslData = {};
-      connection._saslFailureCB();
+      connection._saslFailureCallback();
       return null;
     }
 
@@ -392,7 +392,7 @@ class Scram {
         clientKey = keys['ck'];
         serverKey = keys['sk'];
       } else {
-        connection._saslFailureCB();
+        connection._saslFailureCallback();
         return null;
       }
     }

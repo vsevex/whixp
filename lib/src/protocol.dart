@@ -20,7 +20,7 @@ abstract class Protocol {
   /// Callback method which is invoked upon a successful connection.
   ///
   /// Accepts a parameter named `bodyWrap` which represents the body wrap.
-  Future<int> connectCB(xml.XmlElement bodyWrap);
+  Future<int> connectCallback(xml.XmlElement bodyWrap);
 
   /// This method is used to disconnect the protocol connection. If a
   /// `presence` element is provided, it is used to send the connection
@@ -52,6 +52,8 @@ abstract class Protocol {
   /// connection is idle. The exact implementation may vary depending on the
   /// concrete implementation of the protocol.
   void onIdle();
+
+  /// Not used in the WebSocket connection.
   void abortAllRequests();
   xml.XmlElement? reqToData(xml.XmlElement? stanza);
   void sendRestart();
