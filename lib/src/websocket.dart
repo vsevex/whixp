@@ -29,30 +29,8 @@ class WebSocket extends Protocol {
 
   /// Private constructor of the class.
   WebSocket._(this.connection) {
-    /// Retrieve the 'service' property from the connection
-    final service = connection.service;
-
     /// Set the default value for the 'strip' variable
     super.strip = 'wrapper';
-
-    /// Check if the service does not start with 'ws:' or 'wss:'
-    if (!service.startsWith('ws:') && !service.startsWith('wss:')) {
-      String newService = '';
-
-      /// Determine the protocol based on the 'protocol' option in the
-      /// connection's options map.
-      if (connection.options['protocol'] == 'ws') {
-        newService += 'ws';
-      } else {
-        newService += 'wss';
-      }
-
-      /// Construct the new service URL using the current host
-      newService += '://${connection.service}';
-
-      /// Update the connection's service with the new constructed service URL
-      connection.service = newService;
-    }
 
     /// Check if the URL is valid WebSocket URL, if not then throw
     /// [InvalidURLException].
@@ -154,52 +132,56 @@ class WebSocket extends Protocol {
     /// If there is an open connection currently, close it.
     _closeSocket();
 
-    try {
-      /// Establish a WebSocket connection using the connection's service URL and
-      /// 'xmpp' protocol.
-      ///
-      /// Trigger a timeout if establishing a connection exceeds
-      /// [connection._disconnectionTimeout].
-      socket = ws.WebSocketChannel.connect(
-        Uri.parse(connection.service),
-        protocols: ['xmpp'],
-      );
+    /// Establish a WebSocket connection using the connection's service URL and
+    /// 'xmpp' protocol.
+    ///
+    /// Trigger a timeout if establishing a connection exceeds
+    /// [connection._disconnectionTimeout].
+    socket = ws.WebSocketChannel.connect(
+      Uri.parse(connection.service),
+      protocols: ['xmpp'],
+    );
 
-      socket!.ready.then(
-        (_) {
-          /// Invoke `onOpen` method afterwards.
-          _onOpen.call();
+    socket!.ready.then(
+      (_) {
+        /// Invoke `onOpen` method afterwards.
+        _onOpen.call();
 
-          /// Listen for incoming messages on the socket.
-          socket!.stream.listen(
-            (message) {
-              if (_onMessageCallback == null) {
-                /// Call the `onInitialMessage` callback if `onMessageCallback` is
-                /// not set.
-                _onInitialMessage(message as String);
-              } else {
-                _onMessageCallback!.call(message as String);
-              }
-            },
+        /// Listen for incoming messages on the socket.
+        socket!.stream.listen(
+          (message) {
+            if (_onMessageCallback == null) {
+              /// Call the `onInitialMessage` callback if `onMessageCallback` is
+              /// not set.
+              _onInitialMessage(message as String);
+            } else {
+              _onMessageCallback!.call(message as String);
+            }
+          },
 
-            /// Invoke the `_onClose` callback when the socket is closed.
-            onDone: _onClose,
+          /// Invoke the `_onClose` callback when the socket is closed.
+          onDone: _onClose,
 
-            /// Invoke the `_onError` callback if there is an error.
-            onError: _onError,
+          /// Invoke the `_onError` callback if there is an error.
+          onError: _onError,
 
-            /// Cancel the subscription if an error occurs.
-            cancelOnError: true,
-          );
-        },
-        onError: (error, trace) {
-          connection._handleError(error);
+          /// Cancel the subscription if an error occurs.
+          cancelOnError: true,
+        );
+      },
+      onError: (error, trace) {
+        /// Try to parse the `error` from [WebSocketChannel].
+        final message = ws.WebSocketChannelException.from(error).message;
+
+        /// If parsing message is successful, then throw the [Exception]
+        /// with message.
+        if (message != null) {
+          throw WebSocketException(message);
+        } else {
           throw WebSocketException.unknown();
-        },
-      );
-    } catch (error) {
-      throw WebSocketException.unknown();
-    }
+        }
+      },
+    ).timeout(Duration(milliseconds: connection._disconnectionTimeout));
   }
 
   /// Connects to the callback based on the XML element received during the
@@ -217,7 +199,7 @@ class WebSocket extends Protocol {
   /// * - If there are no stream errors indicating a successful connection,
   /// * @return `status[Status.connected]`.
   @override
-  Future<int> connectCB(xml.XmlElement bodyWrap) async {
+  Future<int> connectCallback(xml.XmlElement bodyWrap) async {
     /// Calls `_checkStreamError` method inside, passes `bodyWrap` and the
     /// [EchoStatus] of connection failed as parameters. If any stream errors
     /// are detected, then the method returns corresponding failure status
@@ -341,7 +323,7 @@ class WebSocket extends Protocol {
         /// If the stream start handling is successful, calls this method,
         /// passes the parsed XML element to connect to the callback based on
         /// the received data.
-        connectCB(streamStart);
+        connectCallback(streamStart);
       }
     }
 
@@ -409,7 +391,7 @@ class WebSocket extends Protocol {
 
       /// Parses the wrapped message as an XML document.
       final element = xml.XmlDocument.parse(string);
-      connection._connectCB(element.rootElement, null, message);
+      connection._connectCallback(element.rootElement, null, message);
     }
   }
 
@@ -486,7 +468,7 @@ class WebSocket extends Protocol {
   @override
   Future<void> doDisconnect() async {
     /// Informs user about the method call.
-    Log().trigger(LogType.info, "WebSocket's doDisconnect method is called.");
+    Log().trigger(LogType.info, "WebSocket's doDisconnect method is called");
 
     /// And calls close socket for returning to the initial state.
     await _closeSocket();
@@ -673,6 +655,7 @@ class WebSocket extends Protocol {
     /// If the connection is currently connected and not in the process of
     /// disconnecting,
     if (connection._connected && !connection._disconnecting) {
+      Log().trigger(LogType.error, 'WebSocket closed unexpectedly');
       connection._doDisconnect();
     }
 
@@ -687,14 +670,14 @@ class WebSocket extends Protocol {
         code != null &&
         code == 1006 &&
         !connection._connected) {
-      Log().trigger(LogType.error, 'WebSocket closed unexpectedly.');
+      Log().trigger(LogType.error, 'WebSocket closed unexpectedly');
 
       /// The connection status is updated to a connection failure status with
       /// an appropriate error message using the
       /// `connection._changeConnectStatus` method.
       await connection._changeConnectStatus(
         EchoStatus.connectionFailed,
-        'WebSocket connection could not be established or was disconnected.',
+        'WebSocket connection could not be established or was disconnected',
       );
     } else {
       /// If none of the above conditions are met, an informational message is
@@ -721,7 +704,7 @@ class WebSocket extends Protocol {
     /// Changes the status of the connection.
     return connection._changeConnectStatus(
       EchoStatus.connectionFailed,
-      'The websocket connection could not be established or was disconnected.',
+      'The websocket connection could not be established or was disconnected',
     );
   }
 
