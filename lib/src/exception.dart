@@ -23,7 +23,8 @@ abstract class EchoException implements Exception {
   EchoException copyWith({String? message, int? code});
 
   @override
-  String toString() => '''Exception: $message (code: $code)''';
+  String toString() =>
+      '''Exception: $message${code != null ? ' (code: $code)' : ''} ''';
 }
 
 /// [EchoExceptionMapper] is a custom exception class that extends [EchoException].
@@ -43,12 +44,12 @@ class EchoExceptionMapper extends EchoException {
   /// Creates an [EchoExceptionMapper] representing a `Bad Request` exception
   /// (HTTP 400).
   factory EchoExceptionMapper.badRequest() =>
-      EchoExceptionMapper('Bad Request has been made.', 400);
+      EchoExceptionMapper('Bad Request has been made', 400);
 
   /// Creates an [EchoExceptionMapper] representing a `Not Authorized` exception
   /// (HTTP 401).
   factory EchoExceptionMapper.notAuthorized() =>
-      EchoExceptionMapper('You are not authorized to do this action.', 401);
+      EchoExceptionMapper('You are not authorized to do this action', 401);
 
   /// Creates an [EchoExceptionMapper] representing a `Forbidden` exception
   /// (HTTP 403).
@@ -58,62 +59,62 @@ class EchoExceptionMapper extends EchoException {
   /// Creates an [EchoExceptionMapper] representing a `Not Found` exception
   /// (HTTP 404).
   factory EchoExceptionMapper.notFound() =>
-      EchoExceptionMapper('Nothing found for your request.', 404);
+      EchoExceptionMapper('Nothing found for your request', 404);
 
   /// Creates an [EchoExceptionMapper] representing a `Not Allowed` exception
   /// (HTTP 405).
   factory EchoExceptionMapper.notAllowed() =>
-      EchoExceptionMapper('You are not allowed to do this action.', 405);
+      EchoExceptionMapper('You are not allowed to do this action', 405);
 
   /// Creates an [EchoExceptionMapper] representing a `Registration Required`
   /// exception (HTTP 407).
   factory EchoExceptionMapper.registrationRequired() => EchoExceptionMapper(
-        'You need to register in order to make this request.',
+        'You need to register in order to make this request',
         407,
       );
 
   /// Creates an [EchoExceptionMapper] representing a `Request Timed Out` exception
   /// (HTTP 408).
   factory EchoExceptionMapper.requestTimedOut() =>
-      EchoExceptionMapper('Request has timed out.', 408);
+      EchoExceptionMapper('Request has timed out', 408);
 
   /// Creates an [EchoExceptionMapper] representing a `Conflict` exception
   /// (HTTP 409).
   factory EchoExceptionMapper.conflict() => EchoExceptionMapper(
-        'Some conflict occured, please check your request.',
+        'Some conflict occured, please check your request',
         409,
       );
 
   /// Creates an [EchoExceptionMapper] representing an `Internal Server Error`
   /// exception (HTTP 500).
   factory EchoExceptionMapper.internalServerError() => EchoExceptionMapper(
-        'Internal server error occured, please try again later.',
+        'Internal server error occured, please try again later',
         500,
       );
 
   /// Creates an [EchoExceptionMapper] representing a `Not Implemented` exception
   /// (HTTP 501).
   factory EchoExceptionMapper.notImplemented() =>
-      EchoExceptionMapper('This feature is not implemented.', 501);
+      EchoExceptionMapper('This feature is not implemented', 501);
 
   /// Creates an [EchoExceptionMapper] representing a `Remote Server Error`
   /// exception (HTTP 502).
   factory EchoExceptionMapper.remoteServerError() => EchoExceptionMapper(
-        'Error occured on remote server, please try again later.',
+        'Error occured on remote server, please try again later',
         502,
       );
 
   /// Creates an [EchoExceptionMapper] representing a `Service Unavailable`
   /// exception (HTTP 503).
   factory EchoExceptionMapper.serviceUnavailable() => EchoExceptionMapper(
-        'Service is currently unavailable, please try again later.',
+        'Service is currently unavailable, please try again later',
         503,
       );
 
   /// Creates an [EchoExceptionMapper] representing a `Disconnected` exception
   /// (HTTP 510).
   factory EchoExceptionMapper.disconnected() => EchoExceptionMapper(
-        'Service is currently unavailable, so disconnection occured. Please try again later.',
+        'Service is currently unavailable, so disconnection occured. Please try again later',
         510,
       );
 
@@ -161,18 +162,51 @@ class WebSocketException extends EchoException {
   /// error message set to the given message. This method can be used when
   /// encountering an unknown WebSocket error.
   factory WebSocketException.unknown() =>
-      WebSocketException('Unknown WebSocket Error occured.', 11);
+      WebSocketException('Unknown WebSocket Error occured');
 
   /// Thrown when there is an error with the provided URL.
   factory WebSocketException.invalidURL() =>
-      WebSocketException('The given WebSocket URL is invalid.', 400);
+      WebSocketException('The given WebSocket URL is invalid');
 
   /// [WebSocketException.timedOut] factory method that creates a
   /// [WebSocketException] object with the error message set to the given
   /// message. This method can be used when a WebSocket connection exceeds the
   /// allowed time limit.
   factory WebSocketException.timedOut() =>
-      WebSocketException('WebSocket connection timed out.', 22);
+      WebSocketException('WebSocket connection timed out');
+
+  /// Does not need any implementation at the moment.
+  @override
+  EchoException copyWith({String? message, int? code}) {
+    throw UnimplementedError();
+  }
+}
+
+/// A custom [Exception] class to indicate that there is no protocol defined for
+/// the given service or URL.
+///
+/// This exception should be thrown when the user attempts to use a service that
+/// is not defined in to be used within the package.
+class ProtocolException extends EchoException {
+  const ProtocolException(super.message, [super.code]);
+
+  /// Creates a [ProtocolException] with the given `service`.
+  ///
+  /// ### Usage
+  /// ```dart
+  /// try {
+  ///   /// Code that throws ProtocolException
+  /// } catch (error) {
+  ///   log('Error: ${error.toString()});
+  /// }
+  /// ```
+  factory ProtocolException.notDefined(String service) =>
+      ProtocolException('Protocol not defined for service "$service"');
+
+  /// Creates a [ProtocolException] to give a message about empty service
+  /// string.
+  factory ProtocolException.emptyService() =>
+      const ProtocolException('The service cannot be empty');
 
   /// Does not need any implementation at the moment.
   @override
