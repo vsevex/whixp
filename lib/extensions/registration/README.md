@@ -28,27 +28,46 @@ This code snippet demonstrates how to use this extension for the client.
 
 ```dart
 
+import 'dart:async';
 import 'dart:developer';
 
 import 'package:echo/echo.dart';
 
 Future<void> main() async {
   final echo = Echo(service: 'ws://example.com:5443/ws');
+
+  final registrationCompleter = Completer<bool>();
+  final registration = RegistrationExtension();
+  echo.attachExtension(registration);
+
   await echo.connect(
     jid: 'vsevex@example.com',
     password: 'randompasswordwhichisgoingtobeyourpassword',
     callback: (status) async {
-      if (status == EchoStatus.register) {
-        log('you can submit a form now');
-        registration.submit(
-          resultCallback: (_) {
-            log('you are registered user now.');
-            echo.disconnect('registered and disconnecting...');
-          },
-        );
+      if (status == EchoStatus.connected) {
+        log('Connection Established');
+        registrationCompleter.complete(false);
+      } else if (status == EchoStatus.disconnected) {
+        log('Connection Terminated');
+      } else if (status == EchoStatus.register) {
+        registrationCompleter.complete(true);
       }
     },
   );
+
+  final needRegistration = await registrationCompleter.future;
+  if (needRegistration) {
+    await registration.submit(
+      resultCallback: (stanza) {
+        log('you are registered user now.');
+        echo.disconnect('registered and disconnecting...');
+      },
+      errorCallback: (exception) {
+        /// Mapped exception message
+        log(exception.message);
+      },
+    );
+  }
 }
 
 ```

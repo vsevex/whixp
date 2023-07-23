@@ -1,6 +1,6 @@
 name: echo
 description: Lightweight XMPP client, purely written in dart.
-version: 0.0.5
+version: 0.0.7
 repository: https://github.com/vsevex/echo
 
 environment:

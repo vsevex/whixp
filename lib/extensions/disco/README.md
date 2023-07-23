@@ -15,30 +15,39 @@ This code snippet demonstrates how to use this plugin for the client after estab
 
 ```dart
 
+import 'dart:async';
 import 'dart:developer';
 
 import 'package:echo/echo.dart';
 
 Future<void> main() async {
-  final echo = Echo(service: 'ws://example.com:7070/ws');
+  final echo = Echo(service: 'ws://example.com:5443/ws');
+
+  final connectionCompleter = Completer<bool>();
   await echo.connect(
     jid: 'vsevex@example.com',
     password: 'somepsw',
     callback: (status) async {
       if (status == EchoStatus.connected) {
         log('Connection Established');
-        echo.disco.info(
-          'vsevex@example.com',
-          onSuccess: (element) {
-            log(element);
-            /// ...outputs server information about enabled services.
-          },
-        );
+        connectionCompleter.complete(true);
       } else if (status == EchoStatus.disconnected) {
         log('Connection Terminated');
       }
     },
   );
+
+  final isConnected = await connectionCompleter.future;
+  if (isConnected) {
+    await echo.disco.info(
+      'vsevex@example.com',
+      resultCallback: (stanza) {
+        log(stanza.toString());
+
+        /// ...outputs server information about enabled services.
+      },
+    );
+  }
 }
 
 ```
