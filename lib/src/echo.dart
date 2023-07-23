@@ -5,8 +5,8 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:dartz/dartz.dart';
-import 'package:echo/extensions/event/event.dart';
 
+import 'package:echo/extensions/event/event.dart';
 import 'package:echo/extensions/extensions.dart';
 import 'package:echo/src/builder.dart';
 import 'package:echo/src/constants.dart';
@@ -23,6 +23,7 @@ import 'package:xml/xml.dart' as xml;
 part '../extensions/registration/registration_extension.dart';
 part '_extension.dart';
 part 'bosh.dart';
+part 'handler.dart';
 part 'sasl_anon.dart';
 part 'sasl_external.dart';
 part 'sasl_oauthbearer.dart';
@@ -53,6 +54,9 @@ class Echo {
 
     /// Defaults to `true`.
     this.debugEnabled = true,
+
+    /// Defaults to `3` seconds.
+    this.stanzaResponseTimeout = 3000,
   }) {
     /// Assign passed `debugEnabled` flag to the [Log].
     Log().initialize(debugEnabled: debugEnabled);
@@ -145,6 +149,16 @@ class Echo {
 
   /// Jabber identifier of the user.
   late String jid;
+
+  /// The timeout duration, representing in milliseconds.
+  ///
+  /// Indicator for waiting for an incoming stanza response. Used to specify the
+  /// maximum amount of time, in milliseconds, to wait for the completion of a
+  /// future that is waiting for an incoming stanza response. If the stanza
+  /// response does not arrive within this timeout duration, the future will be
+  /// considered timed out and an appropriate action can be taken to handle the
+  /// timeout.
+  late final int stanzaResponseTimeout;
 
   /// Domain part of the given JID.
   String? _domain;
@@ -272,7 +286,7 @@ class Echo {
   /// This variable represents a function that can be assigned to handle the
   /// connection status and related data after a connection attempt.
   late final FutureOr Function(EchoStatus, [String?, xml.XmlElement?])?
-      _connectCallback;
+      _onConnectCallback;
 
   /// This variable holds an instance of the [Handler] class that serves as a
   /// fallback handler for IQ (Info/Query) stanzas.
@@ -324,17 +338,6 @@ class Echo {
   /// server to the client, requiring additional information or responses. The
   /// `_saslChallengeHandler` is triggered when such challenges are received.
   late Handler? _saslChallengeHandler;
-
-  /// [Map] used to store protocol error handlers. It is structured as a nested
-  /// map, where the outer map is indexed by the protocol name (e.g. `HTTP`),
-  /// and the inner map is indexed by the status code associated with the error.
-  ///
-  /// Each status code is mapped to a callback function that will be invoked
-  /// when the corresponding error occurs.
-  // Map<String, dynamic>? _connectionPlugins;
-
-  /// Protocol map holder.
-  // Map<String, Map<int, Function>>? _protocolErrorHandlers;
 
   /// Handles an error by logging it as a fatal error.
   ///
@@ -405,6 +408,11 @@ class Echo {
     /// Try to get protocol from `options`, else assign empty string.
     final protocol = options['protocol'] as String? ?? '';
 
+    /// Check if the service is not empty.
+    if (service.isEmpty) {
+      throw ProtocolException.emptyService();
+    }
+
     /// Check if WebSocket implementation should be used.
     if (service.startsWith('ws:') ||
         service.startsWith('wss:') ||
@@ -419,6 +427,7 @@ class Echo {
       /// TODO: implement worker web socket.
     } else {
       Log().trigger(LogType.warn, 'No service was found under: $service');
+      throw ProtocolException.notDefined(service);
     }
   }
 
@@ -633,7 +642,7 @@ class Echo {
     _password = password;
 
     /// Connection callback will be equal if there is one.
-    _connectCallback =
+    _onConnectCallback =
         (status, [condition, element]) async => callback!.call(status);
 
     /// Make `disconnecting` false initially.
@@ -698,7 +707,7 @@ class Echo {
       /// then the given message will be printed.
       Log().trigger(
         LogType.warn,
-        'Authentication failed. Check the provided credentials or attach RegistrationExtension to register JID.',
+        'Authentication failed. Check the provided credentials or attach RegistrationExtension to register JID',
       );
     }
 
@@ -717,9 +726,9 @@ class Echo {
       }
     }
 
-    if (_connectCallback != null) {
+    if (_onConnectCallback != null) {
       try {
-        await _connectCallback!.call(status, condition, element);
+        await _onConnectCallback!.call(status, condition, element);
       } catch (error) {
         _handleError(error);
         Log().trigger(
@@ -818,7 +827,10 @@ class Echo {
   ///
   /// The message type can be [xml.XmlElement], or list of [xml.XmlElement], or
   /// just [EchoBuilder].
-  void send(dynamic message) {
+  FutureOr<void> send(
+    dynamic message, [
+    Completer<Either<xml.XmlElement, EchoException>>? completer,
+  ]) async {
     /// If the message is null or empty, exit from the function.
     if (message == null) return;
 
@@ -841,7 +853,16 @@ class Echo {
     }
 
     /// Run the protocol send function to flush all the available data.
-    return _protocol.send();
+    _protocol.send();
+
+    /// If `completer` param is not null, then wait for the incoming stanza
+    /// result.
+    if (completer != null) {
+      await completer.future.timeout(
+        Duration(milliseconds: stanzaResponseTimeout),
+        onTimeout: () => Right(EchoExceptionMapper.requestTimedOut()),
+      );
+    }
   }
 
   /// Helper function to send IQ stanzas.
@@ -853,17 +874,35 @@ class Echo {
   /// On timeout, the stanza will be null.
   /// * @param timeout The time specified in milliseconds for a timeout to
   /// occur.
-  String sendIQ({
+  /// * @param waitForResult A flag indicating whether the handler should wait
+  /// for the result of incoming stanza. If this `waitForResult` is set to
+  /// `true`, the handler will block and wait for the response of the incoming
+  /// stanzas before proceeding.
+  FutureOr<void> sendIQ({
     required xml.XmlElement element,
     FutureOr<void> Function(xml.XmlElement element)? resultCallback,
-    FutureOr<void> Function(EchoException? exception)? errorCallback,
+    FutureOr<void> Function(EchoException exception)? errorCallback,
     int? timeout,
-  }) {
+    bool waitForResult = false,
+  }) async {
     _TimedHandler? timeoutHandler;
     String? id = element.getAttribute('id');
     if (id == null) {
       id = getUniqueId('sendIQ');
       element.setAttribute('id', id);
+    }
+
+    /// [Completer] depending on `waitForResult` boolean. If the flag is true,
+    /// then completer variable will be used. This completer is used to wait
+    /// for the incoming stanza.
+    ///
+    /// It can return [Either] XmlElement or Exception.
+    Completer<Either<xml.XmlElement, EchoException>>? completer;
+
+    /// If the result is waited, then completer equals to an object.
+    if (waitForResult) {
+      /// Create completer for waiting for stanzas.
+      completer = Completer<Either<xml.XmlElement, EchoException>>();
     }
 
     final handler = addHandler(
@@ -882,6 +921,7 @@ class Echo {
       name: 'iq',
       id: id,
       type: ['result', 'error'],
+      completer: completer,
     );
 
     /// If timeout specified, set up a timeout handler.
@@ -890,15 +930,26 @@ class Echo {
         /// Get rid of normal handler.
         deleteHandler(handler);
 
-        /// If onError is not null, then call errorCallback with null identifier.
-        errorCallback?.call(null);
-
         return false;
       });
     }
 
     send(element);
-    return id;
+
+    /// If the completer is not null, that means the user wants to wait for
+    /// waiting stanzas.
+    if (completer != null) {
+      /// Wait for the future of completer.
+      final either = await completer.future.timeout(
+        Duration(milliseconds: stanzaResponseTimeout),
+        onTimeout: () => Right(EchoExceptionMapper.requestTimedOut()),
+      );
+
+      either.fold(
+        (stanza) => resultCallback?.call(stanza),
+        (exception) => errorCallback?.call(exception),
+      );
+    }
   }
 
   /// Queue outgoing data for later sending.
@@ -917,7 +968,7 @@ class Echo {
         element.children.isEmpty ||
         element.name.local.isEmpty) {
       /// If one of above conditions are met, then throw an [Exception].
-      throw Exception('Cannot queue empty element.');
+      throw Exception('Cannot queue empty element');
     }
     _data.add(element);
   }
@@ -1016,6 +1067,9 @@ class Echo {
   /// * @param id The stanza id attribute to match.
   /// * @param from The stanza from attribute to match.
   /// * @param options The handler options
+  /// * @param completer Provides a way to produce a single value in the future,
+  /// either with a successful result represented by an [XmlElement] or an error
+  /// represented by an [EchoException].
   /// * @return A reference to the handler that can be used to remove it.
   Handler addHandler(
     /// The user callback.
@@ -1043,26 +1097,48 @@ class Echo {
 
     /// The handler options.
     Map<String, bool>? options,
-  }) {
-    /// Create new [Handler] object.
-    final hand = Handler(
-      handler,
-      stanzaName: name,
-      namespace: namespace,
-      type: type,
-      id: id,
-      from: from,
-      options: options,
-    );
 
-    /// When `fire` is triggered from the [Handler] class which extends [Event]
-    /// this method will be triggered and run what is passed to the function.
-    hand.event.addListener((either) {
-      either.fold(
-        (stanza) => resultCallback?.call(stanza),
-        (exception) => errorCallback?.call(exception),
+    /// A [Completer] object used to wait for incoming stanzas and complete
+    /// with either an [XmlElement] or an [EchoException].
+    Completer<Either<xml.XmlElement, EchoException>>? completer,
+  }) {
+    /// Nullable [Handler] object for creating [Handler] with or without
+    /// `completer` parameter.
+    Handler? hand;
+
+    if (completer != null) {
+      /// Create new [Handler] object.
+      hand = Handler(
+        handler,
+        stanzaName: name,
+        namespace: namespace,
+        type: type,
+        id: id,
+        from: from,
+        completer: completer,
+        options: options,
       );
-    });
+    } else {
+      /// Create new [Handler] object.
+      hand = Handler(
+        handler,
+        stanzaName: name,
+        namespace: namespace,
+        type: type,
+        id: id,
+        from: from,
+        options: options,
+      );
+
+      /// When `fire` is triggered from the [Handler] class which extends [Event]
+      /// this method will be triggered and run what is passed to the function.
+      hand.event.addListener((either) {
+        either.fold(
+          (stanza) => resultCallback?.call(stanza),
+          (exception) => errorCallback?.call(exception),
+        );
+      });
+    }
 
     /// Add handlers to the list.
     _addHandlers.add(hand);
@@ -1140,9 +1216,12 @@ class Echo {
 
     /// Log according to the `reason` value.
     if (reason != null) {
-      Log().trigger(LogType.warn, 'Disconnect was called because: $reason');
+      Log().trigger(
+        LogType.warn,
+        'disconnect method was called because: $reason',
+      );
     } else {
-      Log().trigger(LogType.info, 'Disconnect was called');
+      Log().trigger(LogType.info, 'disconnect method was called');
     }
 
     /// Proceed if [Echo] is connected to the server.
@@ -1177,7 +1256,7 @@ class Echo {
     else {
       Log().trigger(
         LogType.warn,
-        'Disconnect was called before Echo connected to the server.',
+        'Disconnect was called before Echo connected to the server',
       );
       _protocol.abortAllRequests();
       await _doDisconnect();
@@ -1204,7 +1283,7 @@ class Echo {
     }
 
     /// Logs the disconnection event.
-    Log().trigger(LogType.info, '_doDisconnect was called');
+    Log().trigger(LogType.info, 'doDisconnect method was called');
 
     /// Invokes `doDisconnect` method which is declared as [Protocol] object
     /// method.
@@ -1242,7 +1321,7 @@ class Echo {
 
   /// Handler to processes incoming data from the connection.
   ///
-  /// Except for `connectCB` handling the initial connection request,
+  /// Except for `connectCallback` handling the initial connection request,
   /// this function handles the incoming data for all requests. This function
   /// also fires stanza handlers that match each incoming stanza.
   ///
@@ -1393,7 +1472,7 @@ class Echo {
   /// * @return false to remove the handler.
   Future<bool> _onResourceBindResultIQ(xml.XmlElement element) async {
     if (element.getAttribute('type') == 'error') {
-      Log().trigger(LogType.warn, 'Resource binding failed.');
+      Log().trigger(LogType.warn, 'Resource binding failed');
       final conflict = element.getElement('conflict');
       String? condition;
       if (conflict != null) {
@@ -1419,7 +1498,7 @@ class Echo {
         }
       }
     } else {
-      Log().trigger(LogType.warn, 'Resource binding failed.');
+      Log().trigger(LogType.warn, 'Resource binding failed');
       await _changeConnectStatus(
         EchoStatus.authenticationFailed,
         null,
@@ -1430,19 +1509,19 @@ class Echo {
     return false;
   }
 
-  /// Private `connectCB` method.
+  /// Private `connectCallback` method.
   ///
   /// SASL authentication will be attempted if available, otherwise the code
   /// will fall back to legacy authentication.
   ///
   /// * @param request The current request
   /// * @param callback Low level (xmpp) connect callback function.
-  Future<void> _connectCB(
+  Future<void> _connectCallback(
     xml.XmlElement request,
     Future<void> Function(Echo)? callback, [
     String? raw,
   ]) async {
-    Log().trigger(LogType.verbose, 'connectCB was called');
+    Log().trigger(LogType.verbose, 'connectCallback method was called');
     _connected = true;
 
     xml.XmlElement? bodyWrap;
@@ -1457,7 +1536,7 @@ class Echo {
         if (_processedFeatures) {
           _processedFeatures = false;
         } else {
-          _connectCB(request, callback, raw);
+          _connectCallback(request, callback, raw);
         }
       } else {
         if (await _registerCallback(request, callback, raw)) {
@@ -1494,7 +1573,7 @@ class Echo {
       _rawInput(Echotils.serialize(bodyWrap));
     }
 
-    final connectionCheck = await _protocol.connectCB(bodyWrap);
+    final connectionCheck = await _protocol.connectCallback(bodyWrap);
     if (connectionCheck == status[EchoStatus.connectionFailed]) {
       return;
     }
@@ -1549,7 +1628,7 @@ class Echo {
     Future<void> Function(Echo)? callback, [
     String? raw,
   ]) async {
-    Log().trigger(LogType.info, '_registerCallback was called');
+    Log().trigger(LogType.info, 'registerCallback method was called');
     _connected = true;
 
     final bodyWrap = _protocol.reqToData(stanza);
@@ -1570,7 +1649,7 @@ class Echo {
       _rawInput(Echotils.serialize(bodyWrap));
     }
 
-    final connectionCheck = await _protocol.connectCB(bodyWrap);
+    final connectionCheck = await _protocol.connectCallback(bodyWrap);
     if (connectionCheck == status[EchoStatus.connectionFailed]) {
       return false;
     }
@@ -1641,7 +1720,7 @@ class Echo {
   }
 
   Future<void> _authenticate(List<SASL?> mechanisms) async {
-    if (!_attemptSASLAuth(mechanisms)) {
+    if (!await _attemptSASLAuth(mechanisms)) {
       await _attemptLegacyAuth();
     }
   }
@@ -1672,7 +1751,7 @@ class Echo {
   /// * @param mechanisms List of [SASL] mechanisms.
   /// * @return [bool] true or false, depending on whether a valid SASL
   /// mechanism was found with which authentication could be started.
-  bool _attemptSASLAuth(List<SASL?> mechanisms) {
+  Future<bool> _attemptSASLAuth(List<SASL?> mechanisms) async {
     final mechs = _sortMechanismsByPriority(mechanisms);
     bool mechanismFound = false;
     for (int i = 0; i < mechs.length; i++) {
@@ -1680,16 +1759,16 @@ class Echo {
       if (!mechs[i]!.test()) {
         continue;
       }
-      _saslSuccessHandler = _addSystemHandler(
-        (element) => _saslSuccessCB(element),
+      _saslSuccessHandler = await _addSystemHandler(
+        (element) => _saslSuccessCallback(element),
         name: 'success',
       );
-      _saslFailureHandler = _addSystemHandler(
-        (element) => _saslFailureCB(element),
+      _saslFailureHandler = await _addSystemHandler(
+        (element) => _saslFailureCallback(element),
         name: 'failure',
       );
-      _saslChallengeHandler = _addSystemHandler(
-        (element) => _saslChallengeCB(element),
+      _saslChallengeHandler = await _addSystemHandler(
+        (element) => _saslChallengeCallback(element),
         name: 'challenge',
       );
 
@@ -1710,7 +1789,7 @@ class Echo {
     return mechanismFound;
   }
 
-  bool _saslChallengeCB(xml.XmlElement element) {
+  bool _saslChallengeCallback(xml.XmlElement element) {
     final challenge = Echotils.atob(Echotils.getText(element));
     final response = _mechanism?.onChallenge(challenge: challenge);
     final stanza = EchoBuilder('response', {'xmlns': ns['SASL']});
@@ -1780,7 +1859,7 @@ class Echo {
         .up()
         .c('resource', attributes: {}).t(Echotils().getResourceFromJID(jid)!);
     _addSystemHandler(
-      (element) async => _auth2CB(element),
+      (element) async => _auth2Callback(element),
       id: '_auth_2',
     );
     send(iq.nodeTree);
@@ -1796,7 +1875,7 @@ class Echo {
   ///
   /// * @param element The matching stanza.
   /// * @return false to remove the handler.
-  Future<bool> _saslSuccessCB(xml.XmlElement? element) async {
+  Future<bool> _saslSuccessCallback(xml.XmlElement? element) async {
     /// Check server signature (if available). By decoding the success message
     /// and extracting the server signature attribute. If the server signature
     /// is invalid, it invokes the SASL failure callback, cleans up the relevant
@@ -1829,14 +1908,14 @@ class Echo {
 
         /// Clear sasl data.
         _saslData!.clear();
-        return _saslFailureCB();
+        return _saslFailureCallback();
       }
     }
 
     /// If the server signature is valid, it logs the successful SASL
     /// authentication and invokes the onSuccess callback for the specific SASL
     /// mechanism.
-    Log().trigger(LogType.info, 'SASL authentication succeed');
+    Log().trigger(LogType.info, 'SASL authentication succeeded');
 
     /// Invoke onSuccess callback for the specific mechanism.
     if (_mechanism != null) {
@@ -1863,7 +1942,7 @@ class Echo {
 
     /// Add system handlers for stream:features.
     streamFeatureHandlers.add(
-      _addSystemHandler(
+      await _addSystemHandler(
         (element) => wrapper(streamFeatureHandlers, element),
         name: 'stream:features',
       ),
@@ -1871,7 +1950,7 @@ class Echo {
 
     /// Add system handlers for features.
     streamFeatureHandlers.add(
-      _addSystemHandler(
+      await _addSystemHandler(
         (element) => wrapper(streamFeatureHandlers, element),
         namespace: ns['STREAM'],
         name: 'features',
@@ -1916,7 +1995,7 @@ class Echo {
     if (!_doSession) {
       Log().trigger(
         LogType.warn,
-        '_establishSession called but apparently ${ns['SESSION']} was not advertised by the server',
+        'establishSession method was called but apparently ${ns['SESSION']} was not advertised by the server',
       );
       return;
     }
@@ -1977,7 +2056,7 @@ class Echo {
       _authenticated = false;
 
       /// Logs a warning message using the `Log().warn` function.
-      Log().trigger(LogType.warn, 'Session creation failed.');
+      Log().trigger(LogType.warn, 'Session creation failed');
 
       /// Calls the `_changeConnectStatus` method with the parameters
       /// `EchoStatus.authenticationFailed`, `null`, and the error element.
@@ -1999,7 +2078,7 @@ class Echo {
   ///
   /// * @param element XmlElment type matching stanza.
   /// * @return false to remove the handler.
-  Future<bool> _saslFailureCB([xml.XmlElement? element]) async {
+  Future<bool> _saslFailureCallback([xml.XmlElement? element]) async {
     if (_saslChallengeHandler != null) {
       deleteHandler(_saslChallengeHandler!);
       _saslChallengeHandler = null;
@@ -2025,7 +2104,7 @@ class Echo {
   ///
   /// * @param element The stanza that triggered the callback.
   /// * @return false to remove the handler.
-  Future<bool> _auth2CB(xml.XmlElement element) async {
+  Future<bool> _auth2Callback(xml.XmlElement element) async {
     if (element.getAttribute('type') == 'result') {
       _authenticated = true;
       await _changeConnectStatus(EchoStatus.connected, null);
@@ -2041,6 +2120,9 @@ class Echo {
   }
 
   bool _onDisconnectTimeout() {
+    Log().trigger(LogType.info, 'onDisconnectTimeout method was called');
+    _changeConnectStatus(EchoStatus.connectionTimeout, null);
+    _doDisconnect();
     return false;
   }
 
@@ -2118,7 +2200,10 @@ class Echo {
   /// * @param name The stanza name to match.
   /// * @param type The stanza type attribute to match.
   /// * @param id The stanza id attribute to match.
-  Handler _addSystemHandler(
+  /// * @param completer Provides a way to produce a single value in the future,
+  /// either with a successful result represented by an [XmlElement] or an error
+  /// represented by an [EchoException].
+  FutureOr<Handler> _addSystemHandler(
     /// The user callback.
     FutureOr<bool> Function(xml.XmlElement) handler, {
     /// The user callback when incoming stanza is `result`. Defaults to `null`.
@@ -2136,26 +2221,46 @@ class Echo {
     /// The stanza name to match.
     String? id,
 
+    /// A [Completer] object used to wait for incoming stanzas and complete
+    /// with either an [XmlElement] or an [EchoException].
+    Completer<Either<xml.XmlElement, EchoException>>? completer,
+
     /// The stanza type.
     dynamic type,
-  }) {
-    /// Create [Handler] for passing to the system handler list.
-    final hand = Handler(
-      handler,
-      namespace: namespace,
-      stanzaName: name,
-      type: type,
-      id: id,
-    );
+  }) async {
+    /// Nullable [Handler] object for creating [Handler] with or without
+    /// `completer` parameter.
+    Handler? hand;
 
-    /// When `fire` is triggered from the [Handler] class which extends [Event]
-    /// this method will be triggered and run what is passed to the function.
-    hand.event.addListener(
-      (either) => either.fold(
-        (stanza) => resultCallback?.call(stanza),
-        (exception) => errorCallback?.call(exception),
-      ),
-    );
+    if (completer != null) {
+      /// Create [Handler] for passing to the system handler list.
+      hand = Handler(
+        handler,
+        namespace: namespace,
+        stanzaName: name,
+        type: type,
+        id: id,
+        completer: completer,
+      );
+    } else {
+      /// Create [Handler] for passing to the system handler list.
+      hand = Handler(
+        handler,
+        namespace: namespace,
+        stanzaName: name,
+        type: type,
+        id: id,
+      );
+
+      /// When `fire` is triggered from the [Handler] class which extends [Event]
+      /// this method will be triggered and run what is passed to the function.
+      hand.event.addListener(
+        (either) => either.fold(
+          (stanza) => resultCallback?.call(stanza),
+          (exception) => errorCallback?.call(exception),
+        ),
+      );
+    }
 
     /// Equal to false for indicating that this is system handler.
     hand.user = false;
@@ -2165,287 +2270,4 @@ class Echo {
 
     return hand;
   }
-}
-
-/// Private helper class for managing stanza handlers.
-///
-/// Encapsulates a user provided callback function to be executed when matching
-/// stanzas are received by the connection.
-///
-/// Handlers can be either one-off or persistant depending on their return
-/// value. Returning true will cause a Handler to remain active, and returning
-/// false will remove the Handler.
-///
-/// Users will not use Handlers directly, instead they will use
-/// `Echo.addHandler()` or `Echo.deleteHandler()` method.
-class Handler extends Event<Either<xml.XmlElement, EchoException>> {
-  Handler(
-    /// Required for executing when `run` is triggered.
-    this.handler, {
-    /// The namespace of the stanzas to match. If null, all namespaces will be
-    /// considered a match.
-    this.namespace,
-
-    /// The name of the stanzas to match. If null, all names will be considered
-    /// a match.
-    this.stanzaName,
-
-    /// The type of the stanzas to match. If null, all types will be considered
-    /// a match.
-    this.type,
-
-    /// The id of the stanzas to match. If null, all ids will be considered a
-    /// match.
-    this.id,
-
-    /// The source of the stanzas to match. If null, all sources will be
-    /// considered a match.
-    String? from,
-
-    /// Additional options for the handler.
-    ///
-    Map<String, bool>? options,
-  })  : options = options ??
-            {
-              /// If set to true, it indicates that the from attribute should
-              /// be matched with the bare JID (Jabber ID) instead of the full
-              /// `JID`.
-              ///
-              /// Default is `false`.
-              'matchBareFromJid': false,
-
-              /// If set to true, it indicates that the namespace should be
-              /// compared without considering any fragment after the '#'
-              /// character.
-              ///
-              /// Default is false.
-              'ignoreNamespaceFragment': false,
-            },
-        super(name: id ?? 'generated-handler') {
-    if (this.options!.containsKey('matchBare')) {
-      Log().trigger(
-        LogType.warn,
-        'The "matchBare" option is deprecated, use "matchBareFromJid" instead.',
-      );
-      this.options!['matchBareFromJid'] = this.options!['matchBareFromJid']!;
-      this.options!.remove('matchBare');
-    }
-    if (this.options!.containsKey('matchBareFromJid')) {
-      this.from = from != null ? Echotils().getBareJIDFromJID(from) : null;
-    } else {
-      this.from = from;
-    }
-
-    /// Whether the handler is a user handler or a system handler.
-    user = true;
-  }
-
-  /// The source of the stanzas to match.
-  String? from;
-
-  /// The `namespace` of the stanzas to match, If null, all namespaces will be
-  /// considered a match.
-  final String? namespace;
-
-  /// The `name` of the stanzas to match.
-  final String? stanzaName;
-
-  /// The `type` of the stanzas to match. Can be used as [String] or [List].
-  final dynamic type;
-
-  /// The `id` of the stanzas to match.
-  final String? id;
-
-  /// Additional `options` for the handler.
-  final Map<String, bool>? options;
-
-  /// The [Function] executor needs to be run when needed.
-  final FutureOr<bool> Function(xml.XmlElement)? handler;
-
-  /// Authentication flag for the handler.
-  bool user = false;
-
-  /// Retrieves the namespacce of an XML element.
-  String? getNamespace(xml.XmlElement element) {
-    /// Defaults to the attribute of `xlmns`.
-    String? namespace = element.getAttribute('xmlns');
-
-    /// If not null and the options contain dedicated param, then split `#` sign
-    /// from `namespace`.
-    if (namespace != null && options!['ignoreNamespaceFragment']!) {
-      namespace = namespace.split('#')[0];
-    }
-    return namespace;
-  }
-
-  /// Checks if the namespace of an XML element matches the specified namespace.
-  ///
-  /// * @param element The XML element to check.
-  /// * @return True if the element's namespace matches the specified namespace.
-  /// Otherwise `false`.
-  bool namespaceMatch(xml.XmlElement element) {
-    /// Defaults to false.
-    bool isNamespaceMatches = false;
-
-    /// If null then return true that namespace matches.
-    if (namespace == null) return true;
-    Echotils.forEachChild(element, null, (node) {
-      if (getNamespace(node) == namespace) {
-        isNamespaceMatches = true;
-      }
-    });
-    return isNamespaceMatches || getNamespace(element) == namespace;
-  }
-
-  /// Checks if an XML element matches the specified criteria.
-  ///
-  /// * @param element The XML element to check.
-  /// * @return True if the element matches the specified criteria. Otherwise
-  /// `false`.
-  bool isMatch(xml.XmlElement element) {
-    /// Default to the attribute under name of `from` on the passed `element`
-    String? from = element.getAttribute('from');
-
-    if (options!['matchBareFromJid']!) {
-      from = Echotils().getBareJIDFromJID(from!);
-    }
-    final elementType = element.getAttribute('type');
-    if (namespaceMatch(element) &&
-        (stanzaName == null || Echotils.isTagEqual(element, stanzaName!)) &&
-        (type == null ||
-            (type is List
-                ? (type! as List).contains(elementType)
-                : elementType == type)) &&
-        (id == null || element.getAttribute('id') == id) &&
-        (this.from == null || from == this.from)) {
-      return true;
-    }
-
-    return false;
-  }
-
-  /// Runs the handler function on the specified XML element.
-  ///
-  /// * @param element The XML element to process.
-  /// * @return The result of the handler function, if available.
-  /// Otherwise returns null.
-  FutureOr<bool>? run(xml.XmlElement element) async {
-    bool? result;
-
-    /// If handler is not null, then execute the passed function.
-    if (handler != null) {
-      result = await handler!.call(element);
-    }
-
-    if (element.getAttribute('type') == 'error') {
-      /// Initialize null [EchoException].
-      EchoException? exception;
-
-      /// Iterate the `condition` over switch case and match the extension
-      /// during this.
-      switch (_mapErrors(element)!.value1) {
-        case 'bad-request':
-          exception = EchoExceptionMapper.badRequest();
-        case 'not-authorized':
-          exception = EchoExceptionMapper.notAuthorized();
-        case 'forbidden':
-          exception = EchoExceptionMapper.forbidden();
-        case 'not-allowed':
-          exception = EchoExceptionMapper.notAllowed();
-        case 'registration-required':
-          exception = EchoExceptionMapper.registrationRequired();
-        case 'remote-server-timeout':
-          exception = EchoExceptionMapper.requestTimedOut();
-        case 'conflict':
-          exception = EchoExceptionMapper.conflict();
-        case 'internal-server-error':
-          exception = EchoExceptionMapper.internalServerError();
-        case 'service-unavailable':
-          exception = EchoExceptionMapper.serviceUnavailable();
-        case 'disconnected':
-          exception = EchoExceptionMapper.disconnected();
-      }
-
-      /// If there is not [EchoException] catched, then fire [Right] side of
-      /// the [Event].
-      if (exception != null) {
-        /// Check if there is any inner error text associated with the server
-        /// message, if yes, then continue to print that code to the output.
-        if (element.getElement('error')!.getElement('text') != null &&
-            element
-                .getElement('error')!
-                .getElement('text')!
-                .innerText
-                .isNotEmpty) {
-          exception = exception.copyWith(
-            message: element.getElement('error')!.getElement('text')!.innerText,
-          );
-        }
-        fire(Right(exception.copyWith()));
-      }
-    } else {
-      /// If there is not any [EchoException] catched, then fire [Left] side of
-      /// the [Event].
-      fire(Left(element));
-    }
-
-    return result ?? true;
-  }
-
-  @override
-  String toString() =>
-      '{Handler: $handler (name: $stanzaName, id: $id, namespace: $namespace type: $type options: $options)}';
-}
-
-/// Private helper class for managing timed handlers.
-///
-/// Encapsulates a user provided callback that should be called after a certain
-/// period of time or at regulra intervals. The return value of the callback
-/// determines whether the [_TimedHandler] will continue to fire.
-///
-/// Users will not use this class objects directly, but instead
-/// they will use this class's `addTimedHandler()` method and
-/// `deleteTimedHandler()` method.
-class _TimedHandler {
-  _TimedHandler({
-    required this.period,
-    required this.handler,
-  }) {
-    /// Equal the last call time to now.
-    lastCalled = DateTime.now();
-  }
-
-  /// The number of milliseconds to wait before the handler is called.
-  final int period;
-
-  /// The callback to run when the handler fires. This function should take no
-  /// arguments.
-  final bool Function() handler;
-
-  bool user = true;
-
-  /// Nullable param for indicating lastCalled time of the handler.
-  DateTime? lastCalled;
-
-  /// Run the callback for the [_TimedHandler].
-  ///
-  /// * @return `true` if the [_TimedHandler] should be called again, otherwise
-  /// false.
-  bool run() {
-    /// Equals last called time to now.
-    lastCalled = DateTime.now();
-
-    /// Calls handler.
-    return handler.call();
-  }
-
-  /// Reset the last called time for the [_TimedHandler].
-  void reset() {
-    /// Equals `lastCalled` variable to `DateTime.now()`.
-    lastCalled = DateTime.now();
-  }
-
-  /// Get a string representation of the [_TimedHandler] object.
-  @override
-  String toString() => '''TimedHandler: $handler ($period)''';
 }

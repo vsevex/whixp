@@ -97,19 +97,19 @@ class DiscoExtension extends Extension {
   /// * @param jid Specifies the JID to send the request to.
   /// * @param node Specifies the node associated with the request. Defaults to
   /// `null`.
-  /// * @param onSuccess Specifies the callback function to be executed when
-  /// the request succeeds. Defaults to `null`.
-  /// * @param onError Specifies the callback function to be executed when an
-  /// error occurs. Defaults to `null`.
+  /// * @param resultCallback Specifies the callback function to be executed
+  /// when the request succeeds. Defaults to `null`.
+  /// * @param errorCallback Specifies the callback function to be executed when
+  /// an error occurs. Defaults to `null`.
   /// * @param timeout Specifies the timeout duration to be passed to the method
   /// of `sendIQ`.
-  void info(
+  Future<void> info(
     String jid, {
     String? node,
-    FutureOr<void> Function(XmlElement)? onSuccess,
-    FutureOr<void> Function(EchoException?)? onError,
+    FutureOr<void> Function(XmlElement)? resultCallback,
+    FutureOr<void> Function(EchoException)? errorCallback,
     int? timeout,
-  }) {
+  }) async {
     final attributes = <String, String>{'xmlns': ns['DISCO_INFO']!};
 
     if (node != null) {
@@ -120,10 +120,11 @@ class DiscoExtension extends Extension {
       attributes: {'from': echo!.jid, 'to': jid, 'type': 'get'},
     ).c('query', attributes: attributes);
 
-    echo!.sendIQ(
+    return echo!.sendIQ(
       element: info.nodeTree!,
-      resultCallback: onSuccess,
-      errorCallback: onError,
+      resultCallback: resultCallback,
+      errorCallback: errorCallback,
+      waitForResult: true,
       timeout: timeout,
     );
   }
@@ -132,19 +133,19 @@ class DiscoExtension extends Extension {
   ///
   /// * @param jid Specifies the JID to send the request to.
   /// * @param node Specifies the node associated with the request.
-  /// * @param onSuccess Specifies the callback function to be executed when
-  /// the request succeeds.
-  /// * @param onError Specifies the callback function to be executed when an
-  /// error occurs. Defaults to `null`.
+  /// * @param resultCallback Specifies the callback function to be executed
+  /// when the request succeeds.
+  /// * @param errorCallback Specifies the callback function to be executed when
+  /// an error occurs. Defaults to `null`.
   /// * @param timeout Specifies the timeout duration to be passed to the method
   /// of `sendIQ`.
-  void items(
+  Future<void> items(
     String jid, {
     String? node,
-    FutureOr<void> Function(XmlElement)? onSuccess,
-    FutureOr<void> Function(EchoException?)? onError,
+    FutureOr<void> Function(XmlElement)? resultCallback,
+    FutureOr<void> Function(EchoException)? errorCallback,
     int? timeout,
-  }) {
+  }) async {
     final attributes = <String, String>{'xmlns': ns['DISCO_ITEMS']!};
 
     if (node != null) {
@@ -155,10 +156,11 @@ class DiscoExtension extends Extension {
       attributes: {'from': echo!.jid, 'to': jid, 'type': 'get'},
     ).c('query', attributes: attributes);
 
-    echo!.sendIQ(
+    return echo!.sendIQ(
       element: items.nodeTree!,
-      resultCallback: onSuccess,
-      errorCallback: onError,
+      resultCallback: resultCallback,
+      errorCallback: errorCallback,
+      waitForResult: true,
       timeout: timeout,
     );
   }

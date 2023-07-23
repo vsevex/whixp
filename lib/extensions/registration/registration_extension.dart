@@ -44,11 +44,12 @@ class RegistrationExtension extends Extension {
   ///
   /// For the proper usage of this method, please refer to the Readme file
   /// associated with the extension folder.
-  void submit({
+  Future<void> submit({
     FutureOr<void> Function(xml.XmlElement)? resultCallback,
     FutureOr<void> Function(EchoException)? errorCallback,
-  }) {
-    final query = EchoBuilder.iq(attributes: {'type': 'set'})
+  }) async {
+    final id = echo!.getUniqueId('registration');
+    final query = EchoBuilder.iq(attributes: {'type': 'set', 'id': id})
         .c('query', attributes: {'xmlns': ns['REGISTER']!});
 
     final fields = super.echo!._fields.keys.toList();
@@ -57,6 +58,8 @@ class RegistrationExtension extends Extension {
       final value = super.echo!._fields[name];
       query.c(name).t(value!).up();
     }
+
+    final completer = Completer<Either<xml.XmlElement, EchoException>>();
 
     /// Add system handler for accepting incoming stanzas.
     super.echo!._addSystemHandler(
@@ -76,11 +79,20 @@ class RegistrationExtension extends Extension {
         }
         return false;
       },
-      resultCallback: resultCallback,
-      errorCallback: errorCallback,
+      completer: completer,
+      name: 'iq',
+      id: id,
     );
 
     /// Send stanza which built using [EchoBuilder.iq] constructor.
-    super.echo!.sendIQ(element: query.nodeTree!);
+    await super.echo!.send(query.nodeTree);
+
+    /// Wait for the answer from `completer`.
+    final either = await completer.future;
+
+    return either.fold(
+      (stanza) => resultCallback?.call(stanza),
+      (exception) => errorCallback?.call(exception),
+    );
   }
 }
