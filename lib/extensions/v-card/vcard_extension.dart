@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:echo/echo.dart';
 import 'package:echo/extensions/event/event.dart';
 import 'package:echo/src/constants.dart';
@@ -44,15 +46,15 @@ class VCardExtension extends Extension {
   Future<void> get({
     String? jid,
     void Function(VCard)? callback,
-    void Function(EchoException?)? onErrorCallback,
+    void Function(EchoException)? onErrorCallback,
   }) async {
-    assert(jid != null, 'JID must be provided in order to get vCard.');
+    assert(jid != null, 'JID must be provided in order to get vCard');
 
     /// Declares empty [VCard].
     VCard vCard = const VCard();
 
     /// Sends initial get response to the server with the corresponding JID.
-    echo!.sendIQ(
+    return echo!.sendIQ(
       element: _buildIQ(
         'get',
         jid: jid,
@@ -86,6 +88,7 @@ class VCardExtension extends Extension {
         }
       },
       errorCallback: onErrorCallback,
+      waitForResult: true,
     );
   }
 
@@ -99,17 +102,18 @@ class VCardExtension extends Extension {
   /// * @return A [String] that resolves to the retrieved vCard information
   /// stanza ID.
   /// * @throws AssertionError if the vCard is not provided.
-  String set({
+  Future<void> set({
     VCard? vCard,
     void Function(XmlElement)? callback,
-    void Function(EchoException?)? errorCallback,
-  }) {
-    assert(vCard != null, 'vCard must be provided.');
+    void Function(EchoException)? errorCallback,
+  }) async {
+    assert(vCard != null, 'vCard must be provided');
 
     return echo!.sendIQ(
       element: _buildIQ('set', vCard: vCard),
       resultCallback: callback,
       errorCallback: errorCallback,
+      waitForResult: true,
     );
   }
 

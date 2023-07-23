@@ -19,7 +19,7 @@ import 'dart:developer';
 import 'package:echo/echo.dart';
 
 Future<void> main() async {
-  final echo = Echo(service: 'ws://example.com:7070/ws');
+  final echo = Echo(service: 'ws://example.com:5443/ws');
   await echo.connect(
     jid: 'vsevex@example.com',
     password: 'somepsw',
