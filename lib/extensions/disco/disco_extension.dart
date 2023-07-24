@@ -21,10 +21,10 @@ class DiscoExtension extends Extension {
   late final _items = <DiscoItem>[];
 
   /// The list of feature strings.
-  late final _features = <String>[];
+  late final features = <String>[];
 
   /// The list of [DiscoIdentity] objects.
-  late final _identities = <DiscoIdentity>[];
+  late final identities = <DiscoIdentity>[];
 
   /// This method is not implemented and will not be affected in the use of this
   /// extension.
@@ -72,16 +72,16 @@ class DiscoExtension extends Extension {
     String name = '',
     String language = '',
   }) {
-    for (int i = 0; i < _identities.length; i++) {
-      if (_identities[i].category == category &&
-          _identities[i].type == type &&
-          _identities[i].name == name &&
-          _identities[i].language == language) {
+    for (int i = 0; i < identities.length; i++) {
+      if (identities[i].category == category &&
+          identities[i].type == type &&
+          identities[i].name == name &&
+          identities[i].language == language) {
         return false;
       }
     }
 
-    _identities.add(
+    identities.add(
       DiscoIdentity(
         category: category,
         type: type,
@@ -110,6 +110,7 @@ class DiscoExtension extends Extension {
     FutureOr<void> Function(EchoException)? errorCallback,
     int? timeout,
   }) async {
+    final id = super.echo!.getUniqueId('info');
     final attributes = <String, String>{'xmlns': ns['DISCO_INFO']!};
 
     if (node != null) {
@@ -117,7 +118,7 @@ class DiscoExtension extends Extension {
     }
 
     final info = EchoBuilder.iq(
-      attributes: {'from': echo!.jid, 'to': jid, 'type': 'get'},
+      attributes: {'from': super.echo!.jid, 'to': jid, 'type': 'get', 'id': id},
     ).c('query', attributes: attributes);
 
     return echo!.sendIQ(
@@ -125,7 +126,6 @@ class DiscoExtension extends Extension {
       resultCallback: resultCallback,
       errorCallback: errorCallback,
       waitForResult: true,
-      timeout: timeout,
     );
   }
 
@@ -171,12 +171,12 @@ class DiscoExtension extends Extension {
   /// * @return `true` if the feature was added successfully, or `false` if the
   /// feature already exists.
   bool addFeature(String variableName) {
-    for (int i = 0; i < _features.length; i++) {
-      if (_features[i] == variableName) {
+    for (int i = 0; i < features.length; i++) {
+      if (features[i] == variableName) {
         return false;
       }
     }
-    _features.add(variableName);
+    features.add(variableName);
     return true;
   }
 
@@ -186,9 +186,9 @@ class DiscoExtension extends Extension {
   /// * @return `true` feature was removed successfully, or `false` if the
   /// feature does not exist.
   bool removeFeature(String variableName) {
-    for (int i = 0; i < _features.length; i++) {
-      if (_features[i] == variableName) {
-        _features.removeAt(i);
+    for (int i = 0; i < features.length; i++) {
+      if (features[i] == variableName) {
+        features.removeAt(i);
         return true;
       }
     }
@@ -209,25 +209,25 @@ class DiscoExtension extends Extension {
     final iqResult =
         _buildIQResult(stanza: stanza, queryAttributes: attributes);
 
-    for (int i = 0; i < _identities.length; i++) {
+    for (int i = 0; i < identities.length; i++) {
       attributes = {
-        'category': _identities[i].category,
-        'type': _identities[i].type
+        'category': identities[i].category,
+        'type': identities[i].type
       };
-      if (_identities[i].name != null) {
-        attributes['name'] = _identities[i].name!;
+      if (identities[i].name != null) {
+        attributes['name'] = identities[i].name!;
       }
-      if (_identities[i].language != null) {
-        attributes['language'] = _identities[i].language!;
+      if (identities[i].language != null) {
+        attributes['language'] = identities[i].language!;
       }
       iqResult.c('identity', attributes: attributes).up();
     }
 
-    for (int i = 0; i < _features.length; i++) {
-      iqResult.c('feature', attributes: {'var': _features[i]}).up();
+    for (int i = 0; i < features.length; i++) {
+      iqResult.c('feature', attributes: {'var': features[i]}).up();
     }
 
-    echo!.send(iqResult.nodeTree);
+    echo!.send(iqResult);
     return true;
   }
 
@@ -265,7 +265,7 @@ class DiscoExtension extends Extension {
       }
       iqResult.c('item', attributes: attributes).up();
     }
-    echo!.send(iqResult.nodeTree);
+    echo!.send(iqResult);
     return true;
   }
 
