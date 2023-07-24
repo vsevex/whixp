@@ -133,6 +133,10 @@ class Echo {
     /// Initialize [DiscoExtension] class and attach to the current [Echo].
     disco = DiscoExtension();
     attachExtension(disco);
+
+    /// Initialize [CapsExtension] class and attach to the current [Echo].
+    caps = CapsExtension();
+    attachExtension(caps);
   }
 
   /// `version` constant.
@@ -267,6 +271,9 @@ class Echo {
 
   /// Late initialization of [DiscoExtension].
   late final DiscoExtension disco;
+
+  /// Late initialization of [CapsExtension].
+  late final CapsExtension caps;
 
   /// The selected mechanism to provide authentication.
   late SASL? _mechanism;
@@ -830,6 +837,8 @@ class Echo {
   FutureOr<void> send(
     dynamic message, [
     Completer<Either<xml.XmlElement, EchoException>>? completer,
+    FutureOr<void> Function(xml.XmlElement stanza)? resultCallback,
+    FutureOr<void> Function(EchoException)? errorCallback,
   ]) async {
     /// If the message is null or empty, exit from the function.
     if (message == null) return;
@@ -858,9 +867,14 @@ class Echo {
     /// If `completer` param is not null, then wait for the incoming stanza
     /// result.
     if (completer != null) {
-      await completer.future.timeout(
+      final either = await completer.future.timeout(
         Duration(milliseconds: stanzaResponseTimeout),
         onTimeout: () => Right(EchoExceptionMapper.requestTimedOut()),
+      );
+
+      either.fold(
+        (stanza) => resultCallback?.call(stanza),
+        (exception) => errorCallback?.call(exception),
       );
     }
   }
