@@ -62,7 +62,7 @@ class RegistrationExtension extends Extension {
     final completer = Completer<Either<xml.XmlElement, EchoException>>();
 
     /// Add system handler for accepting incoming stanzas.
-    super.echo!._addSystemHandler(
+    echo!._addSystemHandler(
       (stanza) {
         final query = stanza.findAllElements('query');
 
@@ -85,14 +85,6 @@ class RegistrationExtension extends Extension {
     );
 
     /// Send stanza which built using [EchoBuilder.iq] constructor.
-    await super.echo!.send(query.nodeTree);
-
-    /// Wait for the answer from `completer`.
-    final either = await completer.future;
-
-    return either.fold(
-      (stanza) => resultCallback?.call(stanza),
-      (exception) => errorCallback?.call(exception),
-    );
+    await echo!.send(query, completer, resultCallback, errorCallback);
   }
 }
