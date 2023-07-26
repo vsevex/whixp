@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:echo/echo.dart';
-import 'package:echo/extensions/event/event.dart';
 import 'package:echo/src/constants.dart';
 
 part 'vcard.dart';
@@ -25,9 +24,6 @@ class VCardExtension extends Extension {
   /// /// ...for more information please refer to `attachExtension` method.
   /// ```
   VCardExtension() : super('v-card-extension');
-
-  /// Initialize [vCardEvent] object to listen later changes of the current card.
-  final vCardEvent = Eventius<VCard>(name: 'v-card');
 
   /// Initializer method for [Extension].
   @override
