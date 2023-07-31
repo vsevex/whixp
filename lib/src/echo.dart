@@ -21,6 +21,7 @@ import 'package:web_socket_channel/web_socket_channel.dart' as ws;
 import 'package:xml/xml.dart' as xml;
 
 part '../extensions/registration/registration_extension.dart';
+part '../extensions/roster/roster_extension.dart';
 part '_extension.dart';
 part 'bosh.dart';
 part 'handler.dart';
@@ -263,7 +264,7 @@ class Echo {
   late Timer _idleTimeout;
 
   /// Initialize an empty list of [Extension]s.
-  final _extensions = <Extension<dynamic>>[];
+  final _extensions = <Extension>[];
 
   /// Late initialization of [DiscoExtension].
   late final DiscoExtension disco;
@@ -373,7 +374,7 @@ class Echo {
   /// connection.
   ///
   /// * @param extension The extension to attach to the connection.
-  void attachExtension<T>(Extension<T> extension) {
+  void attachExtension<T>(Extension extension) {
     /// Check if the extension is alrady added. If is is already added, then
     /// warn user about this and do not add again.
     if (_extensions.where((ext) => ext._name == extension._name).isNotEmpty) {
@@ -619,7 +620,7 @@ class Echo {
     String password = '',
 
     /// The connection callback function.
-    Future<void> Function(EchoStatus)? callback,
+    FutureOr<void> Function(EchoStatus)? callback,
 
     /// Optional alternative authentication identifier.
     String? authcid,
@@ -641,9 +642,29 @@ class Echo {
     /// Authentication identity. Equal gathered `password` to global password.
     _password = password;
 
-    /// Connection callback will be equal if there is one.
-    _onConnectCallback =
-        (status, [condition, element]) async => callback!.call(status);
+    if (_extensions
+        .where((extension) => extension._name == 'roster-extension')
+        .isNotEmpty) {
+      final roster = _extensions
+          .where((extension) => extension._name == 'roster-extension')
+          .first as RosterExtension;
+
+      _onConnectCallback = (status, [condition, element]) async {
+        addHandler(roster._onReceivePresence, name: 'presence');
+        addHandler(
+          roster._onReceiveIQ,
+          namespace: ns['ROSTER'],
+          name: 'iq',
+          type: 'set',
+        );
+
+        await callback!.call(status);
+      };
+    } else {
+      /// Connection callback will be equal if there is one.
+      _onConnectCallback =
+          (status, [condition, element]) async => callback!.call(status);
+    }
 
     /// Make `disconnecting` false initially.
     _disconnecting = false;
