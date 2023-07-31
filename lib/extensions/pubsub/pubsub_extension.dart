@@ -235,15 +235,8 @@ class PubSubExtension extends Extension {
 
     final completer = Completer<Either<XmlElement, EchoException>>();
 
-    echo!.addHandler(
-      callback,
-      resultCallback: resultCallback,
-      errorCallback: errorCallback,
-      completer: completer,
-      name: 'iq',
-      id: id,
-    );
-    echo!.send(iq.nodeTree, completer);
+    echo!.addHandler(callback, completer: completer, name: 'iq', id: id);
+    await echo!.send(iq, completer, resultCallback, errorCallback);
 
     return id;
   }
@@ -328,7 +321,7 @@ class PubSubExtension extends Extension {
       id: id,
     );
 
-    echo!.send(iq.nodeTree);
+    echo!.send(iq);
 
     return id;
   }
@@ -343,9 +336,7 @@ class PubSubExtension extends Extension {
   /// data.
   /// * @return A [String] resolves to the ID of the sent IQ stanza.This ID can
   /// be used to track the response or correlate it with the original request.
-  String getDefaultNodeConfig([
-    FutureOr<bool> Function(XmlElement)? callback,
-  ]) {
+  String getDefaultNodeConfig([FutureOr<bool> Function(XmlElement)? callback]) {
     final id = echo!.getUniqueId('pubsubdefaultnodeconfig');
 
     final iq = EchoBuilder.iq(
@@ -353,7 +344,7 @@ class PubSubExtension extends Extension {
     ).c('pubsub', attributes: {'xmlns': ns['PUBSUB_OWNER']!}).c('default');
 
     echo!.addHandler(callback, name: 'iq', id: id);
-    echo!.send(iq.nodeTree);
+    echo!.send(iq);
 
     return id;
   }
@@ -520,16 +511,8 @@ class PubSubExtension extends Extension {
 
     final completer = Completer<Either<XmlElement, EchoException>>();
 
-    echo!.addHandler(
-      callback,
-      name: 'iq',
-      id: id,
-      resultCallback: resultCallback,
-      errorCallback: errorCallback,
-      completer: completer,
-    );
-
-    echo!.send(iq, completer);
+    echo!.addHandler(callback, name: 'iq', id: id, completer: completer);
+    await echo!.send(iq, completer, resultCallback, errorCallback);
 
     return id;
   }
@@ -634,6 +617,12 @@ class PubSubExtension extends Extension {
   ///
   /// * @param node The identifier of the PubSub node for which the
   /// subscriptions are requested.
+  /// * @param resultCallback (Function) An optional callback function that
+  /// will be invoked when a successful response to the IQ stanza is received.
+  /// It can be used to process the received items XML and perform any necessary
+  /// actions.
+  /// * @param errorCallback An optional callback function that will be invoked
+  /// when an error response or no response to the IQ stanza is received.
   /// * @param callback (Function) An optional callback function that will be
   /// invoked when a response to the IQ stanza is received. This callback can
   /// be used to process the response or perform additional actions based on
@@ -648,10 +637,12 @@ class PubSubExtension extends Extension {
   ///   return true;
   /// });
   /// ```
-  String getNodeSubscriptions(
+  Future<String> getNodeSubscriptions(
     String node, [
     FutureOr<bool> Function(XmlElement)? callback,
-  ]) {
+    FutureOr<void> Function(XmlElement)? resultCallback,
+    FutureOr<void> Function(EchoException)? errorCallback,
+  ]) async {
     final id = echo!.getUniqueId('pubsubsubscriptions');
 
     final iq = EchoBuilder.iq(
@@ -661,8 +652,10 @@ class PubSubExtension extends Extension {
       attributes: {'node': node},
     );
 
-    echo!.addHandler(callback, name: 'iq', id: id);
-    echo!.send(iq.nodeTree);
+    final completer = Completer<Either<XmlElement, EchoException>>();
+
+    echo!.addHandler(callback, completer: completer, name: 'iq', id: id);
+    await echo!.send(iq, completer, resultCallback, errorCallback);
 
     return id;
   }
@@ -676,6 +669,12 @@ class PubSubExtension extends Extension {
   /// requested.
   /// * @param subID The identifier of the subscription for which options are
   /// requested.
+  /// * @param resultCallback (Function) An optional callback function that
+  /// will be invoked when a successful response to the IQ stanza is received.
+  /// It can be used to process the received items XML and perform any necessary
+  /// actions.
+  /// * @param errorCallback An optional callback function that will be invoked
+  /// when an error response or no response to the IQ stanza is received.
   /// * @param callback (Function) An optional callback function which returns
   /// bool or Future<bool>. This callback can be used to process the response or
   /// perform additional actions based on the received data.
@@ -692,11 +691,13 @@ class PubSubExtension extends Extension {
   ///   },
   /// );
   /// ```
-  String getSubscriptionOptions(
+  Future<String> getSubscriptionOptions(
     String node, {
     String? subID,
     FutureOr<bool> Function(XmlElement)? callback,
-  }) {
+    FutureOr<void> Function(XmlElement)? resultCallback,
+    FutureOr<void> Function(EchoException)? errorCallback,
+  }) async {
     final id = echo!.getUniqueId('pubsubsuboptions');
 
     final iq = EchoBuilder.iq(
@@ -715,8 +716,10 @@ class PubSubExtension extends Extension {
       iq.addAttributes({'subid': subID});
     }
 
-    echo!.addHandler(callback, name: 'iq', id: id);
-    echo!.send(iq.nodeTree);
+    final completer = Completer<Either<XmlElement, EchoException>>();
+
+    echo!.addHandler(callback, completer: completer, name: 'iq', id: id);
+    await echo!.send(iq, completer, resultCallback, errorCallback);
 
     return id;
   }
