@@ -1,12 +1,7 @@
-# 0.0.6 - 2023-07-18
+# 0.0.7 - 2023-08-08
 
-- Added `Disco` extension support.
-- Added `Registration` extension support.
-
-## Changed
-
-- Improved WebSocket connectivity for better reliability and performance.
-- Enhanced exception handling to provide more informative error messages.
+- Added `CAPS` extension support.
+- Added `Roster` extension support.
 
 ## Deprecated
 
@@ -15,6 +10,16 @@
 ## Removed
 
 - N/A
+
+## 0.0.6 - 2023-07-18
+
+- Added `Disco` extension support.
+- Added `Registration` extension support.
+
+## Changed
+
+- Improved WebSocket connectivity for better reliability and performance.
+- Enhanced exception handling to provide more informative error messages.
 
 ## Breaking
 
