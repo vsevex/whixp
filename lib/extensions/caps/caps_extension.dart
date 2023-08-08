@@ -124,7 +124,7 @@ class CapsExtension extends Extension {
   Map<String, String> get _generateCapsAttributes => {
         'xmlns': ns['CAPS']!,
         'hash': 'sha-1',
-        'node': 'echo 0.0.6<',
+        'node': 'echo client',
         'ver': _generateVerificationString,
       };
 

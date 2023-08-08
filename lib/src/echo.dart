@@ -168,7 +168,7 @@ class Echo {
   String? _domain;
 
   /// [xml.XmlElement] type features for later assign.
-  // xml.XmlElement? _features;
+  xml.XmlElement? features;
 
   /// [Protocol] which will be responsible for keeping the type of connection.
   late Protocol _protocol;
@@ -267,7 +267,7 @@ class Echo {
   late Timer _idleTimeout;
 
   /// Initialize an empty list of [Extension]s.
-  final _extensions = <Extension<dynamic>>[];
+  final _extensions = <Extension>[];
 
   /// Late initialization of [DiscoExtension].
   late final DiscoExtension disco;
@@ -380,7 +380,7 @@ class Echo {
   /// connection.
   ///
   /// * @param extension The extension to attach to the connection.
-  void attachExtension<T>(Extension<T> extension) {
+  void attachExtension<T>(Extension extension) {
     /// Check if the extension is alrady added. If is is already added, then
     /// warn user about this and do not add again.
     if (_extensions.where((ext) => ext._name == extension._name).isNotEmpty) {
@@ -626,7 +626,7 @@ class Echo {
     String password = '',
 
     /// The connection callback function.
-    Future<void> Function(EchoStatus)? callback,
+    FutureOr<void> Function(EchoStatus)? callback,
 
     /// Optional alternative authentication identifier.
     String? authcid,
@@ -648,10 +648,6 @@ class Echo {
     /// Authentication identity. Equal gathered `password` to global password.
     _password = password;
 
-    /// Connection callback will be equal if there is one.
-    _onConnectCallback =
-        (status, [condition, element]) async => callback!.call(status);
-
     /// Make `disconnecting` false initially.
     _disconnecting = false;
 
@@ -669,6 +665,10 @@ class Echo {
 
     /// Parse `jid` for domain.
     _domain = Echotils().getDomainFromJID(jid);
+
+    /// Connection callback will be equal if there is one.
+    _onConnectCallback =
+        (status, [condition, element]) async => callback!.call(status);
 
     /// Check if [RegistrationExtension] is attached to the client, then
     /// initialize the required variables to its initial values.
@@ -1943,6 +1943,9 @@ class Echo {
       deleteHandler(_saslChallengeHandler!);
       _saslChallengeHandler = null;
     }
+
+    /// Decleration for handling features that constantly streaming while
+    /// connection in the namespace of "stream:features".
     final streamFeatureHandlers = <Handler>[];
 
     /// Wrapper function to handle stream features after SASL authentication.
@@ -1977,7 +1980,7 @@ class Echo {
   }
 
   Future<bool> _onStreamFeaturesAfterSASL(xml.XmlElement element) async {
-    // _features = element;
+    features = element;
     for (int i = 0; i < element.descendantElements.length; i++) {
       final child = element.descendantElements.toList()[i];
       if (child.name.local == 'bind') {
