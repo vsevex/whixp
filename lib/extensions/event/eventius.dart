@@ -94,7 +94,7 @@ class Eventius<P> {
   ///
   /// Use [filter] to select which listener to be removed.
   void clear([bool Function(EventiusListener<P> listener)? filter]) =>
-      filter != null ? _listeners.clear() : _listeners.removeWhere(filter!);
+      filter != null ? _listeners.removeWhere(filter) : _listeners.clear();
 
   /// Remove provided listener from the list of `listeners`.
   void removeListener(EventiusListener<P> listener) =>
