@@ -1,5 +1,6 @@
 # Echo
 
+![Github last build (main)][last_build]
 [![License: MIT][license_badge]][license_link]
 ![GitHub Repo stars][star_count]
 ![GitHub last commit (main)][last_commit]
@@ -34,6 +35,8 @@ For more information please navigate to `lib/extensions/v-card/`.
 **Disco**: (XEP-0030) The Service Discovery extension provides enhanced functionality for discovering services within an XMPP network. The rest of doc provides a brief of the extension and its features.
 
 **Registration**: (XEP-0077) The registration extension allows users to register new accounts on an XMPP server directly from the client, streamlining the registration process.
+
+**Roster Versioning**: (XEP-0237) The roster versioning extension allows for enhanced management of contact lists, including group-based rostering and improved roster synchronization in XMPP communication.
 
 ## Up-Coming Features
 
@@ -92,3 +95,4 @@ We welcome and appreciate contributions from the community to enhance the `Echo`
 [license_link]: https://opensource.org/licenses/MIT
 [star_count]: https://img.shields.io/github/stars/vsevex/echo
 [last_commit]: https://img.shields.io/github/last-commit/vsevex/echo/main
+[last_build]: https://img.shields.io/github/actions/workflow/status/vsevex/echo/dart.yml
