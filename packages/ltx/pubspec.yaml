@@ -1,0 +1,20 @@
+name: ltx
+description: A sample command-line application.
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ^3.1.0
+
+dependencies:
+  echotils:
+    path: ../echotils/
+  error:
+    path: ../error/
+  event:
+    path: ../eventius/
+  lint: ^2.1.2
+  xml: ^6.4.2
+
+dev_dependencies:
+  test: ^1.21.0

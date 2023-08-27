@@ -1,0 +1,12 @@
+name: event
+description: Event Object representation in Dart language.
+version: 0.0.1
+
+environment:
+  sdk: ">=3.0.7 <4.0.0"
+
+dependencies:
+  lint: ^2.1.2
+
+dev_dependencies:
+  test: ^1.21.0

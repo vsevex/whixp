@@ -1,0 +1,13 @@
+name: echotils
+description: A starting point for Dart libraries or applications.
+version: 0.0.1
+
+environment:
+  sdk: ^3.1.0
+
+dependencies:
+  lint: ^2.1.2
+  xml: ^6.4.2
+
+dev_dependencies:
+  test: ^1.21.0
