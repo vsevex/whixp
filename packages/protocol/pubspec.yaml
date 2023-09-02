@@ -1,4 +1,4 @@
-name: eventius
+name: protocol
 version: 0.0.1
 publish_to: none
 
@@ -6,10 +6,15 @@ environment:
   sdk: ^3.1.0
 
 dependencies:
+  echotils:
+    path: ../echotils/
   error:
     path: ../error/
   events_emitter: ^0.5.2
   lint: 2.1.2
+  ltx:
+    path: ../ltx/
+  web_socket_channel: ^2.4.0
 
 dev_dependencies:
   test: ^1.21.0

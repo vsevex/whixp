@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:xml/xml.dart' as xml;
 
 part '_constants.dart';
@@ -186,6 +188,23 @@ class Echotils {
         function(childNode);
       }
     }
+  }
+
+  /// Converts a string to a buffer of bytes encoded in UTF-8.
+  ///
+  /// Takes a string as input and returns a buffer of bytes encoded in UTF-8 as
+  /// a [Uint8List]. This is useful for converting a string to a format that can
+  /// be sent over the network or written to a file. To return a [Uint8List] can
+  /// be converted back to a string using `utf8.decode`.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final value = 'hert, blya!';
+  /// final bytes = Echotils.stringToArrayBuffer(value);
+  /// ```
+  static Uint8List stringToArrayBuffer(String value) {
+    final bytes = value.codeUnits;
+    return Uint8List.fromList(bytes);
   }
 
   /// Retrieves namespace [String] from namespace [Map] according to the passed

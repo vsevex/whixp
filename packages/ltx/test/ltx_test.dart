@@ -4,24 +4,26 @@ import 'package:test/test.dart';
 import 'package:xml/xml.dart' as xml;
 
 void main() {
-  late LTXEmitter emitter;
+  late LTXParser parser;
 
   setUp(() {
-    emitter = LTXEmitter();
+    parser = LTXParser();
   });
 
-  void emit() => emitter.write(
+  void emit() => parser.write(
         xml.XmlDocument.parse(
           '<foo><bar>hert</bar></foo>',
         ).rootElement,
       );
 
-  group('emitter methods test', () {
+  group('parser methods test', () {
     test(
       'notifies start event correctly when fired',
       () {
-        emitter.startEvent.addListener(
-          (element) => expect(element.toXmlString(), equals('<foo/>')),
+        parser.on(
+          'start',
+          (xml.XmlElement element) =>
+              expect(element.toXmlString(), equals('<foo/>')),
         );
 
         emit();
@@ -31,8 +33,10 @@ void main() {
     test(
       'notifies ending xml stanza fired correctly',
       () {
-        emitter.endEvent.addListener(
-          (element) => expect(element.toXmlString(), equals('<foo/>')),
+        parser.on(
+          'end',
+          (xml.XmlElement element) =>
+              expect(element.toXmlString(), equals('<foo/>')),
         );
 
         emit();
@@ -42,8 +46,10 @@ void main() {
     test(
       'notifies when there is a text fired',
       () {
-        emitter.textEvent
-            .addListener((element) => expect(element.toXmlString(), 'hert'));
+        parser.on(
+          'text',
+          (xml.XmlElement element) => expect(element.toXmlString(), 'hert'),
+        );
 
         emit();
       },

@@ -11,8 +11,7 @@ dependencies:
     path: ../echotils/
   error:
     path: ../error/
-  event:
-    path: ../eventius/
+  events_emitter: ^0.5.2
   lint: ^2.1.2
   xml: ^6.4.2
 
