@@ -483,7 +483,7 @@ class WebSocketProtocol {
         'status',
         StatusEmitter(
           EchoStatus.connectionFailed,
-          errorCondition['NO_AUTH_MECH'],
+          _errorCondition['NO_AUTH_MECH'],
         ),
       );
 
@@ -799,4 +799,12 @@ const _status = <EchoStatus, int>{
   EchoStatus.redirect: 8,
   EchoStatus.connectionTimeout: 9,
   EchoStatus.bindingRequired: 10,
+};
+
+const _errorCondition = {
+  'BAD_FORMAT': 'bad-format',
+  'CONFLICT': 'conflict',
+  'MISSING_JID_NODE': "x-strophe-bad-non-anon-jid",
+  'NO_AUTH_MECH': "no-auth-mech",
+  'UNKNOWN_REASON': "unknown",
 };

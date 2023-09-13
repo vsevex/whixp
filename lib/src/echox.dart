@@ -915,7 +915,7 @@ class EchoX extends EventEmitter {
           'status',
           StatusEmitter(
             EchoStatus.connectionFailed,
-            errorCondition['UNKNOWN_REASON'],
+            _errorCondition['UNKNOWN_REASON'],
           ),
         );
       }
@@ -1011,7 +1011,7 @@ class EchoX extends EventEmitter {
       final conflict = element.getElement('conflict');
       String? condition;
       if (conflict != null) {
-        condition = errorCondition['CONFLICT'];
+        condition = _errorCondition['CONFLICT'];
       }
       emit<StatusEmitter>(
         'status',
@@ -1065,10 +1065,10 @@ class EchoX extends EventEmitter {
         'status',
         StatusEmitter(
           EchoStatus.connectionFailed,
-          errorCondition['BAD_FORMAT'],
+          _errorCondition['BAD_FORMAT'],
         ),
       );
-      _doDisconnect(errorCondition['BAD_FORMAT']);
+      _doDisconnect(_errorCondition['BAD_FORMAT']);
     }
 
     if (bodyWrap == null) return;
