@@ -5,8 +5,8 @@ import 'package:echo/echo.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('hmacIteration Method Test', () {
-    test('Must return correct decoded value in the output', () {
+  group('hmacIteration method test', () {
+    test('must return correct decoded value in the output', () {
       final result = Scram.hmacIteration(
         key: 'password',
         salt: 'salt',
@@ -19,8 +19,8 @@ void main() {
     });
   });
 
-  group('deriveKeys Method Test', () {
-    test('Must return correct client key value in the output', () {
+  group('deriveKeys method test', () {
+    test('must return correct client key value in the output', () {
       final result = Scram().deriveKeys(
         password: 'pencil',
         salt: 'QSXCR+Q6sek8bf92',
@@ -34,8 +34,8 @@ void main() {
     });
   });
 
-  group('clientProof Method Test', () {
-    test('Must return correct client proof as a result', () {
+  group('clientProof method test', () {
+    test('returns correct client proof as a result', () {
       const message =
           'n=user,r=fyko+d2lbbFgONRv9qkxdawL,r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j,s=QSXCR+Q6sek8bf92,i=4096,c=biws,r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j';
       final result = Scram.clientProof(
@@ -50,31 +50,31 @@ void main() {
     });
   });
 
-  group('generateCnonce Method Test', () {
-    test('Must return true length of the generated value', () {
+  group('generateCnonce method test', () {
+    test('return true length of the generated value', () {
       final generated = Scram.generateCNonce;
       expect(generated.length, 24);
     });
   });
 
-  group('parseChallenge Method Test', () {
-    test('Must return null if challenge is null', () {
+  group('parseChallenge method tests', () {
+    test('must return null if challenge is null', () {
       final result = Scram.parseChallenge(null);
       expect(result, isNull);
     });
 
-    test('Must return null if challenge is empty', () {
+    test('must return null if challenge is empty', () {
       final result = Scram.parseChallenge('');
       expect(result, isNull);
     });
 
-    test('Must return null if challenge has unknown attribute', () {
+    test('return null if challenge has unknown attribute', () {
       const challenge = 'unknown=value';
       final result = Scram.parseChallenge(challenge);
       expect(result, isNull);
     });
 
-    test('Must return the challenge correctly', () {
+    test('must return the challenge correctly', () {
       const challenge =
           'r=fyko+d2lbbFgONRv9qkxdawL,s=W22ZaJ0SNY7soEsUEjb6,i=4096';
       final result = Scram.parseChallenge(challenge);
