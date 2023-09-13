@@ -441,7 +441,7 @@ class Echotils {
   /// ```dart
   /// final streamNamespace = Echotils.getNamespace('STREAM');
   /// ```
-  static String getNamespace(String ns) => namespace[ns]!;
+  static String getNamespace(String ns) => _namespace[ns]!;
 
   /// Adds a namespace to the current list of namespaces for a server
   /// configuration.
@@ -452,7 +452,7 @@ class Echotils {
   /// ```dart
   /// Echotils.addNamespace('CLIENT', 'jabber:client');
   /// ```
-  static void addNamespace(String name, String key) => namespace[name] = key;
+  static void addNamespace(String name, String key) => _namespace[name] = key;
 }
 
 /// Helps to emit status information.
