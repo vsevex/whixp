@@ -1,29 +1,24 @@
-# 0.0.7 - 2023-08-08
+# 0.1.0 - 2023-09-14
 
-- Added `CAPS` extension support.
-- Added `Roster` extension support.
+## Breaking
+
+- **Event System Overhaul**
+  The main eventing system has undergone a significant change. Previously, it used a static approach, but now it utilizes the 'EventsEmitter' class for event handling. This change may require updates to your event handling code. Please refer to the updated documentation for guidance on using the new event system.
 
 ## Deprecated
 
-- N/A
+- **Extension Systems and Extensions Removal**
+  The previously created extension systems and extensions have been deprecated in this release and will be entirely removed in the next release. It is recommended to prepare for this change by migrating your extensions to the new system that will be introduced in the upcoming version. Detailed instructions will be provided in the next release's documentation.
 
-## Removed
+## 0.0.7 - 2023-08-08
 
-- N/A
+- Added `CAPS` extension support.
+- Added `Roster` extension support.
 
 ## 0.0.6 - 2023-07-18
 
 - Added `Disco` extension support.
 - Added `Registration` extension support.
-
-## Changed
-
-- Improved WebSocket connectivity for better reliability and performance.
-- Enhanced exception handling to provide more informative error messages.
-
-## Breaking
-
-- `Handler` class implementation changed. `resultCallback` and `errorCallback` methods were added to accept incoming stanzas in an efficient way and used an FP package named `dartz`.
 
 ## 0.0.55 - 2023-07-08
 

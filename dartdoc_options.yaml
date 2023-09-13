@@ -1,0 +1,6 @@
+dartdoc:
+  nodoc: ["lib/src/echotils/src/_constants.dart", "lib/src/_extension.dart"]
+  examplePathPrefix: "example"
+  showUndocumentedCategories: true
+  warnings:
+    - tool-error

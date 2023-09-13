@@ -1,18 +1,17 @@
-import 'package:echo/src/echo.dart';
-import 'package:echo/src/utils.dart';
+import 'package:echo/echo.dart';
 
 import 'package:test/test.dart';
 import 'package:xml/xml.dart' as xml;
 
 void main() {
-  group('getNamespace Method Test', () {
+  group('getNamespace method tests', () {
     /// Global element initialization.
     xml.XmlElement? element;
     Handler? handler;
 
     /// [Handler] with options initialization.
     Handler? handlerWOptions;
-    setUp(
+    setUpAll(
       () {
         handler = Handler(
           (element) async {
@@ -37,7 +36,7 @@ void main() {
     );
 
     test(
-      'Must return valid namespace with namespace and `ignoreNamespaceFragment` set to false',
+      'must return valid namespace with namespace and `ignoreNamespaceFragment` set to false',
       () {
         element!.setAttribute('xmlns', 'http://blin.com#fragment');
         final namespace = handler!.getNamespace(element!);
@@ -46,7 +45,7 @@ void main() {
     );
 
     test(
-        'Must return valid namespace with a namespace and `ignoreNamespaceFragment` set to true',
+        'returns valid namespace with a namespace and `ignoreNamespaceFragment` set to true',
         () {
       element!.setAttribute('xmlns', 'http://example.com#fragment');
       final namespace = handlerWOptions!.getNamespace(element!);
@@ -54,11 +53,11 @@ void main() {
     });
   });
 
-  group('namespaceMatch Method Test', () {
+  group('namespaceMatch method tests', () {
     /// Global element initialization.
-    xml.XmlElement? element;
-    Handler? handler;
-    setUp(
+    late xml.XmlElement element;
+    late Handler handler;
+    setUpAll(
       () {
         handler = Handler(
           (element) async {
@@ -66,70 +65,72 @@ void main() {
           },
           namespace: 'http://example.com',
         );
-
-        /// Create element with the given name.
-        element = Echotils.xmlElement('element');
       },
     );
 
-    test('Must return true with no namespace given', () {
+    setUp(() {
+      /// Create element with the given name.
+      element = Echotils.xmlElement('element');
+    });
+
+    test('must return true with no namespace given', () {
       /// Handler without namespace
       final handler = Handler((element) async {
         return false;
       });
-      final result = handler.namespaceMatch(element!);
+      final result = handler.namespaceMatch(element);
       expect(result, isTrue);
     });
 
-    test('Must return true with a matching namespace', () {
-      element!.setAttribute('xmlns', 'http://example.com');
-      final result = handler!.namespaceMatch(element!);
+    test('must return true with a matching namespace', () {
+      element.setAttribute('xmlns', 'http://example.com');
+      final result = handler.namespaceMatch(element);
       expect(result, isTrue);
     });
 
-    test('Must return false with a non-matching namespace', () {
-      element!.setAttribute('xmlns', 'http://blin.com');
-      final result = handler!.namespaceMatch(element!);
+    test('returns false with a non-matching namespace', () {
+      element.setAttribute('xmlns', 'http://blin.com');
+      final result = handler.namespaceMatch(element);
       expect(result, isFalse);
     });
 
     test(
-      'Must return true with a matching namespace and among child elements',
+      'must return true with a matching namespace and among child elements',
       () {
         final firstChild = Echotils.xmlElement('hehe');
-        firstChild!.setAttribute('xmlns', 'http://blin.com');
+        firstChild.setAttribute('xmlns', 'http://blin.com');
         final secondChild = Echotils.xmlElement('hehehe');
-        secondChild!.setAttribute('xmlns', 'http://example.com');
-        element!.children.addAll([firstChild, secondChild]);
-        final result = handler!.namespaceMatch(element!);
+        secondChild.setAttribute('xmlns', 'http://example.com');
+        element.children.addAll([firstChild, secondChild]);
+        final result = handler.namespaceMatch(element);
         expect(result, isTrue);
       },
     );
 
     test(
-      'Must return false with a no namespace and among child elements',
+      'must return false without namespace and among child elements',
       () {
         final firstChild = Echotils.xmlElement('hehe');
         final secondChild = Echotils.xmlElement('hehehe');
-        element!.children.addAll([firstChild!, secondChild!]);
-        final result = handler!.namespaceMatch(element!);
+        element.children.addAll([firstChild, secondChild]);
+        final result = handler.namespaceMatch(element);
         expect(result, isFalse);
       },
     );
   });
 
-  group('isMatch Method Test', () {
+  group('isMatch method tests', () {
     /// Global element initialization.
     xml.XmlElement? element;
     Handler? handler;
-    setUp(
+    setUpAll(
       () {
         handler = Handler(
           (element) async {
             return false;
           },
           namespace: 'http://example.com',
-          stanzaName: 'element',
+          name: 'element',
           type: 'type',
           id: 'id',
           from: 'from',
@@ -139,7 +140,7 @@ void main() {
         element = Echotils.xmlElement('element');
       },
     );
-    test('Must return true with all parameters matching', () {
+    test('must return true with all parameters matching', () {
       element!
         ..setAttribute('xmlns', 'http://example.com')
         ..setAttribute('type', 'type')
@@ -150,7 +151,7 @@ void main() {
       expect(result, isTrue);
     });
 
-    test('Must return true with missing optional params', () {
+    test('must return true with missing optional params', () {
       final handler = Handler(
         (element) async {
           return false;
@@ -161,7 +162,7 @@ void main() {
       final result = handler.isMatch(element!);
       expect(result, isTrue);
     });
-    test('Must return false with mismatched namespace', () {
+    test('must return false with mismatched namespace', () {
       final handler = Handler(
         (element) async {
           return false;
@@ -173,19 +174,19 @@ void main() {
       expect(result, isFalse);
     });
 
-    test('Must return false wiht mismatched element name', () {
+    test('must return false wiht mismatched element name', () {
       final handler = Handler(
         (element) async {
           return false;
         },
-        stanzaName: 'element',
+        name: 'element',
       );
       final element = Echotils.xmlElement('artyom');
-      final result = handler.isMatch(element!);
+      final result = handler.isMatch(element);
       expect(result, isFalse);
     });
 
-    test('Must return false with mismatched element type', () {
+    test('must return false with mismatched element type', () {
       final handler = Handler(
         (element) async {
           return false;
@@ -193,12 +194,12 @@ void main() {
         type: 'type',
       );
       final element = Echotils.xmlElement('alyosha');
-      element!.setAttribute('type', 'human');
+      element.setAttribute('type', 'human');
       final result = handler.isMatch(element);
       expect(result, isFalse);
     });
 
-    test('Must return false with mismatched id', () {
+    test('must return false with mismatched id', () {
       final handler = Handler(
         (element) async {
           return false;
@@ -211,7 +212,7 @@ void main() {
     });
 
     test(
-      'Must return true with `matchBareFromJid` option enabled, and matching `from` attribute',
+      'must return true with `matchBareFromJid` option enabled, and matching `from` attribute',
       () {
         const options = {'matchBareFromJid': true};
         final handler = Handler(
@@ -228,36 +229,35 @@ void main() {
     );
   });
 
-  group('run() Method Test', () {
+  group('run method tests', () {
     test(
-      'Must return true with a callback that returns a truthy value',
+      'returns true with a callback that returns a truthy value',
       () async {
         final handler = Handler((element) async => true);
         final element = Echotils.xmlElement('element');
-        final shouldRemainActive = await handler.run(element!);
+        final shouldRemainActive = await handler.run(element);
         expect(shouldRemainActive, isTrue);
       },
     );
 
-    test('Must return false with a callback that returns a falsy value',
-        () async {
+    test('returns false with a callback that returns a falsy value', () async {
       final handler = Handler((element) async => false);
       final element = Echotils.xmlElement('element');
-      final shouldRemainActive = await handler.run(element!);
+      final shouldRemainActive = await handler.run(element);
       expect(shouldRemainActive, isFalse);
     });
 
-    test('Must throw an exception', () async {
+    test('must throw an exception', () async {
       final handler = Handler((element) => true);
       final element = Echotils.xmlElement('element');
       try {
-        await handler.run(element!);
+        await handler.run(element);
       } catch (error) {
         rethrow;
       }
     });
 
-    test('Must return true with a callback that modifies the element',
+    test('must return true with a callback that modifies the element',
         () async {
       final handler = Handler(
         (element) async {
@@ -266,7 +266,7 @@ void main() {
         },
       );
       final element = Echotils.xmlElement('element');
-      final shouldRemainActive = await handler.run(element!);
+      final shouldRemainActive = await handler.run(element);
       expect(shouldRemainActive, isTrue);
       expect(element.getAttribute('modified'), equals('true'));
     });

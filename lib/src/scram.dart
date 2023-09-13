@@ -56,10 +56,8 @@ class Scram {
 
   /// Parses SCRAM challenge string and returns a [Map] of three values,
   /// including the `nonce`, `salt`, and `iteration` count, if they exist
-  /// in the challenge string. Otherwise, it returns null if any of these values
-  /// is missing or invalid.
-  ///
-  /// `challenge`: The SCRAM challenge string to parse.
+  /// in the [challenge] string. Otherwise, it returns null if any of these
+  /// values is missing or invalid.
   static Map<String, dynamic>? parseChallenge(String? challenge) {
     /// A [String] representing the server's `nonce` value.
     String? nonce;
@@ -102,20 +100,12 @@ class Scram {
     /// If the iteration count is less than 4096, log a warning message and
     /// return `null`.
     if (iter == null || iter < 4096) {
-      Log().trigger(
-        LogType.warn,
-        'Failing SCRAM authentication because server supplied iteration count < 4096',
-      );
       return null;
     }
 
     /// If the salt value is not present, log a warning message and return
     /// `null`.
     if (salt == null) {
-      Log().trigger(
-        LogType.warn,
-        'Failing SCRAM authentication because server supplied incorrect salt',
-      );
       return null;
     }
 
@@ -126,11 +116,11 @@ class Scram {
   /// A function that derives client and server keys using the `PBKDF2`
   /// algorithm with a given `password`, `salt`, `iterations`, and
   /// `hash function`.
-  /// * @param password The password to use for key derivation.
-  /// * @param iterations The number of iterations to use for key derivation.
-  /// * @param hashBits The length of the hash function output, in bits.
-  /// * @param hashName The name of the hash function to use for key derivation.
-  /// * @param salt The salt to use for key derivation.
+  ///
+  /// - [password] The password to use for key derivation.
+  /// - [iterations] The number of iterations to use for key derivation.
+  /// - [hashName] The name of the hash function to use for key derivation.
+  /// - [salt] The salt to use for key derivation.
   ///
   /// * @return A map containing the derived client and server keys, as [String].
   Map<String, String> deriveKeys({
@@ -256,10 +246,7 @@ class Scram {
     }
   }
 
-  /// Computes the SHA-1 hash of the input string.
-  /// * @param data The input string to compute the SHA-1 hash for.
-  /// * @return The SHA-1 hash of the input string, encoded as a hexadecimal
-  /// string.
+  /// Computes the SHA-1 [hash] of the input [data].
   static String hashShaConvert(String data, [crypto.Hash hash = crypto.sha1]) =>
       String.fromCharCodes(
         hash.convert(Uint8List.fromList(data.codeUnits)).bytes,
@@ -283,7 +270,6 @@ class Scram {
   /// This method generates a client nonce, which is used as part of the SCRAM
   /// authentication protocol. It generates 16 random bytes, encodes them them
   /// in base64, and removes any commas from the resulting string.
-  /// * @return A [String] representing the generated client nonce.
   static String get generateCNonce {
     /// Generate 16 random bytes of nonce.
     final bytes = List<int>.generate(16, (index) => math.Random().nextInt(256));
@@ -304,7 +290,6 @@ class Scram {
   /// The `clientChallenge` method updates the `connection._sasl_data` object
   /// with information about the authentication process, including the client
   /// nonce (`cnonce`) and the client first message (`client-first-message-bare`).
-  ///
   static String clientChallenge(Echo connection, String? testCNonce) {
     /// The optional `test_cnonce` parameter is a string value that can be used
     /// for testing purposes instead of generating a random nonce. If it is not
@@ -319,19 +304,51 @@ class Scram {
     return 'n,,$clientFirstMessageBare';
   }
 
-  /// Performs SCRAM authentication and generates a response string to be sent
-  /// to the server.
+  /// Generates a SCRAM (Salted Challenge Response Authentication Mechanism)
+  /// response string.
   ///
-  /// * @param connection An instance of [Echo] representing the
-  /// connection to the server.
-  /// * @param challenge A string representing the challenge received from the
+  /// - [connection] An instance of [Echo] representing the
+  /// connection to the server
+  /// - [challenge] A string representing the challenge received from the
   /// server
-  /// * @param hashName A string representing the name of the hash function to
+  /// - [hashName] A string representing the name of the hash function to
   /// be used in the HMAC operation.
-  /// * @param hashBits An integer representing the number of bits of the hash
+  /// - [hashBits] An integer representing the number of bits of the hash
   /// function.
-  /// * @return A string representing the SCRAM response to be sent to the
-  /// server.
+  ///
+  /// Returns a SCRAM response string or `null` if authentication fails.
+  ///
+  /// The method performs the following steps:
+  /// 1. Checks if the 'cnonce' key is present in the 'saslData' object of the connection.
+  /// 2. Parses the received challenge string.
+  /// 3. Verifies the challenge's validity by comparing nonces.
+  /// 4. Derives client and server keys using the user's password.
+  /// 5. Computes the client proof and server signature.
+  /// 6. Updates the 'saslData' object with relevant information.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final connection = Echo();
+  /// final challenge = 'server_challenge_string';
+  /// final hashName = 'SHA-256';
+  /// final hashBits = 256;
+  /// final response = scramResponse(connection, challenge, hashName, hashBits);
+  /// if (response != null) {
+  ///   // Successfully generated SCRAM response.
+  ///   // Send the response to the server for authentication.
+  /// } else {
+  ///   // Authentication failed. Handle the failure.
+  /// }
+  /// ```
+  ///
+  /// See also:
+  ///
+  /// - [Echo], the Echo connection for which the response is generated.
+  /// - [parseChallenge], a method used to parse the received challenge string.
+  /// - [deriveKeys], a method used to derive client and server keys.
+  /// - [clientProof], a method used to compute the client proof.
+  /// - [serverSign], a method used to compute the server signature.
+  ///
   String? scramResponse(
     Echo connection,
     String? challenge,
@@ -352,10 +369,6 @@ class Scram {
     if (challengeData == null ||
         (challengeData['nonce'] as String).substring(0, cnonce.length) !=
             cnonce) {
-      Log().trigger(
-        LogType.warn,
-        'Failing SCRAM authentication because server supplied incorrect nonce',
-      );
       connection._saslData = {};
       connection._saslFailureCallback();
       return null;
@@ -364,37 +377,20 @@ class Scram {
     String? clientKey;
     String? serverKey;
 
-    // if (connection._password is Map) {
-    //   final password = connection._password as Map<String, dynamic>;
+    final password = connection._password;
 
-    //   /// Check if the password matches with the challenge.
-    //   if (password['name'] == hashName &&
-    //       password['salt'] ==
-    //           Echotils.arrayBufferToBase64(
-    //             challengeData['salt'] as Uint8List,
-    //           ) &&
-    //       password['iter'] == challengeData['iteration']) {
-    //     clientKey = Echotils.atob(password['ck'] as String);
-    //     serverKey = Echotils.atob(password['sk'] as String);
-    //   }
-    // }
-    if (connection._password is String) {
-      final password = connection._password;
-
-      /// If not, derive keys using the provided password.
-      if (password != null) {
-        final keys = deriveKeys(
-          password: password,
-          iterations: challengeData['iter'] as int,
-          hashName: hashName,
-          salt: String.fromCharCodes(challengeData['salt'] as Uint8List),
-        );
-        clientKey = keys['ck'];
-        serverKey = keys['sk'];
-      } else {
-        connection._saslFailureCallback();
-        return null;
-      }
+    if (password != null) {
+      final keys = deriveKeys(
+        password: password,
+        iterations: challengeData['iter'] as int,
+        hashName: hashName,
+        salt: String.fromCharCodes(challengeData['salt'] as Uint8List),
+      );
+      clientKey = keys['ck'];
+      serverKey = keys['sk'];
+    } else {
+      connection._saslFailureCallback();
+      return null;
     }
 
     final clientFirstMessageBare =

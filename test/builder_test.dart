@@ -3,7 +3,7 @@ import 'package:echo/echo.dart';
 import 'package:test/test.dart';
 
 void main() {
-  EchoBuilder? builder;
+  late EchoBuilder builder;
 
   setUp(() {
     /// All tests will go over `iq` stanza builder.
@@ -12,18 +12,18 @@ void main() {
     );
   });
 
-  group('c Method Test', () {
-    test('Must return valid tree', () {
-      final generation = builder!.c('query').c('example').toString();
+  group('c method tests', () {
+    test('must return valid tree', () {
+      final generation = builder.c('query').c('example').toString();
       const expected =
           '<iq from="me" id="1" to="you" type="get" xmlns="jabber:client"><query><example/></query></iq>';
       expect(generation, equals(expected));
     });
 
     test(
-      'Must return valid tree when there is child element and attributes',
+      'must return valid tree when there is child element and attributes',
       () {
-        final generation = builder!
+        final generation = builder
             .c('query')
             .c('child', attributes: {'attr': 'value'}).toString();
         const expected =
@@ -33,18 +33,18 @@ void main() {
     );
   });
 
-  group('t Method Test', () {
-    test('Must return valid string when the text is not empty', () {
-      final generated = builder!.t('hello').toString();
+  group('t method tests', () {
+    test('must return valid string when the text is not empty', () {
+      final generated = builder.t('hello').toString();
       const expected =
           '<iq from="me" id="1" to="you" type="get" xmlns="jabber:client">hello</iq>';
       expect(generated, equals(expected));
     });
   });
 
-  group('up Method Test', () {
+  group('up method tests', () {
     test(
-      'Must return valid builder object with a single child element',
+      'must return valid builder object with a single child element',
       () {
         final builder = EchoBuilder('parent');
         builder.c('child', attributes: {});
@@ -55,7 +55,7 @@ void main() {
     );
 
     test(
-      'Must return valid tree string with multiple child elements',
+      'must return valid tree string with multiple child elements',
       () {
         final builder = EchoBuilder('parent');
         builder.c('child1').up().c('child2', attributes: {});
@@ -65,7 +65,7 @@ void main() {
     );
 
     test(
-      'Must return valid node tree string with multiple levels of nesting',
+      'must return valid node tree string with multiple levels of nesting',
       () {
         final builder = EchoBuilder('parent');
         builder

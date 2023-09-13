@@ -9,9 +9,6 @@ part of 'echo.dart';
 ///
 /// To create a new extension, you should extend this class and implement the
 /// necessary methods and properties.
-///
-/// This abstract class extends [Event] class. This helps to notify extension
-/// about new values, helps to add listeners and other functionalities.
 abstract class Extension {
   /// Creates an instance of the extension with the specified [name].
   ///

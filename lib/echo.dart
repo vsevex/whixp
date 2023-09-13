@@ -1,11 +1,13 @@
-/// Imports [EchoBuilder], [Echo] main class, enums and [Echotils]
+/// Serves as the foundation for establishing and managing XMPP (Extensible
+/// Messaging and Presence Protocol) connections.
 library echo;
 
 export 'package:xml/xml.dart';
 
-export 'extensions/extensions.dart';
 export 'src/builder.dart';
 export 'src/echo.dart';
-export 'src/enums.dart';
+export 'src/echotils/echotils.dart';
 export 'src/exception.dart';
-export 'src/utils.dart';
+export 'src/jid/jid.dart';
+export 'src/log/log.dart';
+export 'src/mishaps.dart';
