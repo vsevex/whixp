@@ -1,4 +1,4 @@
-import 'package:echo/src/jid/jid.dart';
+import 'package:echox/src/jid/jid.dart';
 
 import 'package:test/test.dart';
 

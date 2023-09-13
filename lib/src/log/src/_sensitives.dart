@@ -1,4 +1,4 @@
-import 'package:echo/src/echotils/echotils.dart';
+import 'package:echox/src/echotils/echotils.dart';
 
 final sensitives = <String, String>{
   'handshake': Echotils.getNamespace('COMPONENT'),

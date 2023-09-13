@@ -4,6 +4,7 @@
 
 # Created by `dart doc`
 doc/
+dartdoc_options.yaml
 
 # Avoid committing pubspec.lock for library packages; see
 # https://dart.dev/guides/libraries/private-files#pubspeclock.

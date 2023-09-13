@@ -1,4 +1,4 @@
-part of 'echo.dart';
+part of 'echox.dart';
 
 /// [Scram] is a singleton class used for the SCRAM (Saited Challenge Response
 /// Authentication Mechanism) authentication in the XMPP protocol. It has a
@@ -290,7 +290,7 @@ class Scram {
   /// The `clientChallenge` method updates the `connection._sasl_data` object
   /// with information about the authentication process, including the client
   /// nonce (`cnonce`) and the client first message (`client-first-message-bare`).
-  static String clientChallenge(Echo connection, String? testCNonce) {
+  static String clientChallenge(EchoX connection, String? testCNonce) {
     /// The optional `test_cnonce` parameter is a string value that can be used
     /// for testing purposes instead of generating a random nonce. If it is not
     /// provided, a random nonce will be generated.
@@ -307,7 +307,7 @@ class Scram {
   /// Generates a SCRAM (Salted Challenge Response Authentication Mechanism)
   /// response string.
   ///
-  /// - [connection] An instance of [Echo] representing the
+  /// - [connection] An instance of [EchoX] representing the
   /// connection to the server
   /// - [challenge] A string representing the challenge received from the
   /// server
@@ -328,7 +328,7 @@ class Scram {
   ///
   /// ### Example:
   /// ```dart
-  /// final connection = Echo();
+  /// final connection = EchoX();
   /// final challenge = 'server_challenge_string';
   /// final hashName = 'SHA-256';
   /// final hashBits = 256;
@@ -343,14 +343,14 @@ class Scram {
   ///
   /// See also:
   ///
-  /// - [Echo], the Echo connection for which the response is generated.
+  /// - [EchoX], the EchoX connection for which the response is generated.
   /// - [parseChallenge], a method used to parse the received challenge string.
   /// - [deriveKeys], a method used to derive client and server keys.
   /// - [clientProof], a method used to compute the client proof.
   /// - [serverSign], a method used to compute the server signature.
   ///
   String? scramResponse(
-    Echo connection,
+    EchoX connection,
     String? challenge,
     String hashName,
     int hashBits,

@@ -1,5 +1,5 @@
-import 'package:echo/src/echotils/echotils.dart';
-import 'package:echo/src/error/error.dart';
+import 'package:echox/src/echotils/echotils.dart';
+import 'package:echox/src/error/error.dart';
 
 /// An exception representing WebSocket-related mishaps.
 ///
@@ -76,6 +76,7 @@ class EstablishSessionMishap extends Mishap {
               'establishSession method was called but apparently ${Echotils.getNamespace('SESSION')} was not advertised by the server',
         );
 }
+
 /// An exception representing session creation mishaps.
 ///
 /// The [SessionResultMishap] class is an extension of the [Mishap] class and

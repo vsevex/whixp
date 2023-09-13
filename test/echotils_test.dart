@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:echo/src/echotils/echotils.dart';
+import 'package:echox/src/echotils/echotils.dart';
 
 import 'package:test/test.dart';
 import 'package:xml/xml.dart' as xml;

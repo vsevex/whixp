@@ -1,4 +1,4 @@
-part of '../echo.dart';
+part of '../echox.dart';
 
 /// Provides authentication using an OAuth2 token.
 class SASLXOAuth2 extends SASL {

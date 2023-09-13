@@ -1,17 +1,17 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:echo/src/echotils/src/status.dart';
-import 'package:echo/src/escaper/escaper.dart';
+import 'package:echox/src/echotils/src/status.dart';
+import 'package:echox/src/escaper/escaper.dart';
 
 import 'package:xml/xml.dart' as xml;
 
 part '_constants.dart';
 
-/// A utility class for various Echo-related operations.
+/// A utility class for various EchoX-related operations.
 ///
 /// Contains a collection of utility methods for performing various operations
-/// related to [Echo], such as XML manipulation, stanza handling, error
+/// related to [EchoX], such as XML manipulation, stanza handling, error
 /// management, and data conversions.
 ///
 /// ### Example:
@@ -466,7 +466,7 @@ class Echotils {
 ///
 /// ### Example:
 /// ```dart
-/// final status = StatusEmitter(EchoStatus.connected, 'Echo client connected.');
+/// final status = StatusEmitter(EchoStatus.connected, 'EchoX client connected.');
 /// log(status); /// outputs "Status: Connected (description: Client connected.)";
 /// ```
 class StatusEmitter {

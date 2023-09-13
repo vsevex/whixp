@@ -1,6 +1,6 @@
 import 'package:convert/convert.dart' as convert;
 
-import 'package:echo/echo.dart';
+import 'package:echox/echox.dart';
 
 import 'package:test/test.dart';
 

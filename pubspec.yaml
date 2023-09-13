@@ -1,19 +1,22 @@
-name: echo
-description: Lightweight XMPP client, purely written in dart.
-version: 0.1.0
-repository: https://github.com/vsevex/echo
+name: echox
+description: Streamline Your XMPP Messaging with Lightweight Dart-Based XMPP Client
+version: 0.1.0+1
+repository: https://github.com/vsevex/echox
+issue_tracker: https://github.com/vsevex/echox/issues
+topics: [xmpp, im, network, websocket]
+platforms: [android, ios]
 
 environment:
-  sdk: ">=3.0.7 <4.0.0"
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
+  xml: ^6.3.0
+
+dev_dependencies:
   convert: ^3.1.1
   crypto: ^3.0.3
   events_emitter: ^0.5.2
   lint: ^2.1.2
   logger: ^2.0.2
-  web_socket_client: ^0.1.0
-  xml: ^6.3.0
-
-dev_dependencies:
   test: ^1.21.0
+  web_socket_client: ^0.1.0

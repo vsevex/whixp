@@ -1,4 +1,4 @@
-part of '../echo.dart';
+part of '../echox.dart';
 
 /// The `EXTERNAL` mechanism allows a client to request the server to use
 /// credentials established by means external to the mechanism to authenticate
@@ -26,7 +26,7 @@ class SASLExternal extends SASL {
     /// authzid) with which the user wants to log in as.
     ///
     /// To NOT send the `authzid`, the user should therefore set the `authcid`
-    /// equal to the JID when instantiating a new [Echo] object.
+    /// equal to the JID when instantiating a new [EchoX] object.
     return connection!._authcid == connection!._authzid
         ? ''
         : connection!._authzid!;

@@ -1,4 +1,4 @@
-part of '../echo.dart';
+part of '../echox.dart';
 
 /// This class represents the implementation of the SASL OAuthBearer
 /// authentication mechanism. It extend sthe `SASL` class and overrides its

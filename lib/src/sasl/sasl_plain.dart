@@ -1,4 +1,4 @@
-part of '../echo.dart';
+part of '../echox.dart';
 
 /// Implements the PLAIN SASL authentication mechanism.
 class SASLPlain extends SASL {

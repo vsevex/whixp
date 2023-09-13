@@ -1,4 +1,4 @@
-import 'package:echo/src/escaper/escaper.dart';
+import 'package:echox/src/escaper/escaper.dart';
 
 part '_escape.dart';
 

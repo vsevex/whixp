@@ -1,26 +1,26 @@
-part of 'echo.dart';
+part of 'echox.dart';
 
 /// WebSocket connection handler class.
 ///
-/// This class is used internally by [Echo] to encapsulate WebSocket sessions.
+/// This class is used internally by [EchoX] to encapsulate WebSocket sessions.
 /// It is not meant to be used from user's code.
 ///
-/// A library to enable XMPP over WebSocket in [Echo].
+/// A library to enable XMPP over WebSocket in [EchoX].
 ///
-/// This file implements XMPP over WebSockets for [Echo], If a connection is
-/// established with a websocket url (ws://...) [Echo] will use WebSockets.
+/// This file implements XMPP over WebSockets for [EchoX], If a connection is
+/// established with a websocket url (ws://...) [EchoX] will use WebSockets.
 class WebSocketProtocol {
   /// Factory method which returns private instance of this class.
-  factory WebSocketProtocol(Echo connection) =>
+  factory WebSocketProtocol(EchoX connection) =>
       WebSocketProtocol._instance(connection);
 
   /// Constant instance of private constructor.
-  factory WebSocketProtocol._instance(Echo connection) =>
+  factory WebSocketProtocol._instance(EchoX connection) =>
       WebSocketProtocol._(connection);
 
-  /// [Echo] representation of `connection` variable. This is used to run
+  /// [EchoX] representation of `connection` variable. This is used to run
   /// several methods which is declared inside of this class.
-  late final Echo _connection;
+  late final EchoX _connection;
 
   /// Current reconnection attempt count.
   ///
@@ -468,7 +468,7 @@ class WebSocketProtocol {
   ///
   /// When the authentication is not supported, then passed [callback] must be
   /// called
-  void nonAuth([FutureOr<void> Function(Echo)? callback]) {
+  void nonAuth([FutureOr<void> Function(EchoX)? callback]) {
     _connection
       ..emit<Mishap>(
         'error',
@@ -539,7 +539,7 @@ class WebSocketProtocol {
 
   /// Helper function to wrap a stanza in a <stream> tag.
   ///
-  /// With this method [Echo] can process stanzas from WebSockets like BOSH.
+  /// With this method [EchoX] can process stanzas from WebSockets like BOSH.
   String _streamWrap(String stanza) => '<wrapper>$stanza</wrapper>';
 
   /// Replaces the message handler callback with the default message handling

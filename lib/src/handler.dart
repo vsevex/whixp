@@ -1,4 +1,4 @@
-part of 'echo.dart';
+part of 'echox.dart';
 
 /// Private helper class for managing stanza handlers.
 ///
@@ -10,7 +10,7 @@ part of 'echo.dart';
 /// false will remove the Handler.
 ///
 /// Users will not use Handlers directly, instead they will use
-/// `Echo.addHandler()` or `Echo.deleteHandler()` method.
+/// `EchoX.addHandler()` or `EchoX.deleteHandler()` method.
 class Handler {
   Handler(
     /// Required for executing when `run` is triggered.

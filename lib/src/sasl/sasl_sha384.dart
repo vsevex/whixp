@@ -1,4 +1,4 @@
-part of '../echo.dart';
+part of '../echox.dart';
 
 /// The [SASLSHA384] class is a concrete implementation of the [SASL] abstract
 /// class, which provides a framework for implementing different SASL

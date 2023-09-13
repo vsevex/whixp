@@ -6,13 +6,13 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
 
-import 'package:echo/src/builder.dart';
-import 'package:echo/src/echotils/echotils.dart';
-import 'package:echo/src/error/error.dart';
-import 'package:echo/src/exception.dart';
-import 'package:echo/src/jid/jid.dart';
-import 'package:echo/src/mishaps.dart';
-import 'package:echo/src/sasl/sasl.dart';
+import 'package:echox/src/builder.dart';
+import 'package:echox/src/echotils/echotils.dart';
+import 'package:echox/src/error/error.dart';
+import 'package:echox/src/exception.dart';
+import 'package:echox/src/jid/jid.dart';
+import 'package:echox/src/mishaps.dart';
+import 'package:echox/src/sasl/sasl.dart';
 import 'package:events_emitter/events_emitter.dart';
 
 import 'package:web_socket_client/web_socket_client.dart' as ws;
@@ -52,33 +52,33 @@ part 'websocket.dart';
 ///
 /// - **Presence Management**: Monitor and manage the online presence of users.
 ///
-/// **Note**: The [Echo] class is designed to be extended and customized for
+/// **Note**: The [EchoX] class is designed to be extended and customized for
 /// specific XMPP applications, providing a robust foundation for XMPP
 /// communication.
 ///
 /// ```dart
 /// final jid = JabberID('user@example.com');
-/// final echo = Echo(jid);
+/// final echox = EchoX(jid);
 ///
-/// echo.on<StatusEmitter>('status', (status) {
+/// echox.on<StatusEmitter>('status', (status) {
 ///   if (status.status == EchoStatus.connected) {
 ///     // XMPP connection is established.
 ///   }
 /// });
 ///
-/// echo.connect();
+/// echox.connect();
 /// ```
 ///
 /// See also:
 ///
 /// - [EventEmitter], the base class for event-driven functionality.
 /// - [JabberID], the class representing Jabber IDs used for XMPP communication.
-class Echo extends EventEmitter {
-  /// The [Echo] class represents an XMPP client connection.
+class EchoX extends EventEmitter {
+  /// The [EchoX] class represents an XMPP client connection.
   ///
   /// It provides functionality for establishing a connection, handling
   /// protocols, authentication and managing XMPP stanzas.
-  Echo({
+  EchoX({
     /// Jabber ID.
     required this.jid,
 
@@ -177,17 +177,17 @@ class Echo extends EventEmitter {
   /// Jabber/XMPP server.
   late JabberID jid;
 
-  /// A stream of 'status' events emitted by the [Echo].
+  /// A stream of 'status' events emitted by the [EchoX].
   ///
   /// Represents a Stream of 'status' events that can be listened to for updates
-  /// on the status of the Echo class. 'Status' events typically indicate
+  /// on the status of the EchoX class. 'Status' events typically indicate
   /// changes in the connection status.
   late final Stream<StatusEmitter> status;
 
-  /// A stream of 'error' events emitted by the [Echo].
+  /// A stream of 'error' events emitted by the [EchoX].
   ///
   /// Represents a Stream of 'error' events that can be listened to for updates
-  /// on the errors of the Echo class.
+  /// on the errors of the EchoX class.
   late final Stream<Mishap> error;
 
   /// The service URL.
@@ -398,12 +398,12 @@ class Echo extends EventEmitter {
 
   /// Pause the request manager.
   ///
-  /// This will prevent [Echo] from sending any more requests to the server.
+  /// This will prevent [EchoX] from sending any more requests to the server.
   /// This is very useful for temporarily pausing BOSH-Connections (in our case,
   /// we will stop accepting something from WebSockets) while a lot of send()
   /// calls are happening quickly.
   ///
-  /// This causes [Echo] to send the data in a single request, saving many
+  /// This causes [EchoX] to send the data in a single request, saving many
   /// request trips.
   void pause() => _paused = true;
 
@@ -456,8 +456,8 @@ class Echo extends EventEmitter {
   /// Example:
   /// ```dart
   /// final jid = JabberID('hert@example.com');
-  /// final echo = Echo(jid);
-  /// echo.connect(authcid: 'lerko_user', disconnectionTimeout: 2000);
+  /// final echox = EchoX(jid);
+  /// echox.connect(authcid: 'lerko_user', disconnectionTimeout: 2000);
   /// ```
   ///
   /// The method performs the following tasks:
@@ -746,7 +746,7 @@ class Echo extends EventEmitter {
   }
 
   /// Register the SASL `mechanisms` which will be supported by this instance of
-  /// [Echo] (i.e. which this XMPP client will support).
+  /// [EchoX] (i.e. which this XMPP client will support).
   void _registerMechanisms() {
     _mechanisms = {};
 
@@ -814,7 +814,7 @@ class Echo extends EventEmitter {
     } else {
       emit<String>(
         'info',
-        'disconnect was called before Echo connected to the server',
+        'disconnect was called before EchoX connected to the server',
       );
 
       _transport.abortAllRequests();
@@ -942,7 +942,7 @@ class Echo extends EventEmitter {
           emit<Mishap>(
             'error',
             Mishap(
-              condition: 'Removing Echo handlers due to uncaught exception',
+              condition: 'Removing EchoX handlers due to uncaught exception',
               text: error.toString(),
             ),
           );
@@ -966,14 +966,14 @@ class Echo extends EventEmitter {
   /// https://tools.ietf.org/html/rfc6120#section-7.5
   ///
   /// If `explicitResourceBinding` was set to a truthy value in the options
-  /// passed to the [Echo] consructor, then this function needs to be called
+  /// passed to the [EchoX] consructor, then this function needs to be called
   /// by the client author.
   ///
   /// Otherwise it will be called automatically as soon as the XMPP server
   /// advertises the 'urn:ietf:params:xml:ns:xmpp-bind' stream feature.
   void _bind() {
     if (!_doBind) {
-      emit<String>('info', 'Echo bind called but "do_bind" is false');
+      emit<String>('info', 'EchoX bind called but "do_bind" is false');
       return;
     }
     _addSystemHandler(
@@ -1051,7 +1051,7 @@ class Echo extends EventEmitter {
   /// will fall back to legacy authentication.
   void _connectCallback(
     xml.XmlElement request,
-    FutureOr<void> Function(Echo)? callback,
+    FutureOr<void> Function(EchoX)? callback,
   ) {
     emit<String>('info', 'connectCallback method was called');
     _connected = true;
@@ -1231,7 +1231,7 @@ class Echo extends EventEmitter {
     if (jid.resource == null) {
       /// Since the user has not supplied a resource, we pick a default one
       /// here. Unlike other auth methods, the server cannot do this for us.
-      resource = '${jid.bare}/echo';
+      resource = '${jid.bare}/echox';
     }
     iq.up().c('resource', attributes: {}).t(resource);
     _addSystemHandler(

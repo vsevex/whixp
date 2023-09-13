@@ -1,4 +1,4 @@
-part of '../echo.dart';
+part of '../echox.dart';
 
 /// This class extends the `SASL` and implements test method to check if
 /// authentication mechanism is able to run. This class implements `SASL

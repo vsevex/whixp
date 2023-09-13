@@ -1,7 +1,7 @@
-import 'package:echo/echo.dart';
+import 'package:echox/echox.dart';
 
 Future<void> main() async {
-  final echo = Echo(
+  final echox = EchoX(
     service: 'ws://localhost:5443/ws',
     jid: JabberID(
       'user',
@@ -11,5 +11,5 @@ Future<void> main() async {
     password: 'somepsw',
   );
 
-  echo.connect();
+  echox.connect();
 }

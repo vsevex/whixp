@@ -1,4 +1,4 @@
-part of '../echo.dart';
+part of '../echox.dart';
 
 /// This class is a sub-class of the [SASL] class and provides a `Secure
 /// Challenge Response Authentication Mechanism` (SCRAM) implementation for the

@@ -1,4 +1,4 @@
-/// The given given class is a custom written [Exception] class for [Echo].
+/// The given given class is a custom written [Exception] class for [EchoX].
 ///
 /// This abstract class provides a way to encapsulate all possible exceptions
 /// accross the application.
