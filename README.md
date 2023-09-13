@@ -30,8 +30,6 @@ This code snippet demonstrates how to establish a connection using the `EchoX` p
 
 ```dart
 
-import 'dart:developer';
-
 import 'package:echox/echox.dart';
 
 void main() async {
