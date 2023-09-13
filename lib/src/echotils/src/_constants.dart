@@ -16,7 +16,7 @@ part of 'echotils.dart';
 /// * _[SESSION]_ - XMPP Session namespace from RFC 3920.
 /// * _[XHTML_IM]_ - XHTML-IM namespace from XEP 71.
 /// * _[XHTML]_ - XHTML body namespace from XEP 71.
-final namespace = <String, String>{
+final _namespace = <String, String>{
   'HTTPBIND': "http://jabber.org/protocol/httpbind",
   'CLIENT': "jabber:client",
   'AUTH': "jabber:iq:auth",
@@ -37,12 +37,4 @@ final namespace = <String, String>{
   'STANZAS': "urn:ietf:params:xml:ns:xmpp-stanzas",
   'XHTML_IM': "http://jabber.org/protocol/xhtml-im",
   'XHTML': "http://www.w3.org/1999/xhtml",
-};
-
-const errorCondition = {
-  'BAD_FORMAT': 'bad-format',
-  'CONFLICT': 'conflict',
-  'MISSING_JID_NODE': "x-strophe-bad-non-anon-jid",
-  'NO_AUTH_MECH': "no-auth-mech",
-  'UNKNOWN_REASON': "unknown",
 };
