@@ -1,5 +1,6 @@
 # EchoX
 
+![EchoX Logo][logo]
 ![Github last build (main)][last_build]
 [![License: MIT][license_badge]][license_link]
 ![GitHub Repo stars][star_count]
@@ -29,7 +30,6 @@ XMPP is an open source standart protocol widely used for real-time communication
 This code snippet demonstrates how to establish a connection using the `EchoX` package.
 
 ```dart
-
 import 'package:echox/echox.dart';
 
 void main() async {
@@ -57,3 +57,4 @@ We welcome and appreciate contributions from the community to enhance the `EchoX
 [license_link]: https://opensource.org/licenses/MIT
 [star_count]: https://img.shields.io/github/stars/vsevex/echox
 [last_build]: https://img.shields.io/github/actions/workflow/status/vsevex/echox/dart.yml
+[logo]: https://raw.githubusercontent.com/vsevex/echox/main/assets/echox.svg
