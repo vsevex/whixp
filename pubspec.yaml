@@ -1,6 +1,6 @@
 name: echox
 description: Streamline Your XMPP Messaging with Lightweight Dart-Based XMPP Client
-version: 0.1.0+2
+version: 0.1.0+3
 repository: https://github.com/vsevex/echox
 issue_tracker: https://github.com/vsevex/echox/issues
 topics: [xmpp, im, network, websocket]
