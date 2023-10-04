@@ -46,7 +46,6 @@ void main() async {
   debug(echox);
   echox.connect();
 }
-
 ```
 
 ## Contributing to EchoX
