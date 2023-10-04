@@ -434,6 +434,18 @@ class Echotils {
     return base64.encode(buffer);
   }
 
+  /// Converts a byte sequence or string to Unicode string.
+  /// 
+  /// If the input [text] is a byte sequence (bytes), it is decoded using the
+  /// UTF-8 encoding. If the input is already a string, it is returned as is.
+  static String unicode(dynamic text /** List<int> || String */) {
+    if (text! is String) {
+      return utf8.decode(text as List<int>);
+    }
+
+    return text as String;
+  }
+
   /// Retrieves namespace [String] from namespace [Map] according to the passed
   /// retriever.
   ///
