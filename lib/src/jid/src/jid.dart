@@ -1,6 +1,35 @@
+import 'package:dartz/dartz.dart';
 import 'package:echox/src/escaper/escaper.dart';
+import 'package:echox/src/jid/src/exception.dart';
+import 'package:echox/src/stringprep/stringprep.dart';
 
 part '_escape.dart';
+
+class JabberIDTemp {
+  final pattern = RegExp(
+    r"""^(?:([^\"&'/:<>@]{1,1023})@)?([^/@]{1,1023})(?:/(.{1,1023}))?$""",
+  );
+
+  Tuple3<String, String, String> _parse(String jid) {
+    final matches = pattern.allMatches(jid).toList();
+
+    final node = _validateNode(matches[0]);
+    final domain = matches[1];
+    final resource = matches[2];
+
+    return Tuple3(node, domain, resource);
+  }
+
+  String _validateNode(RegExpMatch? node) {
+    if (node == null) {
+      return '';
+    }
+
+    try {
+      final 
+    }
+  }
+}
 
 /// Represents a Jabber ID, which consists of a local part, a domain part, and
 /// an optional resource part. Provides methods to manipulate Jabber IDs and
