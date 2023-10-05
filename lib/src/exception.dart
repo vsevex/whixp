@@ -129,3 +129,27 @@ class TransportException extends EchoException {
   factory TransportException.emptyService() =>
       const TransportException('The service cannot be empty');
 }
+
+abstract class EchoXException implements Exception {
+  const EchoXException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'EchoXException: $message';
+}
+
+class StringPreparationException extends EchoXException {
+  StringPreparationException(super.message);
+
+  factory StringPreparationException.unicode(String char) =>
+      StringPreparationException(
+        'Unicode Error occured - Invalid character: $char',
+      );
+
+  factory StringPreparationException.bidiViolation(int step) =>
+      StringPreparationException('Violation of BIDI requirement $step');
+
+  factory StringPreparationException.punycode(String message) =>
+      StringPreparationException(message);
+}
