@@ -111,17 +111,8 @@ class StandaloneStringPreparation {
     0x205F, // Mathematical Operators - Medium Mathematical Space
   ];
 
-  static bool inTableb1(String code) {
-    final b1Set = memo1((Set<int> set) {
-      /// Add the range of values to the set.
-      for (int i = 65024; i < 65040; i++) {
-        set.add(i);
-      }
-
-      return set;
-    });
-
-    return b1Set(<int>{
+  static Set<int> get _generateb1Set {
+    final set = <int>{
       173,
       847,
       6150,
@@ -133,7 +124,14 @@ class StandaloneStringPreparation {
       8205,
       8288,
       65279,
-    }).contains(code.runes.first);
+    };
+
+    /// Add the range of values to the set
+    for (int i = 65024; i < 65040; i++) {
+      set.add(i);
+    }
+
+    return set;
   }
 
   static String mapTableb3(String code) {
@@ -149,7 +147,7 @@ class StandaloneStringPreparation {
     final b = unorm.nfkc(al);
     final bl = String.fromCharCodes(
       b.runes
-          .map((ch) => mapTableb3(String.fromCharCode(ch)).codeUnits)
+          .map((char) => mapTableb3(String.fromCharCode(char)).codeUnits)
           .expand((x) => x),
     );
     final c = unorm.nfkc(bl);
@@ -160,59 +158,101 @@ class StandaloneStringPreparation {
     }
   }
 
+  static void _addCodePointRange(List<int> list, int start, int end) {
+    for (int codePoint = start; codePoint <= end; codePoint++) {
+      list.add(codePoint);
+    }
+  }
+
+  static List<int> get _generateListOfControlChars {
+    final controlCharacterRange = <int>[];
+
+    for (int codePoint = 0x0000; codePoint <= 0x001F; codePoint++) {
+      controlCharacterRange.add(codePoint);
+    }
+
+    controlCharacterRange.add(0x007F);
+
+    for (int codePoint = 0x0080; codePoint <= 0x009F; codePoint++) {
+      controlCharacterRange.add(codePoint);
+    }
+
+    return controlCharacterRange;
+  }
+
+  static List<int> get _generateListOfCoChars {
+    final coChars = <int>[];
+
+    _addCodePointRange(coChars, 0xE000, 0xF8FF);
+    _addCodePointRange(coChars, 0xF0000, 0xFFFFD);
+    _addCodePointRange(coChars, 0x100000, 0x10FFFD);
+
+    return coChars;
+  }
+
+  static List<int> get _generateListOfSurrogateChars {
+    final surrogateChars = <int>[];
+
+    _addCodePointRange(surrogateChars, 0xD800, 0xDBFF);
+    _addCodePointRange(surrogateChars, 0xDC00, 0xDFFF);
+
+    return surrogateChars;
+  }
+
+  static bool inTableb1(String code) {
+    final b1Set = memo0(() => _generateb1Set).call();
+
+    return b1Set.contains(code.runes.first);
+  }
+
   static bool inTablec11(String code) => code == ' ';
 
   static bool inTablec12(String code) {
-    final codepoint = code.runes.first;
-    return _zsCodePoints.contains(codepoint);
+    return memo1<int, bool>(
+          (int codepoint) => _zsCodePoints.contains(codepoint),
+        ).call(code.runes.first) &&
+        code != ' ';
   }
 
   static bool inTablec22(String code) {
-    final codepoint = code.runes.first;
+    late final controlCharactersRange =
+        memo0<List<int>>(() => _generateListOfControlChars).call();
 
-    final c22 = memo1<Set<int>, bool>((Set<int> set) {
+    late final c22Set = memo0<Set<int>>(
+      () => <int>{
+        1757,
+        1807,
+        6158,
+        8204,
+        8205,
+        8232,
+        8233,
+        65279,
+        ...List<int>.generate(4, (index) => 8288 + index),
+        ...List<int>.generate(6, (index) => 8298 + index),
+        ...List<int>.generate(4, (index) => 65529 + index),
+        ...List<int>.generate(8, (index) => 119155 + index),
+      },
+    ).call();
+
+    final c22 = memo1<int, bool>((int codepoint) {
       if (codepoint < 128) {
         return false;
       }
 
-      if ((codepoint < 32) || (codepoint >= 127 && codepoint < 160)) {
-        return true;
-      }
+      if (controlCharactersRange.contains(codepoint)) return true;
 
-      return set.contains(codepoint);
+      return c22Set.contains(codepoint);
     });
 
-    final set = <int>{
-      1757,
-      1807,
-      6158,
-      8204,
-      8205,
-      8232,
-      8233,
-      65279,
-      ...List<int>.generate(4, (index) => 8288 + index),
-      ...List<int>.generate(6, (index) => 8298 + index),
-      ...List<int>.generate(4, (index) => 65529 + index),
-      ...List<int>.generate(8, (index) => 119155 + index),
-    };
-
-    return c22(set);
+    return c22(code.runes.first);
   }
 
   static bool inTablec3(String code) {
-    final inc3 = memo1<int, bool>(
-      (int codepoint) {
-        final codepoints = <int>[];
-        for (int i = 0xE000; i <= 0xF8FF; i++) {
-          codepoints.add(i);
-        }
+    final coChars = _generateListOfCoChars;
+    final c3 = memo1<int, bool>((int codepoint) => coChars.contains(codepoint));
 
-        return codepoints.contains(codepoint);
-      },
-    );
-
-    return inc3(code.runes.first);
+    return c3(code.runes.first);
   }
 
   static bool inTablec4(String code) {
@@ -226,42 +266,34 @@ class StandaloneStringPreparation {
   }
 
   static bool inTablec5(String code) {
-    final inc5 = memo1<int, bool>(
-      (int codepoint) {
-        final surrogateCodePoints = <int>[];
-
-        /// Add high-surrogates (U+D800 to U+DBFF)
-        for (int i = 0xD800; i <= 0xDBFF; i++) {
-          surrogateCodePoints.add(i);
-        }
-
-        /// Add low-surrogates (U+DC00 to U+DFFF)
-        for (int i = 0xDC00; i <= 0xDFFF; i++) {
-          surrogateCodePoints.add(i);
-        }
-        return codepoint >= 0xD800 && codepoint <= 0xDFFF;
-      },
+    final surrogateCodePoints = _generateListOfSurrogateChars;
+    final c5 = memo1<int, bool>(
+      (int codepoint) => surrogateCodePoints.contains(codepoint),
     );
 
-    return inc5(code.runes.first);
+    return c5(code.runes.first);
   }
 
   static bool inTablec6(String code) {
-    final c6Set =
-        Set<int>.from(List<int>.generate(5, (index) => 65529 + index));
-    final inc6 = memo1<int, bool>((int codepoint) => c6Set.contains(codepoint));
-    return inc6(code.runes.first);
+    final c6Set = memo0(
+      () => Set<int>.from(List<int>.generate(5, (index) => 65529 + index)),
+    ).call();
+    final c6 = memo1<int, bool>((int codepoint) => c6Set.contains(codepoint));
+    return c6(code.runes.first);
   }
 
   static bool inTablec7(String code) {
-    final c7Set =
-        Set<int>.from(List<int>.generate(12, (index) => 12272 + index));
-    final inc7 = memo1<int, bool>((int codepoint) => c7Set.contains(codepoint));
-    return inc7(code.runes.first);
+    final c7Set = memo0(
+      () => Set<int>.from(List<int>.generate(12, (index) => 12272 + index)),
+    ).call();
+    final c7 = memo1<int, bool>((int codepoint) => c7Set.contains(codepoint));
+    return c7(code.runes.first);
   }
 
   static bool inTablec8(String code) {
-    final c8Set = memo1((Set<int> set) {
+    final c8Set = memo0(() {
+      final set = <int>{832, 833, 8206, 8207};
+
       /// Add the range of values to the set.
       for (int i = 8234; i < 8239; i++) {
         set.add(i);
@@ -273,18 +305,17 @@ class StandaloneStringPreparation {
       }
 
       return set;
-    });
+    }).call();
 
-    return c8Set({832, 833, 8206, 8207}).contains(code.runes.first);
+    return c8Set.contains(code.runes.first);
   }
 
   static bool inTablec9(String code) {
-    final c9Set = memo1(
-      (_) =>
-          <int>{917505, ...List<int>.generate(96, (index) => 917536 + index)},
-    );
+    final c9Set = memo0(
+      () => <int>{917505, ...List<int>.generate(96, (index) => 917536 + index)},
+    ).call();
 
-    return c9Set(null).contains(code.runes.first);
+    return c9Set.contains(code.runes.first);
   }
 
   static bool _hasAnyRtl(String code) =>
