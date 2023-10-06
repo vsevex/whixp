@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:echox/echox.dart';
-import 'package:echox/src/echotils/src/punycode.dart';
+import 'package:echox/src/idna/punycode.dart';
 import 'package:echox/src/stringprep/stringprep.dart';
 
 import 'package:unorm_dart/unorm_dart.dart' as unorm;
