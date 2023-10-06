@@ -25,7 +25,7 @@ void main() {
       );
     });
     test(
-      'inTable1 must check availability correct',
+      'inTableb1 must check availability correct',
       () {
         expect(StandaloneStringPreparation.inTableb1('\u00ad'), isTrue);
         expect(StandaloneStringPreparation.inTableb1('\u00ae'), isFalse);
@@ -42,7 +42,15 @@ void main() {
       'inTablec12 must return check result correctly',
       () {
         expect(StandaloneStringPreparation.inTablec12('\u00a0'), isTrue);
+        expect(StandaloneStringPreparation.inTablec12('\u0020'), isTrue);
+        expect(StandaloneStringPreparation.inTablec12('\u00A0'), isTrue);
+        expect(StandaloneStringPreparation.inTablec12('\u2002'), isTrue);
+
         expect(StandaloneStringPreparation.inTablec12('\u00a1'), isFalse);
+        expect(StandaloneStringPreparation.inTablec12('A'), isFalse);
+        expect(StandaloneStringPreparation.inTablec12('\n'), isFalse);
+        expect(StandaloneStringPreparation.inTablec12('\t'), isFalse);
+        expect(StandaloneStringPreparation.inTablec12('\u3000'), isFalse);
       },
     );
     test(
@@ -56,7 +64,11 @@ void main() {
       'inTablec3 must return check result correctly',
       () {
         expect(StandaloneStringPreparation.inTablec3('\ue000'), isTrue);
+        expect(StandaloneStringPreparation.inTablec3('\uf8ff'), isTrue);
         expect(StandaloneStringPreparation.inTablec3('\uf900'), isFalse);
+        expect(StandaloneStringPreparation.inTablec3('A'), isFalse);
+        expect(StandaloneStringPreparation.inTablec3('\n'), isFalse);
+        expect(StandaloneStringPreparation.inTablec3('\t'), isFalse);
       },
     );
     test(
@@ -70,7 +82,11 @@ void main() {
       'inTablec5 must return check result correctly',
       () {
         expect(StandaloneStringPreparation.inTablec5('\ud800'), isTrue);
+        expect(StandaloneStringPreparation.inTablec5('\udbff'), isTrue);
+        expect(StandaloneStringPreparation.inTablec5('\udc00'), isTrue);
         expect(StandaloneStringPreparation.inTablec5('\ud7ff'), isFalse);
+        expect(StandaloneStringPreparation.inTablec5('\uFFFF'), isFalse);
+        expect(StandaloneStringPreparation.inTablec5('\u0010FFFF'), isFalse);
       },
     );
     test(
