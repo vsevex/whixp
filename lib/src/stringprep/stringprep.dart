@@ -93,6 +93,24 @@ class StandaloneStringPreparation {
       r'A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02B8\u0300-\u0590'
       r'\u0800-\u1FFF\u2C00-\uFB1C\uFDFE-\uFE6F\uFEFD-\uFFFF';
 
+  static const _zsCodePoints = [
+    0x0020, // Basic Latin - Space
+    0x00A0, // Latin-1 Supplement - No-Break Space
+    0x2000, // General Punctuation - En Quad
+    0x2001, // General Punctuation - Em Quad
+    0x2002, // General Punctuation - En Space
+    0x2003, // General Punctuation - Em Space
+    0x2004, // General Punctuation - Three-Per-Em Space
+    0x2005, // General Punctuation - Four-Per-Em Space
+    0x2006, // General Punctuation - Six-Per-Em Space
+    0x2007, // General Punctuation - Figure Space
+    0x2008, // General Punctuation - Punctuation Space
+    0x2009, // General Punctuation - Thin Space
+    0x200A, // General Punctuation - Hair Space
+    0x200B, // General Punctuation - Zero Width Space
+    0x205F, // Mathematical Operators - Medium Mathematical Space
+  ];
+
   static bool inTableb1(String code) {
     final b1Set = memo1((Set<int> set) {
       /// Add the range of values to the set.
@@ -145,8 +163,8 @@ class StandaloneStringPreparation {
   static bool inTablec11(String code) => code == ' ';
 
   static bool inTablec12(String code) {
-    return code.runes.isNotEmpty &&
-        String.fromCharCode(code.runes.first).trim().isEmpty;
+    final codepoint = code.runes.first;
+    return _zsCodePoints.contains(codepoint);
   }
 
   static bool inTablec22(String code) {
@@ -184,10 +202,14 @@ class StandaloneStringPreparation {
 
   static bool inTablec3(String code) {
     final inc3 = memo1<int, bool>(
-      (int codepoint) =>
-          (codepoint >= 0xE000 && codepoint <= 0xF8FF) ||
-          (codepoint >= 0xF0000 && codepoint <= 0xFFFFD) ||
-          (codepoint >= 0x100000 && codepoint <= 0x10FFFD),
+      (int codepoint) {
+        final codepoints = <int>[];
+        for (int i = 0xE000; i <= 0xF8FF; i++) {
+          codepoints.add(i);
+        }
+
+        return codepoints.contains(codepoint);
+      },
     );
 
     return inc3(code.runes.first);
@@ -205,7 +227,20 @@ class StandaloneStringPreparation {
 
   static bool inTablec5(String code) {
     final inc5 = memo1<int, bool>(
-      (int codepoint) => codepoint >= 0xD800 && codepoint <= 0xDFFF,
+      (int codepoint) {
+        final surrogateCodePoints = <int>[];
+
+        /// Add high-surrogates (U+D800 to U+DBFF)
+        for (int i = 0xD800; i <= 0xDBFF; i++) {
+          surrogateCodePoints.add(i);
+        }
+
+        /// Add low-surrogates (U+DC00 to U+DFFF)
+        for (int i = 0xDC00; i <= 0xDFFF; i++) {
+          surrogateCodePoints.add(i);
+        }
+        return codepoint >= 0xD800 && codepoint <= 0xDFFF;
+      },
     );
 
     return inc5(code.runes.first);
