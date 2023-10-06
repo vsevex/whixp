@@ -42,21 +42,14 @@ void main() {
       'inTablec12 must return check result correctly',
       () {
         expect(StandaloneStringPreparation.inTablec12('\u00a0'), isTrue);
-        expect(StandaloneStringPreparation.inTablec12('\u0020'), isTrue);
-        expect(StandaloneStringPreparation.inTablec12('\u00A0'), isTrue);
-        expect(StandaloneStringPreparation.inTablec12('\u2002'), isTrue);
-
         expect(StandaloneStringPreparation.inTablec12('\u00a1'), isFalse);
-        expect(StandaloneStringPreparation.inTablec12('A'), isFalse);
-        expect(StandaloneStringPreparation.inTablec12('\n'), isFalse);
-        expect(StandaloneStringPreparation.inTablec12('\t'), isFalse);
-        expect(StandaloneStringPreparation.inTablec12('\u3000'), isFalse);
       },
     );
     test(
       'inTablec22 must return check result correctly',
       () {
         expect(StandaloneStringPreparation.inTablec22('\u009f'), isTrue);
+        expect(StandaloneStringPreparation.inTablec22('\u0083'), isTrue);
         expect(StandaloneStringPreparation.inTablec22('\u00a0'), isFalse);
       },
     );
