@@ -13,14 +13,12 @@ class StringPreparationProfiles {
       '\x1a\x1b\x1c\x1d\x1e\x1f'
       ' !"#\$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\x7f';
 
-  String? nodePrep(String node) {
-    if (_nodePrep == null) return null;
+  String nodePrep(String node) {
     final check = memo1((String node) => _nodePrep!(node));
     return check(node);
   }
 
-  String? resourcePrep(String resource) {
-    if (_resourcePrep == null) return null;
+  String resourcePrep(String resource) {
     final check = memo1((String resource) => _resourcePrep!(resource));
     return check(resource);
   }
