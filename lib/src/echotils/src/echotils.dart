@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:mirrors' as mirrors;
 import 'dart:typed_data';
 
 import 'package:echox/src/echotils/src/status.dart';
@@ -435,7 +436,7 @@ class Echotils {
   }
 
   /// Converts a byte sequence or string to Unicode string.
-  /// 
+  ///
   /// If the input [text] is a byte sequence (bytes), it is decoded using the
   /// UTF-8 encoding. If the input is already a string, it is returned as is.
   static String unicode(dynamic text /** List<int> || String */) {
@@ -465,6 +466,82 @@ class Echotils {
   /// Echotils.addNamespace('CLIENT', 'jabber:client');
   /// ```
   static void addNamespace(String name, String key) => _namespace[name] = key;
+
+  /// Checks if an object has a specified property using reflection.
+  ///
+  /// Uses Dart's reflection capabilities to inspect the structure of an
+  /// [object] at runtime and determine whether it has a property with the given
+  /// [property].
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final object = SomeClass();
+  /// if (Echotils.hasAttr(object, 'property')) {
+  ///   log('property exists!');
+  /// } else {
+  ///   /// ...otherwise do something
+  /// }
+  /// ```
+  /// **Warning:**
+  /// * Reflection can be affected by certain build configurations, and the
+  /// effectiveness of this function may vary in those cases.
+  static bool hasAttr(Object? object, String property) {
+    final instanceMirror = mirrors.reflect(object);
+    return instanceMirror.type.instanceMembers.containsKey(Symbol(property));
+  }
+
+  /// Gets the value of an attribute from an object using reflection.
+  ///
+  /// This function uses Dart's reflection capabilities to inspect the structure
+  /// of an object at runtime and retrieves the value of an attribute with the
+  /// specified name.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final exampleObject = Example();
+  /// final name = Echotils.getAttr(exampleObject, 'name');
+  /// log(name); /// outputs name
+  /// ```
+  ///
+  /// **Warning:**
+  /// * Reflection can be affected by certain build configurations, and the
+  /// effectiveness of this function may vary in those cases.
+  static dynamic getAttr(Object? object, String attribute) {
+    final instanceMirror = mirrors.reflect(object);
+
+    try {
+      final value = instanceMirror.getField(Symbol(attribute)).reflectee;
+      return value;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /// Sets the value of an attribute on an object using reflection.
+  ///
+  /// Uses Dart's reflection capabilities to inspect the structure of an object
+  /// at runtime and sets the value of an attribute with the specified name.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final exampleObject = Example();
+  /// final name = Echotils.setAttr(exampleObject, 'name', 'hert');
+  /// ```
+  /// **Warning:**
+  /// * Reflection can be affected by certain build configurations, and the
+  /// effectiveness of this function may vary in those cases.
+  static void setAttr(Object? object, String attribute, dynamic value) {
+    if (value is Function) {
+      throw ArgumentError("Setting methods dynamically is not supported.");
+    }
+    final instanceMirror = mirrors.reflect(object);
+    try {
+      instanceMirror.setField(Symbol(attribute), value);
+    } catch (error) {
+      /// Handle cases where the attribute does not exist
+      throw ArgumentError("Attribute '$attribute' not found");
+    }
+  }
 }
 
 /// Helps to emit status information.
