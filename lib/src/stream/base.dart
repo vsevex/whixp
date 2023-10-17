@@ -31,7 +31,7 @@ void registerStanzaPlugin(
 
   if (iterable) {
     stanza.pluginIterables.add(plugin);
-    if (plugin.pluginMultiAttribute) {}
+    // if (plugin.pluginMultiAttribute) {}
   }
   if (overrides) {
     for (final interface in plugin.overrides) {
@@ -103,6 +103,7 @@ class XMLBase {
       this.element = element;
     }
 
+    this.parent = null;
     if (parent != null) {
       this.parent = parent.target;
     }
@@ -288,8 +289,11 @@ class XMLBase {
     return plugin;
   }
 
-  Map<String, String> getAllSubtext(String name,
-      {String def = '', String? language,}) {
+  Map<String, String> getAllSubtext(
+    String name, {
+    String def = '',
+    String? language,
+  }) {
     final castedName = _fixNamespace(name).value1;
 
     final defaultLanguage = getLanguage();
@@ -307,7 +311,7 @@ class XMLBase {
         } else {
           text = stanza.innerText;
         }
-        results[stanzaLanguage] = text;
+        results[stanzaLanguage!] = text;
       }
     }
 
@@ -389,6 +393,74 @@ class XMLBase {
     }
   }
 
+  xml.XmlElement? setSubText(
+    String name, {
+    String? text,
+    bool keep = false,
+    String? language,
+  }) {
+    final defaultLanguage = language ?? getLanguage();
+
+    if (text == null && !keep) {
+      deleteSub(name, language: defaultLanguage);
+      return null;
+    }
+
+    final path = _fixNamespace(name, true).value2;
+    final castedName = path.last;
+    late xml.XmlElement? parent;
+    late List<xml.XmlElement> elements;
+
+    List<String> missingPath = <String>[];
+    final searchOrder = path.sublist(0, path.length - 1);
+
+    while (searchOrder.isNotEmpty) {
+      parent = element!.getElement(searchOrder.join('/'));
+      final ename = searchOrder.removeLast();
+      if (parent != null) {
+        break;
+      } else {
+        missingPath.add(ename);
+      }
+      missingPath = missingPath.reversed.toList();
+    }
+
+    if (parent != null) {
+      elements = element!.findElements(path.join('/')).toList();
+    } else {
+      parent = element;
+      elements = [];
+    }
+
+    for (final ename in missingPath) {
+      element = xml.XmlElement(xml.XmlName(ename));
+      parent!.children.add(element!);
+      parent = element;
+    }
+
+    for (final element in elements) {
+      final elanguage =
+          element.getAttribute('${Echotils.getNamespace('XML')}lang') ??
+              defaultLanguage;
+      if ((language == null || language.isEmpty) &&
+              elanguage == defaultLanguage ||
+          language != null && language == elanguage) {
+        element.innerText = text!;
+        return element;
+      }
+    }
+
+    element = xml.XmlElement(xml.XmlName(castedName));
+    element!.innerText = text!;
+    if (language != null &&
+        language.isNotEmpty &&
+        language != defaultLanguage) {
+      element!.setAttribute('${Echotils.getNamespace('XML')}lang', language);
+    }
+    parent!.children.add(element!);
+    return element;
+  }
+
   void setAllSubText(
     String name,
     Map<String, String> values, {
@@ -396,73 +468,98 @@ class XMLBase {
     String? language,
   }) {
     deleteSub(name, language: language);
-
+    for (final value in values.entries) {
+      if ((language == null || language.isEmpty) ||
+          language == '*' ||
+          value.key == language) {
+        setSubText(name, text: value.value, keep: keep, language: value.key);
+      }
+    }
   }
 
   String getAttribute(String name, [String def = '']) =>
       element!.getAttribute(name) ?? def;
 
+  void setAttribute(String name, [Tuple2<String, JabberIDTemp?>? value]) {
+    String? castedValue;
+    if (value == null || value.value1.isEmpty) {
+      deleteItem(name);
+    } else {
+      if (value.value2 != null) {
+        castedValue = value.value2.toString();
+      }
+      element!.setAttribute(name, castedValue ?? value.value1);
+    }
+  }
+
+  void deleteAttribute(String name) {
+    if (element!.getAttribute(name) != null) {
+      element!.removeAttribute(name);
+    }
+  }
+
   void appendXML(xml.XmlElement xml) => element!.children.add(xml);
 
   bool match(Either<String, List<String>> xpath) {
-    Either<String, List<String>> xPath = xpath;
-    xPath = xPath.fold((xpath) => _fixNamespace(xpath), (_) => xpath);
+    late List<String> xPath;
+    xPath = xpath.fold<List<String>>(
+      (xpath) => _fixNamespace(xpath, true).value2,
+      id,
+    );
 
-    return xPath.fold<bool>((_) => true, (xpath) {
-      final components = xpath[0].split('@');
-      final tag = components[0];
-      final attributes = components.sublist(1);
+    final components = xPath[0].split('@');
+    final tag = components[0];
+    final attributes = components.sublist(1);
 
-      if (tag != name &&
-          tag != '$namespace$name' &&
-          !loadedPlugins.contains(tag) &&
-          pluginAttribute.contains(tag)) return false;
+    if (tag != name &&
+        tag != '$namespace$name' &&
+        !loadedPlugins.contains(tag) &&
+        pluginAttribute.contains(tag)) return false;
 
-      bool matchedSubstanzas = false;
+    bool matchedSubstanzas = false;
 
-      for (final substanza in iterables) {
-        if (xpath.sublist(1) == []) break;
-        matchedSubstanzas = substanza.match(right(xpath.sublist(1)));
+    for (final substanza in iterables) {
+      if (xPath.sublist(1) == []) break;
+      matchedSubstanzas = substanza.match(right(xPath.sublist(1)));
 
-        if (matchedSubstanzas) break;
+      if (matchedSubstanzas) break;
+    }
+
+    for (final attribute in attributes) {
+      final name = attribute.split('=')[0];
+      final value = attribute.split('=')[1];
+
+      if (name != value) return false;
+    }
+
+    if (xPath.length > 1) {
+      final nextTag = xPath[1];
+      if (subInterfaces.contains(nextTag) && this[nextTag] != null) {
+        return true;
       }
 
-      for (final attribute in attributes) {
-        final name = attribute.split('=')[0];
-        final value = attribute.split('=')[1];
-
-        if (name != value) return false;
-      }
-
-      if (xpath.length > 1) {
-        final nextTag = xpath[1];
-        if (subInterfaces.contains(nextTag) && this[nextTag] != null) {
-          return true;
+      if (!matchedSubstanzas && xPath.length > 1) {
+        final nextTag = xPath[1].split('@')[0].split('}')[-1];
+        final languages = <String?>[];
+        for (final entry in plugins.entries) {
+          final name = entry.key;
+          if (name.value1 == nextTag) {
+            languages.add(name.value2);
+          }
         }
 
-        if (!matchedSubstanzas && xpath.length > 1) {
-          final nextTag = xpath[1].split('@')[0].split('}')[-1];
-          final languages = <String?>[];
-          for (final entry in plugins.entries) {
-            final name = entry.key;
-            if (name.value1 == nextTag) {
-              languages.add(name.value2);
-            }
+        for (final language in languages) {
+          final plugin = getPlugin(nextTag, language);
+          if (plugin != null && plugin.match(right(xPath.sublist(1)))) {
+            return true;
           }
-
-          for (final language in languages) {
-            final plugin = getPlugin(nextTag, language);
-            if (plugin != null && plugin.match(right(xpath.sublist(1)))) {
-              return true;
-            }
-          }
-
-          return false;
         }
-      }
 
-      return true;
-    });
+        return false;
+      }
+    }
+
+    return true;
   }
 
   Tuple2<String, List<String>> _fixNamespace(
@@ -490,12 +587,12 @@ class XMLBase {
     }
   }
 
-  String getLanguage() {
+  String? getLanguage() {
     final result = element!.getAttribute('${Echotils.getNamespace('XML')}lang');
     if (result == null && parent != null) {
-      return parent['lang'];
+      return parent!['lang'] as String;
     }
-    return result!;
+    return result;
   }
 
   void setLanguage([String? language]) {
@@ -569,7 +666,7 @@ class XMLBase {
     final attribute = attributeLanguage[0];
     final language = attributeLanguage[1];
 
-    final kwargs = {};
+    final kwargs = <String, String>{};
 
     if (language.isNotEmpty && languageInterfaces.contains(attribute)) {
       kwargs['lang'] = language;
@@ -602,11 +699,89 @@ class XMLBase {
             /// TODO: integrate string rep value set in this field
           }
           if (language == '*') {
-            ...
+            if (value is Map<String, String>) {
+              return setAllSubText(name, value, language: '*');
+            }
           }
+          if (value is String) {
+            setSubText(attribute, text: value, language: language);
+          }
+          return;
+        } else if (boolInterfaces.contains(attribute)) {
+          if (value != null) {
+            setSubText(attribute, text: '', keep: true, language: language);
+            return;
+          } else {
+            setSubText(attribute, text: '', language: language);
+            return;
+          }
+        } else {
+          setAttribute(attribute, Tuple2(value as String, null));
         }
       }
     }
+  }
+
+  void deleteItem(String fullAttribute) {
+    final attributeLanguage = '$fullAttribute|'.split('|');
+    final attribute = attributeLanguage[0];
+    final language = attributeLanguage[1];
+
+    final kwargs = <String, String>{};
+
+    if (language.isNotEmpty && languageInterfaces.contains(attribute)) {
+      kwargs['lang'] = language;
+    }
+
+    if (interfaces.contains(attribute) || attribute == 'lang') {
+      final deleteMethod = 'del_${attribute.toLowerCase()}';
+
+      if (pluginOverrides.isNotEmpty) {
+        final name = pluginOverrides[deleteMethod];
+        if (name != null && name.isNotEmpty) {
+          final plugin = getPlugin(attribute, language);
+          if (plugin != null) {
+            final handler = gettersAndSetters.containsKey(Symbol(deleteMethod));
+            if (handler) {
+              noSuchMethod(
+                Invocation.method(Symbol(deleteMethod), [kwargs]),
+              );
+              return;
+            }
+          }
+        }
+      }
+      if (gettersAndSetters.containsKey(Symbol(deleteMethod))) {
+        noSuchMethod(Invocation.method(Symbol(deleteMethod), [kwargs]));
+        return;
+      } else {
+        if (subInterfaces.contains(attribute)) {
+          return deleteSub(attribute, language: language);
+        } else if (boolInterfaces.contains(attribute)) {
+          return deleteSub(attribute, language: language);
+        } else {
+          deleteAttribute(attribute);
+        }
+      }
+    } else if (pluginAttributeMapping.containsKey(attribute)) {
+      final plugin = getPlugin(attribute, language, true);
+      if (plugin == null) {
+        return;
+      }
+      if (plugin.isExtension) {
+        plugin.deleteItem(fullAttribute);
+        plugins[Tuple2(attribute, null)]!.deleteItem(fullAttribute);
+      } else {
+        plugins[Tuple2(attribute, plugin['lang'])]!.deleteItem(fullAttribute);
+      }
+      loadedPlugins.remove(attribute);
+      try {
+        element!.children.remove(plugin.element);
+      } catch (error) {
+        /// something happened
+      }
+    }
+    return;
   }
 
   @override
