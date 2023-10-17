@@ -9,6 +9,9 @@ class XMLBaseTest extends XMLBase {
 
   @override
   Set<String> get interfaces => {'bar', 'baz', 'qux'};
+
+  @override
+  Set<String> get subInterfaces => {'baz'};
 }
 
 class XMLBasePluginTest extends XMLBase {

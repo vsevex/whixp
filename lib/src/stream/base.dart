@@ -103,6 +103,8 @@ class XMLBase {
       this.element = element;
     }
 
+    tag = tagname;
+
     this.parent = null;
     if (parent != null) {
       this.parent = parent.target;
@@ -110,7 +112,21 @@ class XMLBase {
 
     /// If XML generated, then everything is ready.
     if (setup(element)) {
+      print('we do not have to generate xml');
       return;
+    }
+
+    for (final child in element!.descendantElements.toList()) {
+      if (pluginTagMapping.containsKey(child.name.local)) {
+        final pluginClass = pluginTagMapping[child.name.local];
+        if (pluginClass != null) {
+          initPlugin(
+            pluginClass.pluginAttribute,
+            existingXml: child,
+            reuse: false,
+          );
+        }
+      }
     }
   }
 
@@ -180,18 +196,19 @@ class XMLBase {
   late final loadedPlugins = <String>{};
 
   /// The underlying [element] for the stanza.
-  late xml.XmlElement? element;
+  xml.XmlElement? element;
   late final List<XMLBase> iterables;
   late int _index;
+  late String tag;
   late XMLBase? parent;
 
   late Map<Symbol, Function> gettersAndSetters;
 
   bool setup([xml.XmlElement? element]) {
-    if (Echotils.getAttr(this, 'element') != null) {
+    if (this.element != null) {
       return false;
     }
-    if (Echotils.getAttr(this, 'element') == null && element != null) {
+    if (this.element == null && element != null) {
       this.element = element;
       return false;
     }
@@ -408,7 +425,7 @@ class XMLBase {
 
     final path = _fixNamespace(name, true).value2;
     final castedName = path.last;
-    late xml.XmlElement? parent;
+    xml.XmlElement? parent;
     late List<xml.XmlElement> elements;
 
     List<String> missingPath = <String>[];
@@ -458,6 +475,7 @@ class XMLBase {
       element!.setAttribute('${Echotils.getNamespace('XML')}lang', language);
     }
     parent!.children.add(element!);
+    print(parent);
     return element;
   }
 
@@ -705,8 +723,8 @@ class XMLBase {
           }
           if (value is String) {
             setSubText(attribute, text: value, language: language);
+            return;
           }
-          return;
         } else if (boolInterfaces.contains(attribute)) {
           if (value != null) {
             setSubText(attribute, text: '', keep: true, language: language);
@@ -797,7 +815,7 @@ class XMLBase {
     return super.noSuchMethod(invocation);
   }
 
-  String get tagname => '$namespace$name';
+  String get tagname => '{$namespace}$name';
 
   String get keys {
     final buffer = StringBuffer();
