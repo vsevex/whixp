@@ -1,19 +1,27 @@
 import 'package:dartz/dartz.dart';
 
-import 'package:echox/src/echotils/src/echotils.dart';
-import 'package:echox/src/jid/jid.dart';
+import 'package:echox/src/echotils/echotils.dart';
 
 import 'package:xml/xml.dart' as xml;
 
-typedef FilterCallback = bool Function(dynamic);
-
+/// Associate a [stanza] object as a plugin for another stanza.
+///
+/// [plugin] stanzas marked as iterable will be included in the list of
+/// substanzas for the parent, using `parent['subsstanzas']`. If the attribute
+/// `pluginMultiAttribute` was defined for the plugin, then the substanza set
+/// can be filtered to only instances of the plugin class.
+///
+/// For instance, given a plugin class `Foo` with
+/// `pluginMultiAttribute = 'foos'` then:
+///   parent['foos']
+/// would return a collection of all `Foo` substanzas.
 void registerStanzaPlugin(
   XMLBase stanza,
   XMLBase plugin, {
   bool iterable = false,
   bool overrides = false,
 }) {
-  final tag = '${plugin.namespace}${plugin.name}';
+  final tag = '{${plugin.namespace}}${plugin.name}';
   const pluginInfo = <String>[
     'pluginAttributeMapping',
     'pluginTagMapping',
@@ -29,10 +37,6 @@ void registerStanzaPlugin(
   stanza.pluginAttributeMapping[plugin.pluginAttribute] = plugin;
   stanza.pluginTagMapping[tag] = plugin;
 
-  if (iterable) {
-    stanza.pluginIterables.add(plugin);
-    // if (plugin.pluginMultiAttribute) {}
-  }
   if (overrides) {
     for (final interface in plugin.overrides) {
       stanza.pluginOverrides[interface] = plugin.pluginAttribute;
@@ -40,98 +44,72 @@ void registerStanzaPlugin(
   }
 }
 
-Tuple2<String, List<String>> fixNamespace(
-  String xpath, {
-  bool split = false,
-  bool propogate = true,
-  String def = '',
-}) {
-  final fixed = <String>[];
-  final namespaceBlocks = xpath.split('{');
-  late List<String?> elements;
-  late String? namespace;
+class _Multi extends XMLBase {
+  // List<XMLBase> getMulti({String? language}) {
+  //   final parent = failWithoutParent;
+  //   if (language == null || language == '*') {
 
-  for (final block in namespaceBlocks) {
-    if (block.contains('}')) {
-      final split = block.split('}');
-      namespace = split[0];
-      elements = split[1].split('/');
-    } else {
-      namespace = def;
-      elements = block.split('/');
-    }
+  //   }
+  // }
 
-    for (final element in elements) {
-      if (element != null && element.isNotEmpty) {
-        late String tag;
-        if (propogate && element[0] != '*') {
-          tag = '$namespace$element';
-        } else {
-          tag = element;
-        }
-        fixed.add(tag);
-      }
+  XMLBase get failWithoutParent {
+    XMLBase? parent;
+    if (this.parent != null) {
+      parent = this.parent;
     }
+    if (parent == null) {
+      throw Exception('No stanza parent for multifactory');
+    }
+    return parent;
   }
-
-  if (split) return Tuple2('', fixed);
-  return Tuple2(fixed.join(), []);
 }
 
 class XMLBase {
-  XMLBase({
-    xml.XmlElement? element,
-    WeakReference<XMLBase>? parent,
-  }) {
-    _index = 0;
+  XMLBase({this.element}) {
+    /// Set the default name of the stanza to `stanza`.
     name = 'stanza';
-    namespace = Echotils.getNamespace('CLIENT');
     pluginAttribute = 'plugin';
-    pluginMultiAttribute = '';
-    interfaces = <String>{'type', 'to', 'from', 'id', 'payload'};
-    subInterfaces = <String>{};
-    boolInterfaces = <String>{};
-    overrides = <String>[];
-    isExtension = false;
-    pluginOverrides = <String, String>{};
-    pluginAttributeMapping = <String, XMLBase>{};
     pluginTagMapping = <String, XMLBase>{};
+
+    /// Set the `interfaces` predefined ones.
+    interfaces = {'type', 'to', 'from', 'id', 'payload'};
+
+    /// Equal `namespace` to `CLIENT` by default.
+    namespace = Echotils.getNamespace('CLIENT');
+
+    /// Set `subInterfaces` to empty by default.
+    subInterfaces = <String>{};
+
+    /// Default set the `languageInterfaces` [Set] to empty.
+    languageInterfaces = <String>{};
+
+    /// By default, [XMLBase] is not extension.
+    isExtension = false;
+
+    pluginAttributeMapping = <String, XMLBase>{};
+
+    /// Equal to empty [Set] in case of anything.
+    pluginIterables = <XMLBase>{};
+
+    /// Initialize and equal to empty [Map].
+    pluginOverrides = <String, String>{};
+    overrides = <String>[];
+
+    gettersAndSetters = <Symbol, Function>{};
+
     iterables = <XMLBase>[];
-    gettersAndSetters = {};
 
-    if (element != null) {
-      this.element = element;
-    }
-
-    tag = tagname;
-
-    this.parent = null;
-    if (parent != null) {
-      this.parent = parent.target;
-    }
-
-    /// If XML generated, then everything is ready.
-    if (setup(element)) {
-      print('we do not have to generate xml');
-      return;
-    }
-
-    for (final child in element!.descendantElements.toList()) {
-      if (pluginTagMapping.containsKey(child.name.local)) {
-        final pluginClass = pluginTagMapping[child.name.local];
-        if (pluginClass != null) {
-          initPlugin(
-            pluginClass.pluginAttribute,
-            existingXml: child,
-            reuse: false,
-          );
-        }
-      }
-    }
+    plugins = <Tuple2<String, String?>, XMLBase>{};
+    loadedPlugins = <String>{};
   }
 
   /// The XML tag name of the element, not including any namespace prefixes.
   late final String name;
+  late String pluginAttribute;
+
+  /// A mapping of root element tag names (in `$namespaceElementName` format)
+  /// to the plugin classes responsible for them.
+  late Map<String, XMLBase> pluginTagMapping;
 
   /// The XML namespace for the element. Given `<foo xmlns="bar" />`, then
   /// `namespace = "bar"` should be used.
@@ -140,28 +118,30 @@ class XMLBase {
   /// is being used in an XMPP library.
   late String namespace;
 
-  late String pluginAttribute;
-
   /// [XMLBase] subclasses that are intended to be an iterable group of items,
   /// the `pluginMultiAttribute` value defines an interface for the parent
-  /// stanza which returns the entire group of matchihng substanzas.
-  late String pluginMultiAttribute;
+  /// stanza which returns the entire group of matching `substanzas`.
+  String? pluginMultiAttribute;
 
   /// The set of keys that the stanza provides for accessing and manipulating
-  /// the underlying XML object.
+  /// the underlying XML object. This [Set] may be augmented with the
+  /// `pluginAttribute` value of any registered stanza plugins.
   late Set<String> interfaces;
 
   /// A subset of `interfaces` which maps interfaces to direct subelements of
-  /// the underlying XML object. Using this set, the text of these subelements
+  /// the underlaying XML object. Using this set, the text of these subelements
   /// may be set, retrieved, or removed without needing to define custom
   /// methods.
   late Set<String> subInterfaces;
 
-  /// A subset of `interfaces` which maps the presence of subelements to
+  /// A subset of `interfaces` which maps to the presence of subelements to
   /// boolean values. Using this set allows for quickly checking for the
-  /// existence of empty subelements like `<required />`.
+  /// existence of empty subelements.
   late Set<String> boolInterfaces;
-  late Set<String> languageInterfaces = <String>{};
+
+  /// A subset of `interfaces` which maps to the presence of subelements to
+  /// language values.
+  late Set<String> languageInterfaces;
 
   /// In some cases you may wish to override the behaviour of one of the
   /// parent stanza's interfaces. The `overrides` list specifies the interface
@@ -181,631 +161,297 @@ class XMLBase {
   /// only interface listed in `interfaces`. Requests for the new interface
   /// from the parent stanza will be passed to the plugin directly.
   late bool isExtension;
-
-  late Map<String, String> pluginOverrides;
   late Map<String, XMLBase> pluginAttributeMapping;
 
-  /// A mapping of root element tag names (in `$namespaceelementName` format)
-  /// to the plugin classes responsible for them.
-  late Map<String, XMLBase> pluginTagMapping;
+  /// A [Map] of interface operations to the overriding functions.
+  ///
+  /// For instance, after overriding the `set` operation for the interface
+  /// `body`, `pluginOverrides` would be:
+  ///
+  /// ```dart
+  /// log(pluginOverrides); /// outputs {'set_body': Function()}
+  /// ```
+  late Map<String, String> pluginOverrides;
 
-  /// The set of stanza classes that can be iterated over using
-  /// the `substanzas` interface.
-  late Set<XMLBase> pluginIterables = {};
+  /// The set of stanza classes that can be iterated over using the `substanzas`
+  /// interface.
+  late Set<XMLBase> pluginIterables;
+
+  /// Responsible to keep track of `getter`, `setter` and other relative
+  /// methods that needs to be executed when there is a need and will work in
+  /// associate of `pluginOverrides` variable.
+  late Map<Symbol, Function> gettersAndSetters;
   late Map<Tuple2<String, String?>, XMLBase> plugins;
-  late final loadedPlugins = <String>{};
+  late final Set<String> loadedPlugins;
+  late List<XMLBase> iterables;
+  late XMLBase? parent;
 
   /// The underlying [element] for the stanza.
   xml.XmlElement? element;
-  late final List<XMLBase> iterables;
-  late int _index;
-  late String tag;
-  late XMLBase? parent;
 
-  late Map<Symbol, Function> gettersAndSetters;
+  /// Responsible to retrieve a stanza plugin through the passed [name] and
+  /// [language].
+  ///
+  /// If [check] is true, then the method returns null instead of creating the
+  /// object.
+  XMLBase? getPlugin(String name, {String? language, bool check = false}) {
+    /// If passed `language` is null, then try to retrieve it through built-in
+    /// method.
+    final lang = language ?? getLanguage();
 
-  bool setup([xml.XmlElement? element]) {
-    if (this.element != null) {
-      return false;
-    }
-    if (this.element == null && element != null) {
-      this.element = element;
-      return false;
-    }
-
-    for (final ename in name.split('/')) {
-      final newXML = xml.XmlElement(xml.XmlName('$namespace$ename'));
-      if (Echotils.getAttr(this, 'element') == null) {
-        this.element = newXML;
-      } else {
-        this.element!.children.add(newXML);
-      }
-    }
-
-    if (parent != null) {
-      if (parent!.element != null) {
-        parent!.element!.children.add(parent!.element!);
-      }
-    }
-
-    return true;
-  }
-
-  void enable() {}
-
-  XMLBase? getPlugin(String name, [String? language, bool check = false]) {
-    late final lang = language ?? getLanguage();
-
-    if (pluginAttributeMapping.containsKey(name)) {
+    if (!pluginAttributeMapping.containsKey(name)) {
       return null;
     }
 
-    final pluginClass = pluginAttributeMapping[name];
+    final plugin = pluginAttributeMapping[name];
 
-    if (pluginClass != null && pluginClass.isExtension) {
-      if (plugins.containsKey(Tuple2(name, null))) {
+    if (plugin == null) return null;
+    if (plugin.isExtension) {
+      if (plugins[Tuple2(name, null)] != null) {
         return plugins[Tuple2(name, null)];
       } else {
-        return check ? null : initPlugin(name, language: language);
+        return check ? null : initPlugin(name, language: lang);
       }
     } else {
-      if (plugins.containsKey(Tuple2(name, lang))) {
+      if (plugins[Tuple2(name, lang)] != null) {
         return plugins[Tuple2(name, lang)];
       } else {
-        return check ? null : initPlugin(name, language: language);
+        return check ? null : initPlugin(name, language: lang);
       }
     }
   }
 
-  XMLBase? initPlugin(
+  /// Responsible to enable and initialize a stanza plugin.
+  XMLBase initPlugin(
     String attribute, {
     String? language,
-    xml.XmlElement? existingXml,
+    xml.XmlElement? existingXML,
     bool reuse = true,
     XMLBase? element,
   }) {
-    final defaultLanguage = language ?? getLanguage();
+    final lang = language ?? getLanguage();
 
-    final pluginClass = pluginAttributeMapping[attribute];
+    late final pluginClass = pluginAttributeMapping[attribute]!;
 
-    if (pluginClass != null &&
-        pluginClass.isExtension &&
-        plugins.containsKey(Tuple2(attribute, null))) {
-      return plugins[Tuple2(attribute, null)];
+    if (pluginClass.isExtension && plugins[Tuple2(attribute, null)] != null) {
+      return plugins[Tuple2(attribute, null)]!;
     }
-    if (reuse && plugins.containsKey(tuple2(attribute, language))) {
-      return plugins[Tuple2(attribute, language)];
+    if (reuse && plugins[Tuple2(attribute, lang)] != null) {
+      return plugins[Tuple2(attribute, lang)]!;
     }
 
-    late XMLBase? plugin;
+    late XMLBase plugin;
 
     if (element != null) {
       plugin = element;
     } else {
-      plugin = XMLBase(element: existingXml, parent: WeakReference(this));
+      plugin = pluginClass
+        ..parent = this
+        ..element = existingXML;
     }
 
     if (plugin.isExtension) {
       plugins[Tuple2(attribute, null)] = plugin;
     } else {
-      if (language != defaultLanguage) {
-        plugin['lang'] = language;
+      if (lang != getLanguage()) {
+        plugin['lang'] = lang;
       }
       plugins[Tuple2(attribute, language)] = plugin;
     }
 
-    if (pluginIterables.contains(plugin)) {
+    if (pluginIterables.contains(pluginClass)) {
       iterables.add(plugin);
-      if (plugin.pluginAttributeMapping.isNotEmpty) {
-        initPlugin(pluginClass!.pluginMultiAttribute);
+      if (pluginClass.pluginMultiAttribute != null) {
+        initPlugin(pluginClass.pluginMultiAttribute!);
       }
     }
 
+    /// Assign `attribute` to the list to indicate that this plugin is loaded
+    /// already.
     loadedPlugins.add(attribute);
 
     return plugin;
   }
 
-  Map<String, String> getAllSubtext(
+  /// Returns the text contents of a sub element.
+  ///
+  /// In case the element does not exist, or it has not textual content, a [def]
+  /// value can be returned instead. An empty string is returned if no other
+  /// default is supplied.
+  Tuple2<String, Map<String, String>> _getSubText(
     String name, {
     String def = '',
     String? language,
   }) {
-    final castedName = _fixNamespace(name).value1;
-
-    final defaultLanguage = getLanguage();
-    final results = <String, String>{};
-    final stanzas = element!.findElements(castedName);
-
-    if (stanzas.isNotEmpty) {
-      for (final stanza in stanzas) {
-        final stanzaLanguage =
-            stanza.getAttribute('${Echotils.getNamespace('XML')}lang') ??
-                defaultLanguage;
-        late String text;
-        if (language == null || language == '*' || stanzaLanguage == language) {
-          text = def;
-        } else {
-          text = stanza.innerText;
-        }
-        results[stanzaLanguage!] = text;
-      }
-    }
-
-    return results;
+    print('$name and $language is supplied');
+    return const Tuple2('', {});
   }
 
-  Tuple2<String, Map<String, String>> getSubText(
-    String name, {
-    String def = '',
-    String? language,
-  }) {
-    final castedName = _fixNamespace(name).value1;
-    if (language == '*') {
-      return Tuple2('', getAllSubtext(name));
-    }
-
-    final defaultLanguage = language ?? getLanguage();
-    final stanzas = element!.findElements(castedName);
-
-    if (stanzas.isEmpty) {
-      return Tuple2(def, {});
-    }
-
-    late String? result;
-    for (final stanza in stanzas) {
-      if (stanza.getAttribute('${Echotils.getNamespace('XML')}lang') ==
-          defaultLanguage) {
-        if (stanza.innerText.isEmpty) {
-          return Tuple2(def, {});
-        }
-        result = stanza.innerText;
-        break;
-      }
-      if (stanza.innerText.isNotEmpty) {
-        result = stanza.innerText;
-      }
-    }
-
-    if (result != null && result.isNotEmpty) {
-      return Tuple2(result, {});
-    }
-    return Tuple2(def, {});
-  }
-
-  void deleteSub(String name, {bool all = false, String? language}) {
-    final path = _fixNamespace(name, true).value2;
-    final originalTarget = path.last;
-
-    final defaultLanguage = language ?? getLanguage();
-    late xml.XmlElement? parent;
-
-    for (int level = 0; level < path.length; level++) {
-      // Generate the path to the target element
-      final elementPath = path.sublist(0, path.length - level).join('/');
-
-      // Generate the path to the parent element (if applicable)
-      final parentPath =
-          level > 0 ? path.sublist(0, path.length - level - 1).join('/') : null;
-
-      final elements = element!.findElements(elementPath);
-      if (parentPath != null && parentPath.isNotEmpty) {
-        parent = element!.getElement(parentPath);
-      }
-      for (final element in elements) {
-        if (element.name.local == originalTarget ||
-            element.children.isNotEmpty) {
-          final elementLanguage =
-              element.getAttribute('${Echotils.getNamespace('XML')}lang') ??
-                  defaultLanguage;
-          if (defaultLanguage == '*' || elementLanguage == defaultLanguage) {
-            parent!.children.remove(element);
-          }
-        }
-      }
-
-      if (!all) {
-        return;
-      }
-    }
-  }
-
-  xml.XmlElement? setSubText(
-    String name, {
-    String? text,
-    bool keep = false,
-    String? language,
-  }) {
-    final defaultLanguage = language ?? getLanguage();
-
-    if (text == null && !keep) {
-      deleteSub(name, language: defaultLanguage);
-      return null;
-    }
-
-    final path = _fixNamespace(name, true).value2;
-    final castedName = path.last;
-    xml.XmlElement? parent;
-    late List<xml.XmlElement> elements;
-
-    List<String> missingPath = <String>[];
-    final searchOrder = path.sublist(0, path.length - 1);
-
-    while (searchOrder.isNotEmpty) {
-      parent = element!.getElement(searchOrder.join('/'));
-      final ename = searchOrder.removeLast();
-      if (parent != null) {
-        break;
-      } else {
-        missingPath.add(ename);
-      }
-      missingPath = missingPath.reversed.toList();
-    }
-
-    if (parent != null) {
-      elements = element!.findElements(path.join('/')).toList();
-    } else {
-      parent = element;
-      elements = [];
-    }
-
-    for (final ename in missingPath) {
-      element = xml.XmlElement(xml.XmlName(ename));
-      parent!.children.add(element!);
-      parent = element;
-    }
-
-    for (final element in elements) {
-      final elanguage =
-          element.getAttribute('${Echotils.getNamespace('XML')}lang') ??
-              defaultLanguage;
-      if ((language == null || language.isEmpty) &&
-              elanguage == defaultLanguage ||
-          language != null && language == elanguage) {
-        element.innerText = text!;
-        return element;
-      }
-    }
-
-    element = xml.XmlElement(xml.XmlName(castedName));
-    element!.innerText = text!;
-    if (language != null &&
-        language.isNotEmpty &&
-        language != defaultLanguage) {
-      element!.setAttribute('${Echotils.getNamespace('XML')}lang', language);
-    }
-    parent!.children.add(element!);
-    print(parent);
-    return element;
-  }
-
-  void setAllSubText(
-    String name,
-    Map<String, String> values, {
-    bool keep = false,
-    String? language,
-  }) {
-    deleteSub(name, language: language);
-    for (final value in values.entries) {
-      if ((language == null || language.isEmpty) ||
-          language == '*' ||
-          value.key == language) {
-        setSubText(name, text: value.value, keep: keep, language: value.key);
-      }
-    }
-  }
-
-  String getAttribute(String name, [String def = '']) =>
-      element!.getAttribute(name) ?? def;
-
-  void setAttribute(String name, [Tuple2<String, JabberIDTemp?>? value]) {
-    String? castedValue;
-    if (value == null || value.value1.isEmpty) {
-      deleteItem(name);
-    } else {
-      if (value.value2 != null) {
-        castedValue = value.value2.toString();
-      }
-      element!.setAttribute(name, castedValue ?? value.value1);
-    }
-  }
-
-  void deleteAttribute(String name) {
-    if (element!.getAttribute(name) != null) {
-      element!.removeAttribute(name);
-    }
-  }
-
-  void appendXML(xml.XmlElement xml) => element!.children.add(xml);
-
-  bool match(Either<String, List<String>> xpath) {
-    late List<String> xPath;
-    xPath = xpath.fold<List<String>>(
-      (xpath) => _fixNamespace(xpath, true).value2,
-      id,
-    );
-
-    final components = xPath[0].split('@');
-    final tag = components[0];
-    final attributes = components.sublist(1);
-
-    if (tag != name &&
-        tag != '$namespace$name' &&
-        !loadedPlugins.contains(tag) &&
-        pluginAttribute.contains(tag)) return false;
-
-    bool matchedSubstanzas = false;
-
-    for (final substanza in iterables) {
-      if (xPath.sublist(1) == []) break;
-      matchedSubstanzas = substanza.match(right(xPath.sublist(1)));
-
-      if (matchedSubstanzas) break;
-    }
-
-    for (final attribute in attributes) {
-      final name = attribute.split('=')[0];
-      final value = attribute.split('=')[1];
-
-      if (name != value) return false;
-    }
-
-    if (xPath.length > 1) {
-      final nextTag = xPath[1];
-      if (subInterfaces.contains(nextTag) && this[nextTag] != null) {
-        return true;
-      }
-
-      if (!matchedSubstanzas && xPath.length > 1) {
-        final nextTag = xPath[1].split('@')[0].split('}')[-1];
-        final languages = <String?>[];
-        for (final entry in plugins.entries) {
-          final name = entry.key;
-          if (name.value1 == nextTag) {
-            languages.add(name.value2);
-          }
-        }
-
-        for (final language in languages) {
-          final plugin = getPlugin(nextTag, language);
-          if (plugin != null && plugin.match(right(xPath.sublist(1)))) {
-            return true;
-          }
-        }
-
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  Tuple2<String, List<String>> _fixNamespace(
-    String xpath, [
-    bool split = false,
-    bool propogate = false,
-  ]) =>
-      fixNamespace(xpath, split: split, propogate: propogate);
-
-  dynamic get(String key, [dynamic def]) {
-    final value = this[key];
-    if (value == null || value == '') {
-      return def;
-    }
-    return value;
-  }
-
-  void clear() {
-    for (final child in element!.childElements) {
-      child.childElements.toList().remove(child);
-    }
-
-    for (final plugin in plugins.keys) {
-      plugins.remove(plugin);
-    }
-  }
-
-  String? getLanguage() {
-    final result = element!.getAttribute('${Echotils.getNamespace('XML')}lang');
-    if (result == null && parent != null) {
-      return parent!['lang'] as String;
-    }
-    return result;
-  }
-
-  void setLanguage([String? language]) {
-    deleteLanguage();
-    final attribute = '${Echotils.getNamespace('XML')}lang';
-    if (language != null) {
-      element!.setAttribute(attribute, language);
-    }
-  }
-
-  void deleteLanguage() {
-    final attribute = '${Echotils.getNamespace('XML')}lang';
-    if (element!.getAttribute(attribute) != null) {
-      return element!.removeAttribute(attribute);
-    }
-  }
-
+  /// Return the value of a stanza interface using operator overload.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final element = XMLBase();
+  /// log(element['body']); /// this must print out 'message contents'
+  /// ```
+  ///
+  /// Stanza interfaces are typically mapped directly to the underlying XML
+  /// object, but can be overridden by the presence of a `getAttribute` method
+  /// (or `get_foo` where the interface is named `foo`, etc).
+  ///
+  /// The search order for interface value retrieval for an interface named
+  /// `foo` is:
+  /// * The list of substanzas (`substanzas`)
+  /// * The result of calling the `getFood` override handler
+  /// * The result of calling `get_foo`
+  /// * The result of calling `getFoo`
+  /// * The contents of the `foo` subelement, if `foo` is listed in
+  /// `subInterfaces`
+  /// * True or false depending on the existence of a `foo` subelement and `foo`
+  /// is in `boolInterfaces`
+  /// * The value of the `foo` attribute of the XML object
+  /// * The plugin named `foo`
+  /// * An empty string
+  ///
+  /// The search for an element will go through the passed `fullAttribute`.
   dynamic operator [](String fullAttribute) {
     final split = '$fullAttribute|'.split('|');
     final attribute = split[0];
     final language = split[1];
 
-    final kwargs =
-        (language.isNotEmpty && languageInterfaces.contains(attribute))
-            ? {'lang': language}
-            : {};
+    /// Check for if `languageInterfaces` contains both `language` and
+    /// `attribute` values, then assign `kwargs` values respective to the check.
+    final kwargs = (languageInterfaces.contains(language) &&
+            languageInterfaces.contains(attribute))
+        ? {'lang': language}
+        : {};
 
     if (attribute == 'substanzas') {
-      return iterables;
+      return interfaces;
     } else if (interfaces.contains(attribute) || attribute == 'lang') {
       final getMethod = 'get_${attribute.toLowerCase()}';
 
       if (pluginOverrides.isNotEmpty) {
         final name = pluginOverrides[getMethod];
+
         if (name != null && name.isNotEmpty) {
-          final plugin = getPlugin(name, language);
+          final plugin = getPlugin(name, language: language);
+
           if (plugin != null) {
-            final handler = gettersAndSetters.containsKey(Symbol(getMethod));
-            if (handler) {
-              return noSuchMethod(
-                Invocation.method(Symbol(getMethod), [kwargs]),
-              );
+            final handler = plugin.gettersAndSetters[#getMethod];
+
+            if (handler != null) {
+              return noSuchMethod(Invocation.method(#getMethod, [kwargs]));
             }
           }
         }
-      }
 
-      if (gettersAndSetters.containsKey(Symbol(getMethod))) {
-        return noSuchMethod(Invocation.method(Symbol(getMethod), [kwargs]));
-      } else {
-        if (subInterfaces.contains(attribute)) {
-          return getSubText(attribute, language: language);
-        } else if (boolInterfaces.contains(attribute)) {
-          final element = this.element!.getElement('$namespace$attribute');
-          return element != null;
+        if (gettersAndSetters.containsKey(#getMethod)) {
+          return noSuchMethod(Invocation.method(#getMethod, [kwargs]));
         } else {
-          return getAttribute(attribute);
+          if (subInterfaces.contains(attribute)) {
+            return _getSubText(attribute, language: language);
+          } else if (boolInterfaces.contains(attribute)) {
+            if (element != null) {
+              final element = this.element!.getElement('$namespace$attribute');
+              return element != null;
+            }
+          } else {
+            return _getAttribute(attribute);
+          }
         }
       }
     } else if (pluginAttributeMapping.containsKey(attribute)) {
-      final plugin = getPlugin(attribute, language);
-      if (plugin != null && plugin.isExtension) return plugin[fullAttribute];
+      final plugin = getPlugin(attribute, language: language);
+
+      if (plugin != null && plugin.isExtension) {
+        return plugin[fullAttribute];
+      }
+
       return plugin;
     } else {
       return '';
     }
   }
 
-  void operator []=(String fullAttribute, dynamic value) {
-    final attributeLanguage = '$fullAttribute|'.split('|');
-    final attribute = attributeLanguage[0];
-    final language = attributeLanguage[1];
+  /// Return the value of top level attribuet of the XML object.
+  ///
+  /// In case the attribute has not been set, a [def] value can be returned
+  /// instead. An empty string is returned if not other default is supplied.
+  String? _getAttribute(String name, [String def = '']) =>
+      element!.getAttribute(name) ?? def;
 
-    final kwargs = <String, String>{};
+  /// Set the [value] of a stanza interface using operator overloading through
+  /// the passed [attribute] string.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final element = XMLBase();
+  /// element['body'] = 'hert!';
+  /// log(element['body']); /// must output 'hert!'
+  /// ```
+  ///
+  /// Stanza interfaces are typically mapped directly to the underlying XML
+  /// object, but can be overridden by the presence of a `setAttribute` method
+  /// (or `set_foo` where the interface is named `foo`, etc.).
+  void operator []=(String attribute, dynamic value) {
+    print('setting $value to $attribute');
+    // final fullAttribute = attribute;
+    // final attributeLanguage = '$attribute|'.split('|');
+    // final attrib = attributeLanguage[0];
+    // final lang = attributeLanguage[1];
 
-    if (language.isNotEmpty && languageInterfaces.contains(attribute)) {
-      kwargs['lang'] = language;
-    }
+    // final kwargs = {};
 
-    if (interfaces.contains(attribute) || attribute == 'lang') {
-      final setMethod = 'set_${attribute.toLowerCase()}';
+    // if (languageInterfaces.contains(lang) &&
+    //     languageInterfaces.contains(attrib)) {
+    //   kwargs['lang'] = lang;
+    // }
 
-      if (pluginOverrides.isNotEmpty) {
-        final name = pluginOverrides[setMethod];
-        if (name != null && name.isNotEmpty) {
-          final plugin = getPlugin(name, language);
-          if (plugin != null) {
-            final handler = gettersAndSetters.containsKey(Symbol(setMethod));
-            if (handler) {
-              noSuchMethod(
-                Invocation.method(Symbol(setMethod), [kwargs]),
-              );
-              return;
-            }
-          }
-        }
-      }
-      if (gettersAndSetters.containsKey(Symbol(setMethod))) {
-        noSuchMethod(Invocation.method(Symbol(setMethod), [kwargs]));
-        return;
-      } else {
-        if (subInterfaces.contains(attribute)) {
-          if (value is JabberIDTemp) {
-            /// TODO: integrate string rep value set in this field
-          }
-          if (language == '*') {
-            if (value is Map<String, String>) {
-              return setAllSubText(name, value, language: '*');
-            }
-          }
-          if (value is String) {
-            setSubText(attribute, text: value, language: language);
-            return;
-          }
-        } else if (boolInterfaces.contains(attribute)) {
-          if (value != null) {
-            setSubText(attribute, text: '', keep: true, language: language);
-            return;
-          } else {
-            setSubText(attribute, text: '', language: language);
-            return;
-          }
-        } else {
-          setAttribute(attribute, Tuple2(value as String, null));
-        }
-      }
-    }
+    // if (interfaces.contains(attrib) || attrib == 'lang') {
+    //   if (value != null) {
+    //     final setMethod = 'set_${attrib.toLowerCase()}';
+
+    //     if (pluginOverrides.isNotEmpty) {
+    //       final name = pluginOverrides[setMethod];
+
+    //       if (name != null && name.isNotEmpty) {
+    //         final plugin = getPlugin(name, language: lang);
+
+    //         if (plugin != null) {
+    //           final handler = plugin.gettersAndSetters[#getMethod];
+    //           if (handler != null) {
+    //             noSuchMethod(Invocation.method(#setMethod, [value, kwargs]));
+    //             return;
+    //           }
+    //         }
+    //       }
+    //     }
+
+    //     if (gettersAndSetters.containsKey(#setMethod)) {
+    //       noSuchMethod(Invocation.method(#setMethod, [value, kwargs]));
+    //     } else {
+    //       if (subInterfaces.contains(attrib)) {
+    //         if (value is JabberIDTemp) {}
+    //       }
+    //     }
+    //   }
+    // }
+
+    return;
   }
 
-  void deleteItem(String fullAttribute) {
-    final attributeLanguage = '$fullAttribute|'.split('|');
-    final attribute = attributeLanguage[0];
-    final language = attributeLanguage[1];
-
-    final kwargs = <String, String>{};
-
-    if (language.isNotEmpty && languageInterfaces.contains(attribute)) {
-      kwargs['lang'] = language;
+  String getLanguage({String? language}) {
+    final result = element!.getAttribute('${Echotils.getNamespace('XML')}lang');
+    if (result != null && parent != null) {
+      return parent!['lang'] as String;
     }
-
-    if (interfaces.contains(attribute) || attribute == 'lang') {
-      final deleteMethod = 'del_${attribute.toLowerCase()}';
-
-      if (pluginOverrides.isNotEmpty) {
-        final name = pluginOverrides[deleteMethod];
-        if (name != null && name.isNotEmpty) {
-          final plugin = getPlugin(attribute, language);
-          if (plugin != null) {
-            final handler = gettersAndSetters.containsKey(Symbol(deleteMethod));
-            if (handler) {
-              noSuchMethod(
-                Invocation.method(Symbol(deleteMethod), [kwargs]),
-              );
-              return;
-            }
-          }
-        }
-      }
-      if (gettersAndSetters.containsKey(Symbol(deleteMethod))) {
-        noSuchMethod(Invocation.method(Symbol(deleteMethod), [kwargs]));
-        return;
-      } else {
-        if (subInterfaces.contains(attribute)) {
-          return deleteSub(attribute, language: language);
-        } else if (boolInterfaces.contains(attribute)) {
-          return deleteSub(attribute, language: language);
-        } else {
-          deleteAttribute(attribute);
-        }
-      }
-    } else if (pluginAttributeMapping.containsKey(attribute)) {
-      final plugin = getPlugin(attribute, language, true);
-      if (plugin == null) {
-        return;
-      }
-      if (plugin.isExtension) {
-        plugin.deleteItem(fullAttribute);
-        plugins[Tuple2(attribute, null)]!.deleteItem(fullAttribute);
-      } else {
-        plugins[Tuple2(attribute, plugin['lang'])]!.deleteItem(fullAttribute);
-      }
-      loadedPlugins.remove(attribute);
-      try {
-        element!.children.remove(plugin.element);
-      } catch (error) {
-        /// something happened
-      }
-    }
-    return;
+    return result!;
   }
 
   @override
   dynamic noSuchMethod(Invocation invocation) {
-    if (invocation.isMethod &&
-        gettersAndSetters.containsKey(invocation.memberName)) {
+    if (invocation.isMethod) {
       return Function.apply(
         gettersAndSetters[invocation.memberName]!,
         invocation.positionalArguments,
@@ -813,22 +459,5 @@ class XMLBase {
       );
     }
     return super.noSuchMethod(invocation);
-  }
-
-  String get tagname => '{$namespace}$name';
-
-  String get keys {
-    final buffer = StringBuffer();
-    for (final x in interfaces) {
-      buffer.write(x);
-    }
-    for (final x in loadedPlugins) {
-      buffer.write(x);
-    }
-    buffer.write('lang');
-    if (iterables.isNotEmpty) {
-      buffer.write('substanzas');
-    }
-    return buffer.toString();
   }
 }
