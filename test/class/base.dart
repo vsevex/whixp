@@ -1,6 +1,6 @@
 import 'package:echox/src/stream/base.dart';
 
-class XMLBaseTest extends XMLBase {
+class TestStanza extends XMLBase {
   @override
   String get name => 'foo';
 
@@ -8,10 +8,35 @@ class XMLBaseTest extends XMLBase {
   String get namespace => 'foo';
 
   @override
-  Set<String> get interfaces => {'bar', 'baz', 'qux'};
+  Set<String> get interfaces => {};
+}
+
+class TestMultiStanza1 extends XMLBase {
+  @override
+  String get name => 'bar';
 
   @override
-  Set<String> get subInterfaces => {'baz'};
+  String get namespace => 'bar';
+
+  @override
+  String get pluginAttribute => name;
+
+  @override
+  String? get pluginMultiAttribute => 'bars';
+}
+
+class TestMultiStanza2 extends XMLBase {
+  @override
+  String get name => 'baz';
+
+  @override
+  String get namespace => 'baz';
+
+  @override
+  String get pluginAttribute => name;
+
+  @override
+  String? get pluginMultiAttribute => 'bazs';
 }
 
 class XMLBasePluginTest extends XMLBase {
