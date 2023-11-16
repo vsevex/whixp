@@ -1,3 +1,4 @@
+// import 'package:echox/src/stream/base.dart';
 import 'package:echox/src/stream/matcher/base.dart';
 
 /// The StanzaPath matcher selects stanzas that match a given "stanza path",
@@ -5,4 +6,10 @@ import 'package:echox/src/stream/matcher/base.dart';
 /// plugins of the stanza instead of the actual, underlying XML.
 class StanzaPath extends BaseMatcher {
   StanzaPath(super.criteria);
+
+  /// Compare a stanza against a "stanza path". A stanza path is similar to an
+  /// XPath expression, but uses the stanza's interfaces and plugins instead of
+  /// the underlying XML.
+  // @override
+  // bool match(XMLBase base) {}
 }
