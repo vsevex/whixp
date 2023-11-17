@@ -1,14 +1,27 @@
 import 'package:echox/src/stream/base.dart';
+import 'package:xml/xml.dart' as xml;
+
+class ExtendedNameTestStanza extends XMLBase {
+  ExtendedNameTestStanza([xml.XmlElement? element]) : super(element: element);
+  @override
+  String get name => 'lerko/hert/blya';
+
+  @override
+  String get namespace => 'test';
+}
 
 class DefaultLanguageTestStanza extends XMLBase {
   @override
-  String get name => 'lerko';
+  String get name => 'foo';
 
   @override
-  String get namespace => 'hert';
+  String get namespace => 'test';
 
   @override
-  Set<String> get interfaces => {'hert'};
+  Set<String> get interfaces => {'test'};
+
+  @override
+  Set<String> get subInterfaces => interfaces;
 
   @override
   Set<String> get languageInterfaces => interfaces;
