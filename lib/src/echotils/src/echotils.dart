@@ -66,6 +66,7 @@ class Echotils {
   static xml.XmlElement xmlElement(
     String name, {
     dynamic attributes /** List<Map<String, String>> || Map<String, String> */,
+    String? namespace,
     String? text,
   }) {
     /// Return if the passed `name` is empty.
@@ -109,7 +110,21 @@ class Echotils {
     /// empty or contains only whitespace, or if the `attributes` argument is
     /// not a valid type, the method returns `null`.
     final builder = _makeGenerator();
-    builder.element(name, attributes: attrs, nest: text);
+    builder.element(
+      name,
+      nest: () {
+        if (namespace != null) {
+          builder.namespace(namespace);
+        }
+        for (final entry in attrs.entries) {
+          builder.attribute(entry.key, entry.value, namespace: namespace);
+        }
+        if (text != null) {
+          builder.text(text);
+        }
+      },
+      namespace: namespace,
+    );
     return builder.buildDocument().rootElement.copy();
   }
 
