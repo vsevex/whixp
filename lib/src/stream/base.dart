@@ -4,8 +4,9 @@ import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/jid/jid.dart';
 
 import 'package:xml/xml.dart' as xml;
+import 'package:xpath_selector_xml_parser/xpath_selector_xml_parser.dart';
 
-/// Applies the stanza's namespace to elements in an [xPath]expression.
+/// Applies the stanza's namespace to elements in an [xPath] expression.
 Tuple2<String?, List<String>?> fixNamespace(
   String xPath, {
   bool split = false,
@@ -14,12 +15,12 @@ Tuple2<String?, List<String>?> fixNamespace(
 }) {
   final fixed = <String>[];
 
-  final namespaceBlocks = xPath.split('{');
+  final namespaceBlocks = xPath.split('<');
   for (final block in namespaceBlocks) {
     late String namespace;
     late List<String> elements;
-    if (block.contains('}')) {
-      final namespaceBlockSplit = block.split('}');
+    if (block.contains('xmlns')) {
+      final namespaceBlockSplit = block.split('>');
       namespace = namespaceBlockSplit[0];
       elements = namespaceBlockSplit[1].split('/');
     } else {
@@ -278,7 +279,7 @@ class XMLBase {
   }
 
   /// The XML tag name of the element, not including any namespace prefixes.
-  late final String name;
+  late String name;
   late String pluginAttribute;
 
   /// A mapping of root element tag names (in `$namespaceElementName` format)
@@ -357,7 +358,7 @@ class XMLBase {
   /// associate of `pluginOverrides` variable.
   late Map<Symbol, Function> gettersAndSetters;
   late Map<Tuple2<String, String?>, XMLBase> plugins;
-  late final Set<String> loadedPlugins;
+  late Set<String> loadedPlugins;
   late List<XMLBase> iterables;
   late XMLBase? parent;
 
@@ -371,7 +372,7 @@ class XMLBase {
 
   /// The stanza's XML contents initializer.
   ///
-  /// Will return `true` if XML was generated acording to the stanza's
+  /// Will return `true` if XML was generated according to the stanza's
   /// definition instead of building a stanza object from an existing XML
   /// object.
   bool setup([xml.XmlElement? element]) {
@@ -383,15 +384,19 @@ class XMLBase {
       return false;
     }
 
-    xml.XmlElement lastXML = xml.XmlElement(xml.XmlName(''));
+    xml.XmlElement? lastXML;
+    int index = 0;
     for (final ename in name.split('/')) {
-      final newElement = xml.XmlElement(xml.XmlName('{$namespace}$ename'));
+      final newElement = index == 0
+          ? Echotils.xmlElement(ename, namespace: namespace)
+          : Echotils.xmlElement(ename);
       if (this.element == null) {
         this.element = newElement;
       } else {
-        lastXML.children.add(newElement);
+        lastXML!.children.add(newElement);
       }
       lastXML = newElement;
+      index++;
     }
 
     if (parent != null) {
@@ -490,42 +495,43 @@ class XMLBase {
   /// In case the element does not exist, or it has not textual content, a [def]
   /// value can be returned instead. An empty string is returned if no other
   /// default is supplied.
-  Tuple2<String?, Map<String, String>?> _getSubText(
+  Tuple2<String?, Map<String, String>?> getSubText(
     String name, {
     String def = '',
     String? language,
   }) {
-    final castedName = fixNs(name).value1!;
-    print(castedName);
-
+    final castedName = '/${fixNs(name).value1!}';
     if (language != null && language == '*') {
-      return Tuple2(null, _getAllSubText(castedName, def: def));
+      return Tuple2(null, _getAllSubText(name, def: def));
     }
 
     final defaultLanguage =
         (language == null || language.isEmpty) ? getLang : null;
 
-    print('_getSubText: element is $element');
+    final stanzas = element!.queryXPath(castedName).nodes;
 
-    final stanzas = element!.findElements(castedName);
-    print(stanzas);
     if (stanzas.isEmpty) {
       return Tuple2(def, null);
     }
 
     String? result;
     for (final stanza in stanzas) {
-      if ((stanza.getAttribute('{${Echotils.getNamespace('XML')}}lang') ??
-              defaultLanguage) ==
-          language) {
-        if (stanza.innerText.isEmpty) {
-          return Tuple2(def, null);
+      if (stanza.isElement) {
+        final node = stanza.node;
+        if ((node.getAttribute(
+                  '{${Echotils.getNamespace('XML')}}lang',
+                ) ??
+                defaultLanguage) ==
+            language) {
+          if (node.innerText.isEmpty) {
+            return Tuple2(def, null);
+          }
+          result = node.innerText;
+          break;
         }
-        result = stanza.innerText;
-        break;
-      }
-      if (stanza.innerText.isNotEmpty) {
-        result = stanza.innerText;
+        if (stanza.node.innerText.isNotEmpty) {
+          result = stanza.node.innerText;
+        }
       }
     }
     if (result != null) {
@@ -556,7 +562,7 @@ class XMLBase {
           } else {
             text = stanza.innerText;
           }
-          results[stanzaLanguage] = text;
+          results[stanzaLanguage!] = text;
         }
       }
     }
@@ -571,7 +577,7 @@ class XMLBase {
   ///
   /// If the [text] is set to an empty string, or null, then the element will be
   /// removed, unless [keep] is set to `true`.
-  xml.XmlElement? _setSubText(
+  xml.XmlNode? setSubText(
     String name, {
     String? text,
     bool keep = false,
@@ -579,42 +585,51 @@ class XMLBase {
   }) {
     final lang = language ?? getLang;
 
-    if (text == null && !keep) {
-      _deleteSub(name, language: lang);
+    if ((text == null || text.isEmpty) && !keep) {
+      deleteSub(name, language: lang);
       return null;
     }
 
     final path = fixNs(name, split: true).value2!;
     final castedName = path.last;
 
-    late xml.XmlElement? parent = element;
-    late List<xml.XmlElement> elements = <xml.XmlElement>[];
+    late xml.XmlNode? parent = element;
+    late List<xml.XmlNode> elements = <xml.XmlElement>[];
 
     List<String> missingPath = <String>[];
     final searchOrder = path.sublist(0, path.length - 1);
 
     while (searchOrder.isNotEmpty) {
-      parent = element!.getElement(searchOrder.join('/'));
+      parent = element!.queryXPath('/${searchOrder.join('/')}').node?.node;
+
       final ename = searchOrder.removeLast();
       if (parent != null) {
         break;
       } else {
         missingPath.add(ename);
       }
-      missingPath = missingPath.reversed.toList();
     }
+    missingPath = missingPath.reversed.toList();
 
     if (parent != null) {
-      elements = element!.findElements(path.join('/')).toList();
+      try {
+        elements = element!
+            .queryXPath('/${path.join('/')}')
+            .nodes
+            .map((item) => item.node)
+            .toList();
+      } catch (_) {
+        elements = parent.children;
+      }
     } else {
       parent = element;
       elements = [];
     }
 
     for (final ename in missingPath) {
-      element = xml.XmlElement(xml.XmlName(ename));
-      parent!.children.add(element!);
-      parent = element;
+      final tempElement = xml.XmlElement(xml.XmlName(ename));
+      parent!.children.add(tempElement);
+      parent = tempElement;
     }
 
     for (final element in elements) {
@@ -627,14 +642,14 @@ class XMLBase {
       }
     }
 
-    element = xml.XmlElement(xml.XmlName(castedName));
-    element!.innerText = text!;
+    final tempElement = xml.XmlElement(xml.XmlName(castedName));
+    tempElement.innerText = text!;
+
     if ((language != null && language.isNotEmpty) && language != lang) {
-      element!.setAttribute('${Echotils.getNamespace('XML')}lang', language);
+      tempElement.setAttribute('${Echotils.getNamespace('XML')}lang', language);
     }
-    print('parent in set sub text: $parent');
-    parent!.children.add(element!);
-    return element = parent;
+    parent!.children.add(tempElement);
+    return tempElement;
   }
 
   void _setAllSubText(
@@ -643,10 +658,10 @@ class XMLBase {
     bool keep = false,
     String? language,
   }) {
-    _deleteSub(name, language: language);
+    deleteSub(name, language: language);
     for (final entry in values.entries) {
       if (language == null || language == '*' || entry.key == language) {
-        _setSubText(name, text: entry.value, keep: keep, language: entry.value);
+        setSubText(name, text: entry.value, keep: keep, language: entry.value);
       }
     }
   }
@@ -656,7 +671,7 @@ class XMLBase {
   /// If the element is in a path, then any parent elements that become empty
   /// after deleting the element may also be deleted if requested by setting
   /// [all] to `true`.
-  void _deleteSub(String name, {bool all = false, String? language}) {
+  void deleteSub(String name, {bool all = false, String? language}) {
     final path = fixNs(name, split: true).value2!;
     final originalTarget = path.last;
 
@@ -668,27 +683,40 @@ class XMLBase {
       }
     }
 
-    late xml.XmlElement? parent = element;
+    late xml.XmlNode? parent = element;
     for (final level in enumerate(path)) {
       final elementPath = path.sublist(0, path.length - level).join('/');
       final parentPath = (level > 0)
           ? path.sublist(0, path.length - level - 1).join('/')
           : null;
 
-      final elements = element!.findAllElements(elementPath);
+      final elements = element!
+          .queryXPath('/$elementPath')
+          .nodes
+          .map((item) => item.node)
+          .toList();
       if (parentPath != null && parentPath.isNotEmpty) {
-        parent = element!.getElement(parentPath);
+        parent = element!.queryXPath('/$parentPath').node?.node;
       }
       if (elements.isNotEmpty) {
         parent ??= element;
         for (final element in elements) {
-          if (element.name.local == originalTarget ||
-              element.children.isEmpty) {
-            final elementLanguage =
-                element.getAttribute('{${Echotils.getNamespace('XML')}}lang');
-
-            if (lang == '*' || elementLanguage == lang) {
-              parent!.children.remove(element);
+          if (element is xml.XmlElement) {
+            if (element.name.qualified == originalTarget ||
+                element.children.isEmpty) {
+              final elementLanguage = element
+                  .queryXPath(
+                    "//@*[local-name()='lang' and namespace-uri()='${Echotils.getNamespace('XML')}']",
+                  )
+                  .attr;
+              if (lang == '*' || elementLanguage == lang) {
+                if (parent!.children[level].innerXml
+                    .contains(element.toXmlString())) {
+                  parent.children[level].innerXml = parent
+                      .children[level].innerXml
+                      .replaceFirst(element.toXmlString(), '');
+                }
+              }
             }
           }
         }
@@ -702,7 +730,7 @@ class XMLBase {
   Tuple2<String?, List<String>?> fixNs(
     String xPath, {
     bool split = false,
-    bool propogateNamespace = true,
+    bool propogateNamespace = false,
   }) =>
       fixNamespace(
         xPath,
@@ -725,8 +753,12 @@ class XMLBase {
   void _setAttribute(
     String attribute, {
     String? value,
-  }) =>
-      element!.setAttribute(attribute, value);
+  }) {
+    if (value == null || value.isEmpty) {
+      return;
+    }
+    element!.setAttribute(attribute, value);
+  }
 
   /// Return the value of a stanza interface using operator overload.
   ///
@@ -761,8 +793,8 @@ class XMLBase {
     final language = split[1];
 
     /// Check for if `languageInterfaces` contains both `language` and
-    /// `attribute` values, then assign `kwargs` values respective to the check.
-    final kwargs = (languageInterfaces.contains(language) &&
+    /// `attribute` values, then assign `args` values respective to the check.
+    final args = (languageInterfaces.contains(language) &&
             languageInterfaces.contains(attribute))
         ? {'lang': language}
         : {};
@@ -783,17 +815,17 @@ class XMLBase {
 
             if (handler != null) {
               return noSuchMethod(
-                Invocation.method(Symbol(getMethod), [kwargs]),
+                Invocation.method(Symbol(getMethod), [args]),
               );
             }
           }
         }
       }
       if (gettersAndSetters.containsKey(Symbol(getMethod))) {
-        return noSuchMethod(Invocation.method(Symbol(getMethod), [kwargs]));
+        return noSuchMethod(Invocation.method(Symbol(getMethod), [args]));
       } else {
         if (subInterfaces.contains(attribute)) {
-          return _getSubText(attribute, language: language);
+          return getSubText(attribute, language: language);
         } else if (boolInterfaces.contains(attribute)) {
           if (element != null) {
             final element = this.element!.getElement('$namespace$attribute');
@@ -830,17 +862,16 @@ class XMLBase {
   /// object, but can be overridden by the presence of a `setAttribute` method
   /// (or `set_foo` where the interface is named `foo`, etc.).
   void operator []=(String attribute, dynamic value) {
-    print('setting $value to $attribute');
     final fullAttribute = attribute;
     final attributeLanguage = '$attribute|'.split('|');
     final attrib = attributeLanguage[0];
-    final lang = attributeLanguage[1];
+    final lang = attributeLanguage[1].isEmpty ? null : attributeLanguage[1];
 
-    final kwargs = {};
+    final args = {};
 
     if (languageInterfaces.contains(lang) &&
         languageInterfaces.contains(attrib)) {
-      kwargs['lang'] = lang;
+      args['lang'] = lang;
     }
 
     if (interfaces.contains(attrib) || attrib == 'lang') {
@@ -857,7 +888,7 @@ class XMLBase {
               final handler = plugin.gettersAndSetters[Symbol(setMethod)];
               if (handler != null) {
                 noSuchMethod(
-                  Invocation.method(Symbol(setMethod), [value, kwargs]),
+                  Invocation.method(Symbol(setMethod), [value, args]),
                 );
                 return;
               }
@@ -866,7 +897,7 @@ class XMLBase {
         }
 
         if (gettersAndSetters.containsKey(Symbol(setMethod))) {
-          noSuchMethod(Invocation.method(Symbol(setMethod), [value, kwargs]));
+          noSuchMethod(Invocation.method(Symbol(setMethod), [value, args]));
         } else {
           if (subInterfaces.contains(attrib)) {
             String? subvalue;
@@ -881,14 +912,14 @@ class XMLBase {
                 language: '*',
               );
             }
-            _setSubText(attribute, text: subvalue, language: lang);
+            setSubText(attribute, text: subvalue, language: lang);
             return;
           } else if (boolInterfaces.contains(attrib)) {
             if (value != null) {
-              _setSubText(attribute, text: '', keep: true, language: lang);
+              setSubText(attribute, text: '', keep: true, language: lang);
               return;
             } else {
-              _setSubText(attribute, text: '', language: lang);
+              setSubText(attribute, text: '', language: lang);
               return;
             }
           } else {
@@ -905,6 +936,72 @@ class XMLBase {
         pluginAttributeMapping[attrib] != null) {}
 
     return;
+  }
+
+  /// Delete the value of a stanza interface.
+  ///
+  /// Stanza interfaces are typically mapped directly to the underlying XML
+  /// object, but can be overridden by the presence of [noSuchMethod] by adding
+  /// [Function] with [Symbol] key under [gettersAndSetters] [Map].
+  void delete(String attribute) {
+    final fullAttribute = attribute;
+    final attributeLanguage = '$attribute|'.split('|');
+    final attrib = attributeLanguage[0];
+    final lang = attributeLanguage[1].isEmpty ? null : attributeLanguage[1];
+
+    final args = {};
+
+    if (languageInterfaces.contains(lang) &&
+        languageInterfaces.contains(attrib)) {
+      args['lang'] = lang;
+    }
+
+    if (interfaces.contains(attrib) || attrib == 'lang') {
+      final deleteMethod = 'del_${attrib.toLowerCase()}';
+
+      if (pluginOverrides.isNotEmpty) {
+        final name = pluginOverrides[deleteMethod];
+
+        if (name != null && name.isNotEmpty) {
+          final plugin = getPlugin(attrib, language: lang);
+
+          if (plugin != null) {
+            final handler = plugin.gettersAndSetters[Symbol(deleteMethod)];
+
+            if (handler != null) {
+              noSuchMethod(Invocation.method(Symbol(deleteMethod), [args]));
+              return;
+            }
+          }
+        }
+      }
+      if (gettersAndSetters.containsKey(Symbol(deleteMethod))) {
+        noSuchMethod(Invocation.method(Symbol(deleteMethod), [args]));
+      } else {
+        if (subInterfaces.contains(attrib)) {
+          return deleteSub(attrib, language: lang);
+        } else if (boolInterfaces.contains(attrib)) {
+          return deleteSub(attrib, language: lang);
+        } else {
+          return deleteSub(attrib);
+        }
+      }
+    } else if (pluginAttributeMapping.containsKey(attrib) &&
+        pluginAttributeMapping[attrib] != null) {
+      final plugin = getPlugin(attrib, language: lang, check: true);
+      if (plugin == null) {
+        return;
+      }
+      if (plugin.isExtension) {
+        plugin.delete(fullAttribute);
+        plugins.remove(Tuple2(attrib, null));
+      } else {
+        plugins.remove(Tuple2(attrib, plugin['lang']));
+      }
+      try {
+        element!.children.remove(plugin.element);
+      } catch (_) {}
+    }
   }
 
   /// Add either an [xml.XmlElement] object or substanza to this stanza object.
@@ -951,17 +1048,37 @@ class XMLBase {
   /// Returns the namespaced name of the stanza's root element.
   ///
   /// The format for the tag name is: '{namespace}elementName'.
-  String get tagName => '{$namespace}$name';
+  String get tagName => '<$name xmlns: $namespace/>';
 
-  String get getLang {
-    final result = element!.getAttribute('${Echotils.getNamespace('XML')}lang');
-    if (result == null && parent != null) {
+  String? get getLang {
+    final result = element!.queryXPath(
+      "//@*[local-name()='lang' and namespace-uri()='${Echotils.getNamespace('XML')}']",
+    );
+    if (result.nodes.isNotEmpty && parent != null) {
       return parent!['lang'] as String;
     }
-    return result ?? '';
+    return result.attr;
   }
 
   bool get boolean => true;
+
+  /// Returns the names of all stanza interfaces provided by the stanza object.
+  ///
+  /// Allows stanza objects to be used as [Map].
+  List<String> get keys {
+    final buffer = <String>[];
+    for (final x in interfaces) {
+      buffer.add(x);
+    }
+    for (final x in loadedPlugins) {
+      buffer.add(x);
+    }
+    buffer.add('lang');
+    if (iterables.isNotEmpty) {
+      buffer.add('substanzas');
+    }
+    return buffer;
+  }
 
   /// Set multiple stanza interface [values] using [Map].
   ///
@@ -1074,7 +1191,57 @@ class XMLBase {
     return super.noSuchMethod(invocation);
   }
 
+  /// You need to override this method in order to create a copy from an
+  /// existing object due Dart do not have deep copy support for now.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// class SimpleStanza extends XMLBase {
+  ///   SimpleStanza({super.element, super.parent});
+  ///
+  ///   @override
+  ///   XMLBase copy() =>
+  ///     SimpleStanza(element: element, parent: parent);
+  /// }
+  /// ```
+  // XMLBase copy() => XMLBase(element: element, parent: parent);
+
   /// Returns a string serialization of the underlying XML object.
   @override
   String toString() => Echotils.serialize(element) ?? '';
+
+  /// Compares the stanza object with another to test for equality.
+  ///
+  /// Stanzas are equal if their interfaces return the same values, and if they
+  /// are both instances of [XMLBase].
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+
+    // Check if the runtime types are the same
+    if (runtimeType != other.runtimeType) return false;
+
+    return other is XMLBase &&
+        () {
+          final otherValues = other.values;
+          for (final key in other.keys) {
+            if (!values.containsKey(key) || values[key] != otherValues[key]) {
+              return false;
+            }
+          }
+
+          for (final key in keys) {
+            if (!values.containsKey(key) || otherValues[key] != values[key]) {
+              return false;
+            }
+          }
+
+          return true;
+        }();
+  }
+
+  @override
+  int get hashCode {
+    return values.hashCode ^ keys.hashCode;
+  }
 }
