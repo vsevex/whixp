@@ -1,16 +1,110 @@
 import 'package:echox/src/stream/base.dart';
+
 import 'package:xml/xml.dart' as xml;
 
-class ExtendedNameTestStanza extends XMLBase {
-  ExtendedNameTestStanza([xml.XmlElement? element]) : super(element: element);
+class SimpleStanza extends XMLBase {
+  SimpleStanza({super.element, super.parent});
+
   @override
-  String get name => 'lerko/hert/blya';
+  String get name => 'lerko';
+
+  @override
+  String get namespace => 'test';
+
+  @override
+  Set<String> get interfaces => {'hert', 'cart'};
+}
+
+class ExtendedNameTestStanza extends XMLBase {
+  ExtendedNameTestStanza({super.element, super.parent});
+
+  @override
+  String get name => 'foo/bar/baz';
 
   @override
   String get namespace => 'test';
 }
 
+class GetSubTextTestStanza extends XMLBase {
+  GetSubTextTestStanza({super.element, super.parent});
+
+  @override
+  String get name => 'blya';
+
+  @override
+  String get namespace => 'test';
+
+  @override
+  Set<String> get interfaces => {'cart'};
+
+  @override
+  Map<Symbol, Function> get gettersAndSetters => {
+        const Symbol('set_cart'): (value, _) {
+          final wrapper = xml.XmlElement(xml.XmlName('wrapper'));
+          final cart = xml.XmlElement(xml.XmlName('cart'));
+          cart.innerText = 'hehe';
+          wrapper.children.add(cart);
+          element!.children.add(wrapper);
+        },
+        const Symbol('get_cart'): (_) {
+          return getSubText('/wrapper/cart', def: 'zort');
+        },
+      };
+}
+
+class SubElementTestStanza extends XMLBase {
+  SubElementTestStanza({super.element, super.parent});
+
+  @override
+  String get name => 'lerko';
+
+  @override
+  String get namespace => 'test';
+
+  @override
+  Set<String> get interfaces => {'hehe', 'boo'};
+
+  @override
+  Map<Symbol, Function> get gettersAndSetters => {
+        const Symbol('set_hehe'): (String value, _) =>
+            setSubText('/wrapper/hehe', text: value),
+        const Symbol('get_hehe'): (_) => getSubText('/wrapper/hehe'),
+        const Symbol('set_boo'): (String value, _) =>
+            setSubText('/wrapper/boo', text: value),
+        const Symbol('get_boo'): (_) => getSubText('/wrapper/boo'),
+      };
+}
+
+class DeleteSubElementTestStanza extends XMLBase {
+  DeleteSubElementTestStanza({super.element, super.parent});
+
+  @override
+  String get name => 'lerko';
+
+  @override
+  String get namespace => 'test';
+
+  @override
+  Set<String> get interfaces => {'hehe', 'boo'};
+
+  @override
+  Map<Symbol, Function> get gettersAndSetters => {
+        const Symbol('set_hehe'): (String value, _) =>
+            setSubText('/wrapper/herto/herto1/hehe', text: value),
+        const Symbol('get_hehe'): (_) =>
+            getSubText('/wrapper/herto/herto1/hehe'),
+        const Symbol('del_hehe'): (_) =>
+            deleteSub('/wrapper/herto/herto1/hehe'),
+        const Symbol('set_boo'): (String value, _) =>
+            setSubText('/wrapper/herto/herto2/boo', text: value),
+        const Symbol('get_boo'): (_) => getSubText('/wrapper/herto/herto2/boo'),
+        const Symbol('del_boo'): (_) => deleteSub('/wrapper/herto/herto2/boo'),
+      };
+}
+
 class DefaultLanguageTestStanza extends XMLBase {
+  DefaultLanguageTestStanza({super.element, super.parent});
+
   @override
   String get name => 'foo';
 
@@ -25,57 +119,4 @@ class DefaultLanguageTestStanza extends XMLBase {
 
   @override
   Set<String> get languageInterfaces => interfaces;
-}
-
-class TestStanza extends XMLBase {
-  @override
-  String get name => 'foo';
-
-  @override
-  String get namespace => 'foo';
-
-  @override
-  Set<String> get interfaces => {};
-}
-
-class TestMultiStanza1 extends XMLBase {
-  @override
-  String get name => 'bar';
-
-  @override
-  String get namespace => 'bar';
-
-  @override
-  String get pluginAttribute => name;
-
-  @override
-  String? get pluginMultiAttribute => 'bars';
-}
-
-class TestMultiStanza2 extends XMLBase {
-  @override
-  String get name => 'baz';
-
-  @override
-  String get namespace => 'baz';
-
-  @override
-  String get pluginAttribute => name;
-
-  @override
-  String? get pluginMultiAttribute => 'bazs';
-}
-
-class XMLBasePluginTest extends XMLBase {
-  @override
-  String get name => 'foobar';
-
-  @override
-  String get namespace => 'foo';
-
-  @override
-  Set<String> get interfaces => {'foobar'};
-
-  @override
-  String get pluginAttribute => 'foobar';
 }
