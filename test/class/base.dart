@@ -150,7 +150,36 @@ class OverridedStanza extends XMLBase {
   Set<String> get interfaces => {'bar', 'baz'};
 }
 
-class OverriderStanza extends XMLBase {
+class ExtensionTestStanza extends XMLBase {
+  ExtensionTestStanza({super.element, super.parent});
+
+  @override
+  String get name => 'extended';
+
+  @override
+  String get namespace => 'test';
+
+  @override
+  String get pluginAttribute => name;
+
+  @override
+  Set<String> get interfaces => {name};
+
+  @override
+  bool get isExtension => true;
+
+  @override
+  Map<Symbol, Function> get gettersAndSetters => {
+        const Symbol('set_extended'): (value, _) {
+          return element!.innerText = value as String;
+        },
+        const Symbol('get_extended'): (_) => element!.innerText,
+        const Symbol('del_extended'): (value, _) =>
+            parent!.element!.children.remove(element),
+      };
+}
+
+class OverriderStanza extends OverridedStanza {
   OverriderStanza({super.element, super.parent});
 
   @override
@@ -178,7 +207,6 @@ class OverriderStanza extends XMLBase {
   Map<Symbol, Function> get gettersAndSetters => {
         const Symbol('set_bar'): (value, _) {
           if (!(value as String).startsWith('override-')) {
-            print(parent);
             parent!.setAttribute('bar', 'override-$value');
           } else {
             parent!.setAttribute('bar', value);

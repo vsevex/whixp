@@ -263,9 +263,31 @@ void main() {
         '<foo bar="foo" xmlns="test"/>',
       );
 
-      registerStanzaPlugin(stanza, overriderStanza, overrides: true);
-      stanza = OverridedStanza();
+      registerStanzaPlugin(
+        stanza,
+        overriderStanza,
+        (updater) => stanza = updater,
+        overrides: true,
+      );
       stanza['bar'] = 'foo';
+      tester.check(
+        stanza,
+        ([element]) => OverridedStanza(element: element),
+        '<foo bar="override-foo" xmlns="test"/>',
+      );
+    });
+
+    test('XMLBase.isExtension property usage test', () {
+      XMLBase stanza = OverridedStanza();
+      final extension = ExtensionTestStanza();
+
+      registerStanzaPlugin(
+        stanza,
+        extension,
+        (updater) => stanza = updater,
+      );
+      stanza['extended'] = 'testing';
+
       print(stanza);
     });
 
