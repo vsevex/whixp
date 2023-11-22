@@ -47,7 +47,7 @@ Tuple2<String?, List<String>?> fixNamespace(
   return Tuple2(fixed.join('/'), null);
 }
 
-/// Associate a [stanza] object as a plugin for another stanza.
+/// Associates a [stanza] object as a plugin for another stanza.
 ///
 /// [plugin] stanzas marked as iterable will be included in the list of
 /// substanzas for the parent, using `parent['subsstanzas']`. If the attribute
@@ -64,7 +64,7 @@ void registerStanzaPlugin(
   bool iterable = false,
   bool overrides = false,
 }) {
-  final tag = '{${plugin.namespace}}${plugin.name}';
+  final tag = '<${plugin.name} xmlns="${plugin.namespace}"/>';
   const pluginInfo = <String>[
     'pluginAttributeMapping',
     'pluginTagMapping',
@@ -384,7 +384,7 @@ class XMLBase {
       return false;
     }
 
-    xml.XmlElement? lastXML;
+    xml.XmlElement lastXML = xml.XmlElement(xml.XmlName(''));
     int index = 0;
     for (final ename in name.split('/')) {
       final newElement = index == 0
@@ -393,7 +393,7 @@ class XMLBase {
       if (this.element == null) {
         this.element = newElement;
       } else {
-        lastXML!.children.add(newElement);
+        lastXML.children.add(newElement);
       }
       lastXML = newElement;
       index++;
@@ -495,37 +495,30 @@ class XMLBase {
   /// In case the element does not exist, or it has not textual content, a [def]
   /// value can be returned instead. An empty string is returned if no other
   /// default is supplied.
-  Tuple2<String?, Map<String, String>?> getSubText(
+  dynamic getSubText(
     String name, {
     String def = '',
     String? language,
   }) {
     final castedName = '/${fixNs(name).value1!}';
     if (language != null && language == '*') {
-      return Tuple2(null, _getAllSubText(name, def: def));
+      return _getAllSubText(name, def: def);
     }
 
-    final defaultLanguage =
-        (language == null || language.isEmpty) ? getLang : null;
+    final defaultLanguage = getLang;
+    final lang = language ?? defaultLanguage;
 
     final stanzas = element!.queryXPath(castedName).nodes;
 
-    if (stanzas.isEmpty) {
-      return Tuple2(def, null);
-    }
+    if (stanzas.isEmpty) return def;
 
     String? result;
     for (final stanza in stanzas) {
       if (stanza.isElement) {
         final node = stanza.node;
-        if ((node.getAttribute(
-                  '{${Echotils.getNamespace('XML')}}lang',
-                ) ??
-                defaultLanguage) ==
-            language) {
-          if (node.innerText.isEmpty) {
-            return Tuple2(def, null);
-          }
+        if ((_lang(node) ?? defaultLanguage) == lang) {
+          if (node.innerText.isEmpty) return def;
+
           result = node.innerText;
           break;
         }
@@ -534,10 +527,9 @@ class XMLBase {
         }
       }
     }
-    if (result != null) {
-      return Tuple2(result, null);
-    }
-    return Tuple2(def, null);
+    if (result != null) return result;
+
+    return def;
   }
 
   Map<String, String> _getAllSubText(
@@ -552,9 +544,7 @@ class XMLBase {
     final stanzas = element!.findAllElements(castedName);
     if (stanzas.isNotEmpty) {
       for (final stanza in stanzas) {
-        final stanzaLanguage =
-            stanza.getAttribute('{${Echotils.getNamespace('XML')}}lang') ??
-                defaultLanguage;
+        final stanzaLanguage = _lang(stanza) ?? defaultLanguage;
         if (language == null || language == '*' || stanzaLanguage == language) {
           late String text;
           if (stanza.innerText.isEmpty) {
@@ -562,7 +552,9 @@ class XMLBase {
           } else {
             text = stanza.innerText;
           }
-          results[stanzaLanguage!] = text;
+          if (stanzaLanguage != null) {
+            results[stanzaLanguage] = text;
+          }
         }
       }
     }
@@ -583,7 +575,8 @@ class XMLBase {
     bool keep = false,
     String? language,
   }) {
-    final lang = language ?? getLang;
+    final defaultLanguage = getLang;
+    final lang = language ?? defaultLanguage;
 
     if ((text == null || text.isEmpty) && !keep) {
       deleteSub(name, language: lang);
@@ -633,10 +626,9 @@ class XMLBase {
     }
 
     for (final element in elements) {
-      final elanguage =
-          element.getAttribute('${Echotils.getNamespace('XML')}lang') ?? lang;
-      if ((language == null || language.isEmpty) && elanguage == lang ||
-          language != null && language == elanguage) {
+      final elanguage = _lang(element) ?? defaultLanguage;
+      if (((lang == null || lang.isEmpty) && elanguage == defaultLanguage) ||
+          lang != null && lang == elanguage) {
         element.innerText = text!;
         return element;
       }
@@ -645,8 +637,8 @@ class XMLBase {
     final tempElement = xml.XmlElement(xml.XmlName(castedName));
     tempElement.innerText = text!;
 
-    if ((language != null && language.isNotEmpty) && language != lang) {
-      tempElement.setAttribute('${Echotils.getNamespace('XML')}lang', language);
+    if ((lang != null && lang.isNotEmpty) && lang != defaultLanguage) {
+      tempElement.setAttribute('xml:lang', lang);
     }
     parent!.children.add(tempElement);
     return tempElement;
@@ -661,7 +653,7 @@ class XMLBase {
     deleteSub(name, language: language);
     for (final entry in values.entries) {
       if (language == null || language == '*' || entry.key == language) {
-        setSubText(name, text: entry.value, keep: keep, language: entry.value);
+        setSubText(name, text: entry.value, keep: keep, language: entry.key);
       }
     }
   }
@@ -675,7 +667,8 @@ class XMLBase {
     final path = fixNs(name, split: true).value2!;
     final originalTarget = path.last;
 
-    final lang = language ?? getLang;
+    final defaultLanguage = getLang;
+    final lang = language ?? defaultLanguage;
 
     Iterable<int> enumerate<T>(List<T> iterable) sync* {
       for (int i = 0; i < iterable.length; i++) {
@@ -704,17 +697,17 @@ class XMLBase {
           if (element is xml.XmlElement) {
             if (element.name.qualified == originalTarget ||
                 element.children.isEmpty) {
-              final elementLanguage = element
-                  .queryXPath(
-                    "//@*[local-name()='lang' and namespace-uri()='${Echotils.getNamespace('XML')}']",
-                  )
-                  .attr;
+              final elementLanguage = _lang(element) ?? defaultLanguage;
+
               if (lang == '*' || elementLanguage == lang) {
                 if (parent!.children[level].innerXml
                     .contains(element.toXmlString())) {
                   parent.children[level].innerXml = parent
                       .children[level].innerXml
                       .replaceFirst(element.toXmlString(), '');
+                }
+                if (parent.children.contains(element)) {
+                  parent.children.remove(element);
                 }
               }
             }
@@ -750,14 +743,14 @@ class XMLBase {
   ///
   /// If the new [value] is null or an empty string, then the attribute will be
   /// removed.
-  void _setAttribute(
-    String attribute, {
+  void setAttribute(
+    String attribute, [
     String? value,
-  }) {
+  ]) {
     if (value == null || value.isEmpty) {
       return;
     }
-    element!.setAttribute(attribute, value);
+    element!.setAttribute(attribute == 'lang' ? 'xml:lang' : attribute, value);
   }
 
   /// Return the value of a stanza interface using operator overload.
@@ -790,7 +783,7 @@ class XMLBase {
   dynamic operator [](String fullAttribute) {
     final split = '$fullAttribute|'.split('|');
     final attribute = split[0];
-    final language = split[1];
+    final language = split[1].isEmpty ? null : split[1];
 
     /// Check for if `languageInterfaces` contains both `language` and
     /// `attribute` values, then assign `args` values respective to the check.
@@ -827,10 +820,7 @@ class XMLBase {
         if (subInterfaces.contains(attribute)) {
           return getSubText(attribute, language: language);
         } else if (boolInterfaces.contains(attribute)) {
-          if (element != null) {
-            final element = this.element!.getElement('$namespace$attribute');
-            return element != null;
-          }
+          return element!.getElement('$namespace$attribute') != null;
         } else {
           return _getAttribute(attribute);
         }
@@ -844,7 +834,7 @@ class XMLBase {
 
       return plugin;
     } else {
-      return '';
+      return null;
     }
   }
 
@@ -895,37 +885,36 @@ class XMLBase {
             }
           }
         }
-
         if (gettersAndSetters.containsKey(Symbol(setMethod))) {
           noSuchMethod(Invocation.method(Symbol(setMethod), [value, args]));
         } else {
           if (subInterfaces.contains(attrib)) {
-            String? subvalue;
+            dynamic subvalue;
             if (value is JabberIDTemp) {
               subvalue = value.toString();
             }
-            subvalue ??= value as String?;
+            subvalue ??= value;
             if (lang == '*') {
               return _setAllSubText(
-                attribute,
-                values: value as Map<String, String>,
+                attrib,
+                values: subvalue as Map<String, String>,
                 language: '*',
               );
             }
-            setSubText(attribute, text: subvalue, language: lang);
+            setSubText(attrib, text: subvalue as String?, language: lang);
             return;
           } else if (boolInterfaces.contains(attrib)) {
             if (value != null) {
-              setSubText(attribute, text: '', keep: true, language: lang);
+              setSubText(attrib, text: '', keep: true, language: lang);
               return;
             } else {
-              setSubText(attribute, text: '', language: lang);
+              setSubText(attrib, text: '', language: lang);
               return;
             }
           } else {
-            _setAttribute(
+            return setAttribute(
               attrib,
-              value: (value != null && value is JabberIDTemp)
+              (value != null && value is JabberIDTemp)
                   ? value.toString()
                   : value as String?,
             );
@@ -1048,16 +1037,28 @@ class XMLBase {
   /// Returns the namespaced name of the stanza's root element.
   ///
   /// The format for the tag name is: '{namespace}elementName'.
-  String get tagName => '<$name xmlns: $namespace/>';
+  String get tagName => '<$name xmlns:"$namespace"/>';
+
+  String? _lang(xml.XmlNode element) {
+    final result = element
+        .queryXPath(
+          "//@*[local-name()='xml:lang' and namespace-uri()='${Echotils.getNamespace('XML')}']",
+        )
+        .node;
+
+    if (result == null) return null;
+
+    return result.node.getAttribute('xml:lang', namespace: namespace);
+  }
 
   String? get getLang {
-    final result = element!.queryXPath(
-      "//@*[local-name()='lang' and namespace-uri()='${Echotils.getNamespace('XML')}']",
-    );
-    if (result.nodes.isNotEmpty && parent != null) {
+    if (element == null) return null;
+
+    final result = _lang(element!);
+    if (result == null && parent != null) {
       return parent!['lang'] as String;
     }
-    return result.attr;
+    return result;
   }
 
   bool get boolean => true;
@@ -1121,7 +1122,6 @@ class XMLBase {
       final interface = interfaceLanguage[0];
       final language =
           interfaceLanguage[1].isEmpty ? getLang : interfaceLanguage[1];
-
       if (interface == 'lang') {
         continue;
       } else if (interface == 'substanzas') {
@@ -1144,6 +1144,7 @@ class XMLBase {
   Map<String, dynamic> get _values {
     final values = <String, dynamic>{};
     values['lang'] = this['lang'];
+
     for (final interface in interfaces) {
       if (this[interface] is JabberIDTemp) {
         values[interface] = (this[interface] as JabberIDTemp).jid;
