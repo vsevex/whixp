@@ -1,7 +1,7 @@
 import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/stream/base.dart';
-import 'package:test/test.dart';
 
+import 'package:test/test.dart';
 import 'package:xml/xml.dart' as xml;
 
 /// Assigns a namespace to an element and any children that do not have a
@@ -85,7 +85,7 @@ xml.XmlElement parseXMLFromString(String xmlToParse) {
 /// any extra elements that are included by default.
 void check(
   XMLBase stanza,
-  XMLBase Function(xml.XmlElement) defaultStanza,
+  XMLBase Function([xml.XmlElement? element]) defaultStanza,
   dynamic criteria, {
   String method = 'exact',
   bool useValues = true,
@@ -97,16 +97,21 @@ void check(
     eksemel = criteria.element!;
   }
 
-  final stanza2 = defaultStanza(eksemel);
+  final stanza1 = defaultStanza(eksemel);
 
   if (useValues) {
-    final values = stanza.values;
+    final values = stanza1.values;
+    final stanza2 = defaultStanza(null);
     stanza2.values = values;
+    // print('stanza: $stanza');
+    // print('stanza1: $stanza1');
+    // print('stanza2: $stanza2');
 
     compare(
       eksemel,
       elements: [
         stanza.element!,
+        stanza1.element!,
         stanza2.element!,
       ],
     );

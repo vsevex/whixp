@@ -25,6 +25,25 @@ class ExtendedNameTestStanza extends XMLBase {
   String get namespace => 'test';
 }
 
+class LanguageTestStanza extends XMLBase {
+  LanguageTestStanza({super.element, super.parent});
+
+  @override
+  String get name => 'lerko';
+
+  @override
+  String get namespace => 'test';
+
+  @override
+  Set<String> get interfaces => {'test'};
+
+  @override
+  Set<String> get subInterfaces => interfaces;
+
+  @override
+  Set<String> get languageInterfaces => interfaces;
+}
+
 class GetSubTextTestStanza extends XMLBase {
   GetSubTextTestStanza({super.element, super.parent});
 
@@ -102,8 +121,8 @@ class DeleteSubElementTestStanza extends XMLBase {
       };
 }
 
-class DefaultLanguageTestStanza extends XMLBase {
-  DefaultLanguageTestStanza({super.element, super.parent});
+class BooleanInterfaceStanza extends XMLBase {
+  BooleanInterfaceStanza({super.element, super.parent});
 
   @override
   String get name => 'foo';
@@ -112,11 +131,58 @@ class DefaultLanguageTestStanza extends XMLBase {
   String get namespace => 'test';
 
   @override
-  Set<String> get interfaces => {'test'};
+  Set<String> get interfaces => {'bar'};
 
   @override
-  Set<String> get subInterfaces => interfaces;
+  Set<String> get boolInterfaces => interfaces;
+}
+
+class OverridedStanza extends XMLBase {
+  OverridedStanza({super.element, super.parent});
 
   @override
-  Set<String> get languageInterfaces => interfaces;
+  String get name => 'foo';
+
+  @override
+  String get namespace => 'test';
+
+  @override
+  Set<String> get interfaces => {'bar', 'baz'};
+}
+
+class OverriderStanza extends XMLBase {
+  OverriderStanza({super.element, super.parent});
+
+  @override
+  String get name => 'overrider';
+
+  @override
+  String get namespace => 'test';
+
+  @override
+  String get pluginAttribute => name;
+
+  @override
+  Set<String> get interfaces => {'bar'};
+
+  @override
+  List<String> get overrides => ['set_bar'];
+
+  @override
+  bool setup([xml.XmlElement? element]) {
+    this.element = xml.XmlElement(xml.XmlName(''));
+    return super.setup(element);
+  }
+
+  @override
+  Map<Symbol, Function> get gettersAndSetters => {
+        const Symbol('set_bar'): (value, _) {
+          if (!(value as String).startsWith('override-')) {
+            print(parent);
+            parent!.setAttribute('bar', 'override-$value');
+          } else {
+            parent!.setAttribute('bar', value);
+          }
+        },
+      };
 }
