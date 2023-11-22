@@ -47,6 +47,8 @@ Tuple2<String?, List<String>?> fixNamespace(
   return Tuple2(fixed.join('/'), null);
 }
 
+typedef _ClassUpdater<T> = T Function(XMLBase);
+
 /// Associates a [stanza] object as a plugin for another stanza.
 ///
 /// [plugin] stanzas marked as iterable will be included in the list of
@@ -58,9 +60,10 @@ Tuple2<String?, List<String>?> fixNamespace(
 /// `pluginMultiAttribute = 'foos'` then:
 ///   parent['foos']
 /// would return a collection of all `Foo` substanzas.
-void registerStanzaPlugin(
+void registerStanzaPlugin<T>(
   XMLBase stanza,
-  XMLBase plugin, {
+  XMLBase plugin,
+  _ClassUpdater<T> stanzaUpdater, {
   bool iterable = false,
   bool overrides = false,
 }) {
@@ -85,7 +88,7 @@ void registerStanzaPlugin(
     if (plugin.pluginMultiAttribute != null &&
         plugin.pluginMultiAttribute!.isNotEmpty) {
       final multiplugin = multifactory(plugin, plugin.pluginMultiAttribute!);
-      registerStanzaPlugin(stanza, multiplugin);
+      registerStanzaPlugin(stanza, multiplugin, stanzaUpdater);
     }
   }
   if (overrides) {
@@ -93,6 +96,7 @@ void registerStanzaPlugin(
       stanza.pluginOverrides[interface] = plugin.pluginAttribute;
     }
   }
+  stanzaUpdater(stanza);
 }
 
 XMLBase multifactory(XMLBase stanza, String pluginAttribute) {
@@ -732,12 +736,14 @@ class XMLBase {
         defaultNamespace: namespace,
       );
 
-  /// Return the value of top level attribuet of the XML object.
+  /// Return the value of top level attribute of the XML object.
   ///
   /// In case the attribute has not been set, a [def] value can be returned
   /// instead. An empty string is returned if not other default is supplied.
-  String? _getAttribute(String name, [String def = '']) =>
-      element!.getAttribute(name) ?? def;
+  String? _getAttribute(String name, [String def = '']) {
+    if (element == null) return def;
+    return element!.getAttribute(name) ?? def;
+  }
 
   /// Set the value of a top level [attribute] of the XML object.
   ///
@@ -815,7 +821,7 @@ class XMLBase {
         }
       }
       if (gettersAndSetters.containsKey(Symbol(getMethod))) {
-        return noSuchMethod(Invocation.method(Symbol(getMethod), [args]));
+        (gettersAndSetters[Symbol(getMethod)]! as Function(dynamic)).call(args);
       } else {
         if (subInterfaces.contains(attribute)) {
           return getSubText(attribute, language: language);
@@ -877,16 +883,18 @@ class XMLBase {
             if (plugin != null) {
               final handler = plugin.gettersAndSetters[Symbol(setMethod)];
               if (handler != null) {
-                noSuchMethod(
-                  Invocation.method(Symbol(setMethod), [value, args]),
-                );
+                (handler as Function(dynamic, dynamic)).call(value, args);
                 return;
               }
             }
           }
         }
         if (gettersAndSetters.containsKey(Symbol(setMethod))) {
-          noSuchMethod(Invocation.method(Symbol(setMethod), [value, args]));
+          (gettersAndSetters[Symbol(setMethod)]! as Function(
+            dynamic,
+            Map<dynamic, dynamic>,
+          ))
+              .call(value, args);
         } else {
           if (subInterfaces.contains(attrib)) {
             dynamic subvalue;
@@ -922,7 +930,12 @@ class XMLBase {
         }
       }
     } else if (pluginAttributeMapping.containsKey(attrib) &&
-        pluginAttributeMapping[attrib] != null) {}
+        pluginAttributeMapping[attrib] != null) {
+      final plugin = getPlugin(attrib, language: lang);
+      if (plugin != null) {
+        plugin[fullAttribute] = value;
+      }
+    }
 
     return;
   }
