@@ -58,10 +58,10 @@ class GetSubTextTestStanza extends XMLBase {
 
   @override
   Map<Symbol, Function> get gettersAndSetters => {
-        const Symbol('set_cart'): (value, _) {
+        const Symbol('set_cart'): (value, __) {
           final wrapper = xml.XmlElement(xml.XmlName('wrapper'));
           final cart = xml.XmlElement(xml.XmlName('cart'));
-          cart.innerText = 'hehe';
+          cart.innerText = value as String;
           wrapper.children.add(cart);
           element!.children.add(wrapper);
         },
@@ -69,6 +69,10 @@ class GetSubTextTestStanza extends XMLBase {
           return getSubText('/wrapper/cart', def: 'zort');
         },
       };
+
+  @override
+  XMLBase copy([xml.XmlElement? element, XMLBase? parent]) =>
+      GetSubTextTestStanza(element: element, parent: parent);
 }
 
 class SubElementTestStanza extends XMLBase {
@@ -169,6 +173,9 @@ class ExtensionTestStanza extends XMLBase {
   bool get isExtension => true;
 
   @override
+  bool get includeNamespace => false;
+
+  @override
   Map<Symbol, Function> get gettersAndSetters => {
         const Symbol('set_extended'): (value, _) =>
             element!.innerText = value as String,
@@ -201,6 +208,9 @@ class OverriderStanza extends OverridedStanza {
   List<String> get overrides => ['set_bar'];
 
   @override
+  bool get includeNamespace => false;
+
+  @override
   bool setup([xml.XmlElement? element]) {
     this.element = xml.XmlElement(xml.XmlName(''));
     return super.setup(element);
@@ -216,4 +226,110 @@ class OverriderStanza extends OverridedStanza {
           }
         },
       };
+}
+
+class KeysTestStanza extends XMLBase {
+  @override
+  String get name => 'foo';
+
+  @override
+  String get namespace => 'test';
+
+  @override
+  Set<String> get interfaces => {'bar', 'baz'};
+
+  @override
+  String get pluginAttribute => 'cart';
+}
+
+class DeleteItemTestStanza extends XMLBase {
+  DeleteItemTestStanza({super.element, super.parent});
+
+  @override
+  String get name => 'foo';
+
+  @override
+  String get namespace => 'test';
+
+  @override
+  Set<String> get interfaces => {'bar', 'baz', 'cart'};
+
+  @override
+  Set<String> get subInterfaces => {'bar'};
+
+  @override
+  Map<Symbol, Function> get gettersAndSetters => {
+        const Symbol('del_cart'): (_) {
+          return;
+        },
+      };
+}
+
+class DeleteItemTestPluginStanza extends XMLBase {
+  DeleteItemTestPluginStanza({super.element, super.parent});
+
+  @override
+  String get name => 'lerko';
+
+  @override
+  String get namespace => 'test';
+
+  @override
+  String get pluginAttribute => name;
+
+  @override
+  Set<String> get interfaces => {name};
+
+  @override
+  bool get includeNamespace => false;
+
+  @override
+  XMLBase copy([xml.XmlElement? element, XMLBase? parent]) =>
+      DeleteItemTestPluginStanza(element: element, parent: parent);
+}
+
+class SetItemTestStanza extends XMLBase {
+  SetItemTestStanza({super.element, super.parent});
+
+  @override
+  String get name => 'foo';
+
+  @override
+  String get namespace => 'test';
+
+  @override
+  Set<String> get interfaces => {'bar', 'baz', 'cart'};
+
+  @override
+  Set<String> get subInterfaces => {'baz'};
+
+  @override
+  Map<Symbol, Function> get gettersAndSetters => {
+        const Symbol('set_cart'): (_, args) {
+          return;
+        },
+      };
+}
+
+class SetItemTestPluginStanza extends XMLBase {
+  SetItemTestPluginStanza({super.element, super.parent});
+
+  @override
+  String get name => 'lerko';
+
+  @override
+  String get namespace => 'test';
+
+  @override
+  String get pluginAttribute => name;
+
+  @override
+  Set<String> get interfaces => {name};
+
+  @override
+  bool get includeNamespace => false;
+
+  @override
+  XMLBase copy([xml.XmlElement? element, XMLBase? parent]) =>
+      SetItemTestPluginStanza(element: element, parent: parent);
 }

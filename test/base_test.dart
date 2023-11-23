@@ -277,6 +277,74 @@ void main() {
       );
     });
 
+    test('must correctly set stanza interface values', () {
+      XMLBase stanza = SetItemTestStanza();
+      final plugin = SetItemTestPluginStanza();
+
+      registerStanzaPlugin(stanza, plugin, (updater) => stanza = updater);
+
+      stanza['bar'] = 'attr';
+      stanza['baz'] = 'element';
+      stanza['cart'] = 'overridden';
+      stanza['lerko'] = 'thisisplugin';
+
+      tester.check(
+        stanza,
+        ([element]) => SetItemTestStanza(element: element),
+        '<foo bar="attr" xmlns="test"><baz>element</baz><lerko lerko="thisisplugin"/></foo>',
+      );
+    });
+
+    test('must delete stanza interface values', () {
+      XMLBase stanza = DeleteItemTestStanza();
+      final plugin = DeleteItemTestPluginStanza();
+
+      registerStanzaPlugin(stanza, plugin, (updater) => stanza = updater);
+
+      stanza['bar'] = 'blya';
+      stanza['baz'] = 'hert';
+      stanza['cart'] = 'gup';
+      final lerko = stanza['lerko'] as XMLBase;
+      lerko['lerko'] = 'a';
+
+      tester.check(
+        stanza,
+        ([element]) => DeleteItemTestStanza(element: element),
+        '<foo baz="hert" cart="gup" xmlns="test"><bar>blya</bar><lerko lerko = "a"/></foo>',
+      );
+
+      stanza
+        ..delete('bar')
+        ..delete('baz')
+        ..delete('cart')
+        ..delete('lerko');
+
+      tester.check(
+        stanza,
+        ([element]) => DeleteItemTestStanza(element: element),
+        '<foo cart="gup" xmlns="test"/>',
+      );
+    });
+
+    test('values getter test using plugins and substanzas', () {
+      
+    });
+
+    test(
+        'must extract interface names from a stanza object using `keys` getter',
+        () {
+      XMLBase stanza = KeysTestStanza();
+      final plugin = KeysTestStanza()..includeNamespace = false;
+
+      registerStanzaPlugin(stanza, plugin, (updater) => stanza = updater);
+
+      expect(stanza.keys, equals(['bar', 'baz', 'lang']));
+
+      stanza.enable('cart');
+
+      expect(stanza.keys, equals(['bar', 'baz', 'cart', 'lang']));
+    });
+
     test('XMLBase.isExtension property usage test', () {
       final extension = ExtensionTestStanza();
       XMLBase stanza = OverridedStanza();
@@ -294,7 +362,6 @@ void main() {
       );
 
       expect(stanza['extended'], equals('testing'));
-      
     });
 
     test('equality check', () {
