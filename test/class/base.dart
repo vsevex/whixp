@@ -170,13 +170,16 @@ class ExtensionTestStanza extends XMLBase {
 
   @override
   Map<Symbol, Function> get gettersAndSetters => {
-        const Symbol('set_extended'): (value, _) {
-          return element!.innerText = value as String;
-        },
+        const Symbol('set_extended'): (value, _) =>
+            element!.innerText = value as String,
         const Symbol('get_extended'): (_) => element!.innerText,
         const Symbol('del_extended'): (value, _) =>
             parent!.element!.children.remove(element),
       };
+
+  @override
+  XMLBase copy([xml.XmlElement? element, XMLBase? parent]) =>
+      ExtensionTestStanza(parent: parent);
 }
 
 class OverriderStanza extends OverridedStanza {

@@ -278,8 +278,8 @@ void main() {
     });
 
     test('XMLBase.isExtension property usage test', () {
-      XMLBase stanza = OverridedStanza();
       final extension = ExtensionTestStanza();
+      XMLBase stanza = OverridedStanza();
 
       registerStanzaPlugin(
         stanza,
@@ -287,8 +287,14 @@ void main() {
         (updater) => stanza = updater,
       );
       stanza['extended'] = 'testing';
+      tester.check(
+        stanza,
+        ([element]) => OverridedStanza(element: element),
+        '<foo xmlns="test"><extended>testing</extended></foo>',
+      );
 
-      print(stanza);
+      expect(stanza['extended'], equals('testing'));
+      
     });
 
     test('equality check', () {
