@@ -391,7 +391,7 @@ class XMLBase {
     xml.XmlElement lastXML = xml.XmlElement(xml.XmlName(''));
     int index = 0;
     for (final ename in name.split('/')) {
-      final newElement = index == 0
+      final newElement = index == 0 && !isExtension
           ? Echotils.xmlElement(ename, namespace: namespace)
           : Echotils.xmlElement(ename);
       if (this.element == null) {
@@ -404,7 +404,7 @@ class XMLBase {
     }
 
     if (parent != null) {
-      parent!.element!.children.add(element!);
+      parent!.element!.children.add(this.element!);
     }
 
     return true;
@@ -427,6 +427,7 @@ class XMLBase {
     final plugin = pluginAttributeMapping[name];
 
     if (plugin == null) return null;
+
     if (plugin.isExtension) {
       if (plugins[Tuple2(name, null)] != null) {
         return plugins[Tuple2(name, null)];
@@ -466,9 +467,8 @@ class XMLBase {
     if (element != null) {
       plugin = element;
     } else {
-      plugin = pluginClass
-        ..parent = this
-        ..element = existingXML;
+      plugin = pluginClass.copy(null, this);
+      if (existingXML != null) plugin.element = existingXML;
     }
 
     if (plugin.isExtension) {
@@ -890,10 +890,7 @@ class XMLBase {
           }
         }
         if (gettersAndSetters.containsKey(Symbol(setMethod))) {
-          (gettersAndSetters[Symbol(setMethod)]! as Function(
-            dynamic,
-            Map<dynamic, dynamic>,
-          ))
+          (gettersAndSetters[Symbol(setMethod)]! as Function(dynamic, dynamic))
               .call(value, args);
         } else {
           if (subInterfaces.contains(attrib)) {
@@ -1170,7 +1167,7 @@ class XMLBase {
     }
     for (final plugin in plugins.entries) {
       final lang = plugin.value['lang'];
-      if (lang != null) {
+      if (lang != null && (lang as String).isNotEmpty) {
         values['${plugin.key.value1}|lang'] = plugin.value.values;
       } else {
         values[plugin.key.value1] = plugin.value.values;
@@ -1214,11 +1211,12 @@ class XMLBase {
   ///   SimpleStanza({super.element, super.parent});
   ///
   ///   @override
-  ///   XMLBase copy() =>
+  ///   XMLBase copy([xml.XmlElement? element, XMLBase? parent]) =>
   ///     SimpleStanza(element: element, parent: parent);
   /// }
   /// ```
-  // XMLBase copy() => XMLBase(element: element, parent: parent);
+  XMLBase copy([xml.XmlElement? element, XMLBase? parent]) =>
+      XMLBase(element: element, parent: parent);
 
   /// Returns a string serialization of the underlying XML object.
   @override
