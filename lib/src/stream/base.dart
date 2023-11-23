@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_dynamic_calls
+
 import 'package:dartz/dartz.dart';
 
 import 'package:echox/src/echotils/echotils.dart';
@@ -244,6 +246,8 @@ class XMLBase {
     /// By default, [XMLBase] is not extension.
     isExtension = false;
 
+    includeNamespace = true;
+
     pluginAttributeMapping = <String, XMLBase>{};
 
     /// Equal to empty [Set] in case of anything.
@@ -341,6 +345,8 @@ class XMLBase {
   /// from the parent stanza will be passed to the plugin directly.
   late bool isExtension;
 
+  late bool includeNamespace;
+
   late Map<String, XMLBase> pluginAttributeMapping;
 
   /// A [Map] of interface operations to the overriding functions.
@@ -391,7 +397,7 @@ class XMLBase {
     xml.XmlElement lastXML = xml.XmlElement(xml.XmlName(''));
     int index = 0;
     for (final ename in name.split('/')) {
-      final newElement = index == 0 && !isExtension
+      final newElement = index == 0 && includeNamespace
           ? Echotils.xmlElement(ename, namespace: namespace)
           : Echotils.xmlElement(ename);
       if (this.element == null) {
@@ -409,6 +415,10 @@ class XMLBase {
 
     return true;
   }
+
+  /// Enables and initializes a stanza plugin.
+  XMLBase enable(String attribute, [String? language]) =>
+      initPlugin(attribute, language: language);
 
   /// Responsible to retrieve a stanza plugin through the passed [name] and
   /// [language].
@@ -759,6 +769,11 @@ class XMLBase {
     element!.setAttribute(attribute == 'lang' ? 'xml:lang' : attribute, value);
   }
 
+  void _deleteAttribute(String name) {
+    if (element == null) return;
+    if (element!.getAttribute(name) != null) element!.removeAttribute(name);
+  }
+
   /// Return the value of a stanza interface using operator overload.
   ///
   /// ### Example:
@@ -812,16 +827,12 @@ class XMLBase {
           if (plugin != null) {
             final handler = plugin.gettersAndSetters[Symbol(getMethod)];
 
-            if (handler != null) {
-              return noSuchMethod(
-                Invocation.method(Symbol(getMethod), [args]),
-              );
-            }
+            if (handler != null) return handler.call();
           }
         }
       }
       if (gettersAndSetters.containsKey(Symbol(getMethod))) {
-        (gettersAndSetters[Symbol(getMethod)]! as Function(dynamic)).call(args);
+        return gettersAndSetters[Symbol(getMethod)]?.call(args);
       } else {
         if (subInterfaces.contains(attribute)) {
           return getSubText(attribute, language: language);
@@ -862,7 +873,6 @@ class XMLBase {
     final attributeLanguage = '$attribute|'.split('|');
     final attrib = attributeLanguage[0];
     final lang = attributeLanguage[1].isEmpty ? null : attributeLanguage[1];
-
     final args = {};
 
     if (languageInterfaces.contains(lang) &&
@@ -882,16 +892,14 @@ class XMLBase {
 
             if (plugin != null) {
               final handler = plugin.gettersAndSetters[Symbol(setMethod)];
-              if (handler != null) {
-                (handler as Function(dynamic, dynamic)).call(value, args);
-                return;
-              }
+
+              if (handler != null) handler.call(value, args);
+              return;
             }
           }
         }
         if (gettersAndSetters.containsKey(Symbol(setMethod))) {
-          (gettersAndSetters[Symbol(setMethod)]! as Function(dynamic, dynamic))
-              .call(value, args);
+          gettersAndSetters[Symbol(setMethod)]?.call(value, args);
         } else {
           if (subInterfaces.contains(attrib)) {
             dynamic subvalue;
@@ -967,10 +975,7 @@ class XMLBase {
           if (plugin != null) {
             final handler = plugin.gettersAndSetters[Symbol(deleteMethod)];
 
-            if (handler != null) {
-              noSuchMethod(Invocation.method(Symbol(deleteMethod), [args]));
-              return;
-            }
+            if (handler != null) handler.call();
           }
         }
       }
@@ -982,7 +987,7 @@ class XMLBase {
         } else if (boolInterfaces.contains(attrib)) {
           return deleteSub(attrib, language: lang);
         } else {
-          return deleteSub(attrib);
+          return _deleteAttribute(attrib);
         }
       }
     } else if (pluginAttributeMapping.containsKey(attrib) &&
@@ -1216,7 +1221,7 @@ class XMLBase {
   /// }
   /// ```
   XMLBase copy([xml.XmlElement? element, XMLBase? parent]) =>
-      XMLBase(element: element, parent: parent);
+      XMLBase(element: element ?? this.element, parent: parent);
 
   /// Returns a string serialization of the underlying XML object.
   @override
