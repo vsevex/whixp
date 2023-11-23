@@ -116,6 +116,14 @@ void check(
       ],
     );
   }
+
+  compare(
+    eksemel,
+    elements: [
+      stanza.element!,
+      stanza1.element!,
+    ],
+  );
 }
 
 void assertCopyInvariants(xml.XmlNode element, xml.XmlNode copy) {
