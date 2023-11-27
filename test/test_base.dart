@@ -85,7 +85,6 @@ xml.XmlElement parseXMLFromString(String xmlToParse) {
 /// any extra elements that are included by default.
 void check(
   XMLBase stanza,
-  XMLBase Function([xml.XmlElement? element]) defaultStanza,
   dynamic criteria, {
   String method = 'exact',
   bool useValues = true,
@@ -97,12 +96,13 @@ void check(
     eksemel = criteria.element!;
   }
 
-  final stanza1 = defaultStanza(eksemel);
+  final stanza1 = stanza.copy(eksemel);
 
   if (useValues) {
-    final values = stanza1.values;
-    final stanza2 = defaultStanza(null);
+    final values = Map<String, dynamic>.from(stanza.values);
+    final stanza2 = stanza1.copy();
     stanza2.values = values;
+
     // print('stanza: $stanza');
     // print('stanza1: $stanza1');
     // print('stanza2: $stanza2');
@@ -115,6 +115,7 @@ void check(
         stanza2.element!,
       ],
     );
+    return;
   }
 
   compare(
