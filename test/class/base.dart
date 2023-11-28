@@ -17,7 +17,7 @@ XMLBase createTestStanza({
   Map<Symbol, void Function(dynamic, XMLBase)>? deleters,
   bool isExtension = false,
   bool includeNamespace = true,
-  void Function(XMLBase base, [XmlElement? element])? setupOverride,
+  bool Function(XMLBase base, [XmlElement? element])? setupOverride,
 }) =>
     _TestStanza(
       name: name,
@@ -53,14 +53,15 @@ class _TestStanza extends XMLBase {
     super.deleters,
     super.isExtension,
     super.includeNamespace,
-    this.setupOverride,
+    super.setupOverride,
   });
+}
 
-  final void Function(XMLBase base, [XmlElement? element])? setupOverride;
-
-  @override
-  bool setup([XmlElement? element]) {
-    setupOverride?.call(this, element);
-    return super.setup(element);
-  }
+class MultiTestStanza2 extends XMLBase {
+  MultiTestStanza2({
+    super.name,
+    super.namespace,
+    super.pluginAttribute,
+    super.pluginMultiAttribute,
+  });
 }

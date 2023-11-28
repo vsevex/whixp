@@ -346,6 +346,7 @@ void main() {
         },
         setupOverride: (base, [element]) {
           base.element = xml.XmlElement(xml.XmlName(''));
+          return false;
         },
       );
 
@@ -356,7 +357,7 @@ void main() {
       stanza['bar'] = 'foo';
       tester.check(
         stanza,
-        '<foo bar="override-foo" xmlns="test"><overrider/></foo>',
+        '<foo bar="override-foo" xmlns="test"></foo>',
       );
     });
 
@@ -543,7 +544,19 @@ void main() {
           pluginAttribute: 'bar',
           pluginMultiAttribute: 'bars',
         );
-        final multistanzaSecond = createTestStanza(
+        final multistanzaSecond = MultiTestStanza2(
+          name: 'baz',
+          namespace: 'test',
+          pluginAttribute: 'baz',
+          pluginMultiAttribute: 'bazs',
+        );
+        final multistanzaThird = createTestStanza(
+          name: 'bar',
+          namespace: 'test',
+          pluginAttribute: 'bar',
+          pluginMultiAttribute: 'bars',
+        );
+        final multistanzaFourth = MultiTestStanza2(
           name: 'baz',
           namespace: 'test',
           pluginAttribute: 'baz',
@@ -554,26 +567,140 @@ void main() {
         registerStanzaPlugin(stanza, multistanzaSecond, iterable: true);
 
         stanza.add(Tuple2(null, multistanzaFirst));
-        // stanza.add(Tuple2(null, GetMultiTestStanzaSecond()));
-        // stanza.add(Tuple2(null, GetMultiTestStanzaFirst()));
-        // stanza.add(Tuple2(null, GetMultiTestStanzaSecond()));
+        stanza.add(Tuple2(null, multistanzaSecond));
+        stanza.add(Tuple2(null, multistanzaThird));
+        stanza.add(Tuple2(null, multistanzaFourth));
 
-        print(stanza['bars']);
+        tester.check(
+          stanza,
+          '<foo xmlns="foo"><bar xmlns="bar"/><baz xmlns="baz"/><bar xmlns="bar"/><baz xmlns="baz"/></foo>',
+          useValues: false,
+        );
+
+        final bars = stanza['bars'];
+        final bazs = stanza['bazs'];
+
+        for (final bar in bars as List<XMLBase>) {
+          tester.check(bar, '<bar xmlns="bar"/>');
+        }
+
+        for (final baz in bazs as List<XMLBase>) {
+          tester.check(baz, '<baz xmlns="baz"/>');
+        }
+
+        expect(bars.length, equals(2));
+        expect(bazs.length, equals(2));
       },
     );
 
-//     test('equality check', () {
-//       final stanza = SimpleStanza();
-//       stanza['hert'] = 'blya';
+    test(
+      'test setting multi_attribute substanzas',
+      () {
+        final stanza = createTestStanza(name: 'foo', namespace: 'test');
+        final multistanzaFirst = createTestStanza(
+          name: 'bar',
+          namespace: 'test',
+          pluginAttribute: 'bar',
+          pluginMultiAttribute: 'bars',
+        );
+        final multistanzaSecond = MultiTestStanza2(
+          name: 'baz',
+          namespace: 'test',
+          pluginAttribute: 'baz',
+          pluginMultiAttribute: 'bazs',
+        );
+        final multistanzaThird = createTestStanza(
+          name: 'bar',
+          namespace: 'test',
+          pluginAttribute: 'bar',
+          pluginMultiAttribute: 'bars',
+        );
+        final multistanzaFourth = MultiTestStanza2(
+          name: 'baz',
+          namespace: 'test',
+          pluginAttribute: 'baz',
+          pluginMultiAttribute: 'bazs',
+        );
 
-//       final stanza1 = SimpleStanza();
-//       stanza1['cart'] = 'blya1';
+        registerStanzaPlugin(stanza, multistanzaFirst, iterable: true);
+        registerStanzaPlugin(stanza, multistanzaSecond, iterable: true);
 
-//       stanza['cart'] = 'blya1';
-//       stanza1['hert'] = 'blya';
+        stanza['bars'] = [multistanzaFirst, multistanzaThird];
+        stanza['bazs'] = [multistanzaSecond, multistanzaFourth];
 
-//       final isEqual = stanza == stanza1;
-//       expect(isEqual, isTrue);
-//     });
+        tester.check(
+          stanza,
+          '<foo xmlns="test"><bar xmlns="test"/><bar xmlns="test"/><baz xmlns="test"/><baz xmlns="test"/></foo>',
+          useValues: false,
+        );
+
+        expect((stanza['substanzas'] as List<XMLBase>).length, equals(4));
+
+        stanza['bars'] = [multistanzaFirst];
+
+        tester.check(
+          stanza,
+          '<foo xmlns="test"><baz xmlns="test"/><baz xmlns="test"/><bar xmlns="test"/></foo>',
+          useValues: false,
+        );
+
+        expect((stanza['substanzas'] as List<XMLBase>).length, equals(3));
+      },
+    );
+
+    test(
+      'must delete multi_attribute substanzas properly',
+      () {
+        final stanza = createTestStanza(name: 'foo', namespace: 'test');
+        final multistanzaFirst = createTestStanza(
+          name: 'bar',
+          namespace: 'test',
+          pluginAttribute: 'bar',
+          pluginMultiAttribute: 'bars',
+        );
+        final multistanzaSecond = MultiTestStanza2(
+          name: 'baz',
+          namespace: 'test',
+          pluginAttribute: 'baz',
+          pluginMultiAttribute: 'bazs',
+        );
+        final multistanzaThird = createTestStanza(
+          name: 'bar',
+          namespace: 'test',
+          pluginAttribute: 'bar',
+          pluginMultiAttribute: 'bars',
+        );
+        final multistanzaFourth = MultiTestStanza2(
+          name: 'baz',
+          namespace: 'test',
+          pluginAttribute: 'baz',
+          pluginMultiAttribute: 'bazs',
+        );
+
+        registerStanzaPlugin(stanza, multistanzaFirst, iterable: true);
+        registerStanzaPlugin(stanza, multistanzaSecond, iterable: true);
+
+        stanza['bars'] = [multistanzaFirst, multistanzaThird];
+        stanza['bazs'] = [multistanzaSecond, multistanzaFourth];
+
+        tester.check(
+          stanza,
+          '<foo xmlns="test"><bar xmlns="test"/><bar xmlns="test"/><baz xmlns="test"/><baz xmlns="test"/></foo>',
+          useValues: false,
+        );
+
+        expect((stanza['substanzas'] as List<XMLBase>).length, equals(4));
+
+        stanza.delete('bars');
+
+        tester.check(
+          stanza,
+          '<foo xmlns="test"><baz xmlns="test"/><baz xmlns="test"/></foo>',
+          useValues: false,
+        );
+
+        expect((stanza['substanzas'] as List<XMLBase>).length, equals(2));
+      },
+    );
   });
 }
