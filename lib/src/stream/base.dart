@@ -6,7 +6,7 @@ import 'package:echox/src/jid/jid.dart';
 import 'package:xml/xml.dart' as xml;
 import 'package:xpath_selector_xml_parser/xpath_selector_xml_parser.dart';
 
-typedef _GetterOrDeleter = void Function(dynamic, XMLBase);
+typedef _GetterOrDeleter = dynamic Function(dynamic, XMLBase);
 
 /// Applies the stanza's namespace to elements in an [xPath] expression.
 Tuple2<String?, List<String>?> fixNamespace(
@@ -67,17 +67,6 @@ void registerStanzaPlugin(
   bool overrides = false,
 }) {
   final tag = '<${plugin._name} xmlns="${plugin._namespace}"/>';
-  // const pluginInfo = <String>[
-  //   '_pluginAttributeMapping',
-  //   '_pluginTagMapping',
-  //   '_pluginIterables',
-  //   '_pluginOverrides',
-  // ];
-
-  // for (final attribute in pluginInfo) {
-  //   final info = Echotils.getAttr(stanza, attribute);
-  //   Echotils.setAttr(stanza, attribute, info);
-  // }
 
   stanza._pluginAttributeMapping[plugin._pluginAttribute] = plugin;
   stanza._pluginTagMapping[tag] = plugin;
@@ -104,21 +93,24 @@ XMLBase multifactory(XMLBase stanza, String pluginAttribute) {
     interfaces: {pluginAttribute},
     languageInterfaces: {pluginAttribute},
     isExtension: true,
+    setupOverride: (base, [element]) {
+      base.element = xml.XmlElement(xml.XmlName(''));
+      return false;
+    },
   );
 
   multistanza
     ..addGetters({
-      Symbol('get_$pluginAttribute'): (args, base) {
-        multistanza.getMulti(args as String?);
-      },
+      Symbol('get_$pluginAttribute'): (args, base) =>
+          multistanza.getMulti(base, args as String?),
     })
     ..addSetters({
       Symbol('set_$pluginAttribute'): (value, args, base) =>
-          multistanza.setMulti(value as Iterable<XMLBase>, args as String?),
+          multistanza.setMulti(base, value as List<dynamic>, args as String?),
     })
     ..addDeleters({
       Symbol('delete_$pluginAttribute'): (args, base) =>
-          multistanza.deleteMulti(args as String?),
+          multistanza.deleteMulti(base, args as String?),
     });
 
   return multistanza;
@@ -133,59 +125,55 @@ class _Multi extends XMLBase {
     super.interfaces,
     super.languageInterfaces,
     super.isExtension,
+    super.setupOverride,
   });
   late final Type _multistanza;
 
-  @override
-  bool setup([xml.XmlElement? element]) {
-    this.element = xml.XmlElement(xml.XmlName(''));
-    return super.setup(element);
-  }
-
-  List<XMLBase> getMulti([String? lang]) {
-    final parent = failWithoutParent;
-    final iterable = _XMLBaseIterable(_iterables);
-    final res = lang == null || lang == '*'
+  List<XMLBase> getMulti(XMLBase base, [String? lang]) {
+    final parent = failWithoutParent(base);
+    final iterable = _XMLBaseIterable(parent);
+    final result = lang == null || lang == '*'
         ? iterable.where(pluginFilter())
         : iterable.where(pluginLanguageFilter(lang));
 
-    return res.toList();
+    return result.toList();
   }
 
-  void setMulti(Iterable<XMLBase> value, [String? language]) {
-    final parent = failWithoutParent;
-    _deleters[Symbol('delete_$_pluginAttribute')]!.call(language, this);
+  void setMulti(XMLBase base, List<dynamic> value, [String? language]) {
+    final parent = failWithoutParent(base);
+    _deleters[Symbol('delete_$_pluginAttribute')]?.call(language, base);
     for (final sub in value) {
-      parent.add(Tuple2(null, sub));
+      parent.add(Tuple2(null, sub as XMLBase));
     }
   }
 
-  XMLBase get failWithoutParent {
+  XMLBase failWithoutParent(XMLBase base) {
     XMLBase? parent;
-    if (this.parent != null) {
-      parent = this.parent;
+    if (base.parent != null) {
+      parent = base.parent;
     }
     if (parent == null) {
       throw ArgumentError('No stanza parent for multifactory');
     }
+
     return parent;
   }
 
-  void deleteMulti([String? language]) {
-    final parent = failWithoutParent;
-    final iterable = _XMLBaseIterable(_iterables);
-    final res = language == null || language == '*'
-        ? iterable.where(pluginFilter())
-        : iterable.where(pluginLanguageFilter(language));
+  void deleteMulti(XMLBase base, [String? language]) {
+    final parent = failWithoutParent(base);
+    final iterable = _XMLBaseIterable(parent);
+    final result = language == null || language == '*'
+        ? iterable.where(pluginFilter()).toList()
+        : iterable.where(pluginLanguageFilter(language)).toList();
 
-    if (res.isEmpty) {
-      parent._plugins.remove(Tuple2(_pluginAttribute, null));
+    if (result.isEmpty) {
+      parent._plugins.remove(Tuple2(_pluginAttribute, ''));
       parent._loadedPlugins.remove(_pluginAttribute);
-      try {
-        parent.element!.children.remove(element);
-      } catch (_) {}
+
+      parent.element!.children.remove(element);
     } else {
-      for (final stanza in res.toList()) {
+      while (result.isNotEmpty) {
+        final stanza = result.removeLast();
         parent._iterables.remove(stanza);
         parent.element!.children.remove(stanza.element);
       }
@@ -199,36 +187,32 @@ class _Multi extends XMLBase {
 }
 
 class _XMLBaseIterable extends Iterable<XMLBase> {
-  _XMLBaseIterable(this._iterables);
-  late final List<XMLBase> _iterables;
+  _XMLBaseIterable(this.parent);
+  final XMLBase parent;
 
   @override
-  Iterator<XMLBase> get iterator => _XMLBaseIterator(_iterables);
+  Iterator<XMLBase> get iterator => _XMLBaseIterator(parent);
 }
 
 class _XMLBaseIterator implements Iterator<XMLBase> {
-  final List<XMLBase> _iterables;
-  final _index = 0;
+  final XMLBase parent;
 
-  _XMLBaseIterator(this._iterables);
+  _XMLBaseIterator(this.parent);
 
   @override
   XMLBase get current {
-    if (_index < _iterables.length) {
-      return _iterables[_index];
-    } else {
-      throw Exception('Iteration must be stopped');
-    }
+    return parent._iterables[parent._index - 1];
   }
 
   @override
   bool moveNext() {
-    // current._index++;
-    // if (current._index > _iterables.length) {
-    //   current._index = 0;
-    //   return false;
-    // }
-    return _index <= _iterables.length;
+    if (parent._index >= parent._iterables.length) {
+      parent._index = 0;
+      return false;
+    } else {
+      parent.incrementIndex.call();
+      return true;
+    }
   }
 }
 
@@ -257,6 +241,7 @@ class XMLBase {
     Map<Symbol, void Function(dynamic value, dynamic args, XMLBase base)>?
         setters,
     Map<Symbol, _GetterOrDeleter>? deleters,
+    this.setupOverride,
     this.element,
     XMLBase? parent,
   }) {
@@ -305,7 +290,7 @@ class XMLBase {
     if (setters != null) addSetters(setters);
     if (deleters != null) addDeleters(deleters);
 
-    // _index = 0;
+    _index = 0;
 
     _tag = tagName;
 
@@ -424,6 +409,9 @@ class XMLBase {
   late final Map<Symbol, _GetterOrDeleter> _deleters =
       <Symbol, _GetterOrDeleter>{};
 
+  /// Overrider for [setup] for method.
+  final bool Function(XMLBase base, [xml.XmlElement? element])? setupOverride;
+
   /// The underlying [element] for the stanza.
   xml.XmlElement? element;
   XMLBase? _parent;
@@ -431,6 +419,8 @@ class XMLBase {
   late final Set<String> _loadedPlugins;
   late final Map<Tuple2<String, String>, XMLBase> _plugins;
 
+  /// Index to keep for iterables.
+  late int _index;
   late final String _tag;
 
   /// The stanza's XML contents initializer.
@@ -439,6 +429,9 @@ class XMLBase {
   /// definition instead of building a stanza object from an existing XML
   /// object.
   bool setup([xml.XmlElement? element]) {
+    if (setupOverride != null) {
+      return setupOverride!(this, element);
+    }
     if (this.element != null) {
       return false;
     }
@@ -1031,7 +1024,10 @@ class XMLBase {
           if (plugin != null) {
             final handler = plugin._deleters[Symbol(deleteMethod)];
 
-            if (handler != null) return handler.call(args['lang'], plugin);
+            if (handler != null) {
+              handler.call(args['lang'], plugin);
+              return;
+            }
           }
         }
       }
@@ -1273,7 +1269,9 @@ class XMLBase {
         namespace: _namespace,
         interfaces: _interfaces,
         pluginAttribute: _pluginAttribute,
+        pluginTagMapping: _pluginTagMapping,
         pluginAttributeMapping: _pluginAttributeMapping,
+        pluginMultiAttribute: _pluginMultiAttribute,
         overrides: _overrides,
         subInterfaces: _subInterfaces,
         boolInterfaces: _boolInterfaces,
@@ -1284,6 +1282,7 @@ class XMLBase {
         deleters: _deleters,
         isExtension: _isExtension,
         includeNamespace: _includeNamespace,
+        setupOverride: setupOverride,
         element: element,
         parent: parent,
       );
@@ -1299,6 +1298,8 @@ class XMLBase {
 
   void addDeleters(Map<Symbol, _GetterOrDeleter> deleters) =>
       _deleters.addAll(deleters);
+
+  void incrementIndex() => _index++;
 
   /// Returns a string serialization of the underlying XML object.
   @override
