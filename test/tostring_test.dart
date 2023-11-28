@@ -21,7 +21,7 @@ void main() {
     test(
       'test converting an empty element to a string',
       () => try2String(
-        '<lerko xmlns="hert" />',
+        '<lerko xmlns="hert"/>',
         message: 'empty element not serialized correctly',
       ),
     );
@@ -29,7 +29,7 @@ void main() {
     test(
       'must convert an empty element inside another element',
       () => try2String(
-        '<lerko xmlns="hert"><blya /></lerko>',
+        '<lerko xmlns="hert"><blya/></lerko>',
         message: 'wrapped empty element not serialized correctly',
       ),
     );
@@ -37,7 +37,7 @@ void main() {
     test(
       'convert an empty element wrapped with text inside another element',
       () => try2String(
-        '<lerko xmlns="hert">hi!. <baz /> Everything will be allright.</lerko>',
+        '<lerko xmlns="hert">hi!. <baz/> Everything will be allright.</lerko>',
         message: 'text wrapped empty element serialized incorrectly',
       ),
     );
@@ -45,7 +45,7 @@ void main() {
     test(
       'must convert multiple child elements to a Unicode string',
       () => try2String(
-        '<lerko xmlns="hert"><zort><qax /></zort><hehe /></lerko>',
+        '<lerko xmlns="hert"><zort><qax/></zort><hehe/></lerko>',
       ),
     );
 
