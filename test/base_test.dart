@@ -192,11 +192,11 @@ void main() {
           namespace: 'test',
           interfaces: const {'cart'},
           getters: {
-            const Symbol('get_cart'): (args, base) =>
+            const Symbol('cart'): (args, base) =>
                 base.getSubText('/wrapper/cart', def: 'zort'),
           },
           setters: {
-            const Symbol('set_cart'): (value, args, base) {
+            const Symbol('cart'): (value, args, base) {
               final wrapper = xml.XmlElement(xml.XmlName('wrapper'));
               final cart = xml.XmlElement(xml.XmlName('cart'));
               cart.innerText = value as String;
@@ -222,15 +222,14 @@ void main() {
         namespace: 'test',
         interfaces: {'hehe', 'boo'},
         getters: {
-          const Symbol('get_hehe'): (args, base) =>
+          const Symbol('hehe'): (args, base) =>
               base.getSubText('/wrapper/hehe'),
-          const Symbol('get_boo'): (args, base) =>
-              base.getSubText('/wrapper/boo'),
+          const Symbol('boo'): (args, base) => base.getSubText('/wrapper/boo'),
         },
         setters: {
-          const Symbol('set_hehe'): (value, args, base) =>
+          const Symbol('hehe'): (value, args, base) =>
               base.setSubText('/wrapper/hehe', text: value as String),
-          const Symbol('set_boo'): (value, args, base) =>
+          const Symbol('boo'): (value, args, base) =>
               base.setSubText('/wrapper/boo', text: value as String),
         },
       );
@@ -261,21 +260,21 @@ void main() {
         namespace: 'test',
         interfaces: {'hehe', 'boo'},
         setters: {
-          const Symbol('set_hehe'): (value, args, base) => base
+          const Symbol('hehe'): (value, args, base) => base
               .setSubText('/wrapper/herto/herto1/hehe', text: value as String),
-          const Symbol('set_boo'): (value, args, base) => base
+          const Symbol('boo'): (value, args, base) => base
               .setSubText('/wrapper/herto/herto2/boo', text: value as String),
         },
         getters: {
-          const Symbol('get_hehe'): (args, base) =>
+          const Symbol('hehe'): (args, base) =>
               base.getSubText('/wrapper/herto/herto1/hehe'),
-          const Symbol('get_boo'): (args, base) =>
+          const Symbol('boo'): (args, base) =>
               base.getSubText('/wrapper/herto/herto2/boo'),
         },
         deleters: {
-          const Symbol('delete_hehe'): (args, base) =>
+          const Symbol('hehe'): (args, base) =>
               base.deleteSub('/wrapper/herto/herto1/hehe'),
-          const Symbol('delete_boo'): (args, base) =>
+          const Symbol('boo'): (args, base) =>
               base.deleteSub('/wrapper/herto/herto2/boo'),
         },
       );
@@ -370,14 +369,14 @@ void main() {
         isExtension: true,
         includeNamespace: false,
         setters: {
-          const Symbol('set_extended'): (value, args, base) =>
+          const Symbol('extended'): (value, args, base) =>
               base.element!.innerText = value as String,
         },
         getters: {
-          const Symbol('get_extended'): (args, base) => base.element!.innerText,
+          const Symbol('extended'): (args, base) => base.element!.innerText,
         },
         deleters: {
-          const Symbol('del_extended'): (args, base) =>
+          const Symbol('extended'): (args, base) =>
               base.parent!.element!.children.remove(base.element),
         },
       );
@@ -456,7 +455,7 @@ void main() {
         namespace: 'test',
         interfaces: {'bar', 'baz', 'cart'},
         subInterfaces: {'bar'},
-        getters: {const Symbol('get_cart'): (args, base) => 'cart'},
+        getters: {const Symbol('cart'): (args, base) => 'cart'},
       );
       final plugin = createTestStanza(
         name: 'foobar',
