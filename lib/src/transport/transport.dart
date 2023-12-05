@@ -1,0 +1,449 @@
+import 'dart:async' as async;
+import 'dart:io' as io;
+import 'dart:math' as math;
+
+import 'package:connecta/connecta.dart';
+import 'package:dartz/dartz.dart';
+import 'package:dnsolve/dnsolve.dart';
+
+import 'package:echox/src/echotils/src/echotils.dart';
+import 'package:echox/src/handler/eventius.dart';
+import 'package:echox/src/handler/handler.dart';
+import 'package:echox/src/stream/base.dart';
+import 'package:echox/src/transport/queue.dart';
+
+import 'package:xml/xml.dart' as xml;
+import 'package:xml/xml_events.dart' as parser;
+
+class Transport {
+  Transport(
+    this._host, {
+    int? port,
+    this.test = false,
+    String? dnsService,
+    this.isComponent = false,
+    bool useIPv6 = false,
+    bool debug = true,
+    bool useTLS = false,
+    bool forceStartTLS = false,
+    bool disableStartTLS = false,
+    List<Tuple2<String, String?>>? caCerts,
+    void Function(
+      List<parser.XmlEventAttribute> attributes,
+      Transport transport,
+    )? startStreamHandler,
+    this.certificatePath = '',
+    this.keyPath = '',
+  }) {
+    _port = port ?? 80;
+
+    _setup();
+
+    _debug = debug;
+    _useTLS = useTLS;
+    _forceStartTLS = forceStartTLS;
+    _disableStartTLS = disableStartTLS;
+    _useIPv6 = useIPv6;
+    _dnsService = dnsService;
+
+    streamHeader = '<stream>';
+
+    _caCerts = caCerts ?? [];
+
+    _startStreamHandlerOverrider = startStreamHandler;
+  }
+
+  final String _host;
+  late String _serviceName;
+
+  /// Defaults to 80;
+  late int _port;
+  late Tuple2<String, int> _address;
+
+  late final Eventius _eventius;
+  final bool test;
+  late bool _debug;
+  late bool _useTLS;
+  late bool _forceStartTLS;
+  late bool _disableStartTLS;
+  late bool _sessionStarted;
+  late bool _useIPv6;
+  String? _dnsService;
+
+  late Queue _queuedStanzas;
+  late Queue _waitingQueue;
+  late async.Completer<dynamic> _runOutFilters;
+  async.Completer<void>? _currentConnectionAttempt;
+  late async.Completer<void> _abortCompleter;
+  String? _disconnectReason;
+  late int _xmlDepth;
+  xml.XmlElement? _rootXML;
+  late Connecta? _connecta;
+  io.Socket? _socket;
+  Iterator<Tuple3<String, String, int>>? _dnsAnswers;
+  late String streamHeader;
+  void Function(List<parser.XmlEventAttribute> attributes, Transport transport)?
+      _startStreamHandlerOverrider;
+
+  bool isComponent;
+
+  /// The backoff of the connection attempt (increases exponentially after each
+  /// failure). Represented in milliseconds;
+  late int _connectFutureWait;
+
+  late String _eventWhenConnected;
+
+  late List<Tuple2<String, String?>> _caCerts;
+
+  /// The path to the certificate file for `TLS` connection (defaults to an
+  /// empty string).
+  final String certificatePath;
+
+  /// The path to the key file for `TLS` connection (defaults to an empty
+  /// string).
+  final String keyPath;
+
+  String _defaultDomain = '';
+  late String defaultNamespace;
+
+  late bool _isConnectionSecured;
+  String? peerDefaultLanguage;
+
+  late final List<Handler> _handlers;
+
+  void _setup() {
+    _reset();
+
+    final setDisconnectedListener =
+        _eventius.createListener<dynamic>('disconnected', (_) {
+      _setDisconnected();
+    });
+
+    _eventius.addEvent(setDisconnectedListener);
+  }
+
+  void _reset() {
+    _serviceName = '';
+    _address = Tuple2(_host, _port);
+
+    _eventius = Eventius();
+    _connecta = null;
+
+    _sessionStarted = false;
+
+    _runOutFilters = async.Completer<dynamic>();
+    _abortCompleter = async.Completer<void>();
+
+    _connectFutureWait = 0;
+    _xmlDepth = 0;
+    _eventWhenConnected = 'connected';
+
+    defaultNamespace = '';
+    peerDefaultLanguage = null;
+
+    _handlers = <Handler>[];
+  }
+
+  void connect() {
+    if (_runOutFilters.isCompleted) {
+      _runOutFilters.complete(_runFilters());
+    }
+
+    _disconnectReason = null;
+    _cancelConnectionAttempt();
+    _connectFutureWait = 0;
+
+    _defaultDomain = _address.value1;
+
+    emit('connecting');
+    _currentConnectionAttempt = async.Completer()..complete(_connect());
+  }
+
+  Future<void> _connect() async {
+    _eventWhenConnected = 'connected';
+
+    if (_connectFutureWait > 0) {
+      emit<int>('reconnectDelay', data: _connectFutureWait);
+      await Future.delayed(Duration(milliseconds: _connectFutureWait));
+    }
+    final record =
+        await _pickDNSAnswer(_defaultDomain, service: _dnsService, test: test);
+
+    if (record != null) {
+      final host = record.value1;
+      final address = record.value2;
+      final port = record.value3;
+
+      _address = Tuple2(address, port);
+      _serviceName = host;
+    } else {
+      _dnsAnswers = null;
+    }
+
+    io.SecurityContext? context;
+
+    if (_useTLS) {
+      context = io.SecurityContext(withTrustedRoots: true);
+      if (_caCerts.isNotEmpty) {
+        for (final caCert in _caCerts) {
+          context.setClientAuthorities(caCert.value1, password: caCert.value2);
+        }
+      }
+      if (certificatePath.isNotEmpty && keyPath.isNotEmpty) {
+        context
+          ..useCertificateChain(certificatePath)
+          ..usePrivateKey(keyPath);
+      }
+    }
+
+    _connecta = Connecta(
+      ConnectaToolkit(
+        hostname: address.value1,
+        port: address.value2,
+        context: context,
+        startTLS: _useTLS,
+      ),
+    );
+
+    try {
+      _socket = await _connecta!.connect(
+        onData: (data) => _dataReceived(data),
+        onError: (error, trace) {
+          print(error);
+        },
+      );
+      _connectionMade();
+    } on ConnectaException catch (error) {
+      emit<Object>('connectionFailed', data: error.message);
+      _rescheduleConnectionAttempt();
+    } on Exception catch (error) {
+      emit<Object>('connectionFailed', data: error);
+      _rescheduleConnectionAttempt();
+    }
+
+    _isConnectionSecured = _connecta!.isSecure;
+  }
+
+  void _connectionMade() {
+    emit(_eventWhenConnected);
+    _currentConnectionAttempt = null;
+    _sendRaw(streamHeader);
+    _initParser();
+    _dnsAnswers = null;
+  }
+
+  void _dataReceived(List<int> bytes) {
+    final data = Echotils.unicode(bytes);
+
+    void onStartElement(parser.XmlStartElementEvent event) {
+      if (_xmlDepth == 0) {
+        _startStreamHandler(event.attributes);
+      }
+      _xmlDepth++;
+    }
+
+    void onEndElement(parser.XmlEndElementEvent event) {
+      _xmlDepth--;
+      if (_xmlDepth == 0) {
+      } else if (_xmlDepth == 1) {}
+    }
+
+    Stream.value(data)
+        .toXmlEvents()
+        .normalizeEvents()
+        .tapEachEvent(
+          onStartElement: onStartElement,
+          onEndElement: onEndElement,
+        )
+        .listen(id);
+  }
+
+  /// Init the XML parser. The parser must always be reset for each new
+  /// connection.
+  void _initParser() {
+    _xmlDepth = 0;
+    _rootXML = null;
+  }
+
+  /// Forcibly close the connection.
+  void abort() {
+    if (_socket != null) {
+      _abortCompleter.complete(_socket!.flush());
+      if (_abortCompleter.isCompleted) {
+        _cancelConnectionAttempt();
+        emit('killed');
+      }
+    }
+  }
+
+  void reconnect() {
+    print('reconnecting..');
+    Future<void> handler(String? event) async {
+      await Future.delayed(Duration.zero);
+      connect();
+    }
+
+    final listener =
+        _eventius.createListener('disconnected', handler, disposable: true);
+    _eventius.addEvent(listener);
+  }
+
+  void registerHandler(Handler handler) {
+    if (handler.transport == null) {
+      _handlers.add(handler);
+    }
+  }
+
+  /// Triggers a custom [event] manually.
+  void emit<T>(String event, {T? data}) {
+    print('event triggered: $event');
+
+    _eventius.emit<T>(event, data);
+  }
+
+  Future<void> _runFilters() async {
+    print('runFilter');
+  }
+
+  void _cancelConnectionAttempt() {
+    _currentConnectionAttempt = null;
+    _connecta = null;
+    _socket = null;
+  }
+
+  void _rescheduleConnectionAttempt() {
+    if (_currentConnectionAttempt == null) {
+      return;
+    }
+    _connectFutureWait = math.min(300, _connectFutureWait * 2 + 100);
+    _currentConnectionAttempt = async.Completer()..complete(_connect());
+  }
+
+  /// Performs any initialization actions, such as handshakes, once the stream
+  /// header has been sent.
+  void _startStreamHandler(List<parser.XmlEventAttribute> attributes) =>
+      _startStreamHandlerOverrider?.call(attributes, this);
+
+  Future<Tuple3<String, String, int>?> _pickDNSAnswer(
+    String domain, {
+    bool test = false,
+    String? service,
+  }) async {
+    print('use of useIPv6  has been disabled');
+    if (test || domain == 'localhost') {
+      print(
+        'because of test flag is true and this is used to be tested locally, do not look for dns records',
+      );
+      return Tuple3(domain, domain, _port);
+    }
+    ResolveResponse? response;
+    final srvs = <String>[];
+    final results = <Tuple3<String, String, int>>[];
+
+    if (service != null) {
+      response = await DNSolve()
+          .lookup('_$service._tcp.$domain', type: RecordType.srv);
+    }
+
+    if (response != null &&
+        response.answer != null &&
+        (response.answer!.srvs != null && response.answer!.srvs!.isNotEmpty)) {
+      for (final record in SRVRecord.sort(response.answer!.srvs!)) {
+        if (record.target != null) {
+          srvs.add(record.target!);
+        }
+      }
+    }
+
+    if (srvs.isNotEmpty) {
+      for (final srv in srvs) {
+        if (_useIPv6) {
+          final response = await DNSolve().lookup(srv, type: RecordType.aaaa);
+          if (response.answer != null && response.answer!.records != null) {
+            for (final record in response.answer!.records!) {
+              results.add(Tuple3(domain, record.name, _port));
+            }
+          }
+        }
+        final response = await DNSolve().lookup(srv);
+        if (response.answer != null) {
+          for (final record in response.answer!.records!) {
+            results.add(Tuple3(domain, record.name, _port));
+          }
+        }
+      }
+    }
+
+    if (results.isNotEmpty) {
+      _dnsAnswers = results.iterator;
+
+      try {
+        return _dnsAnswers!.moveNext() ? _dnsAnswers!.current : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    if (_useIPv6) {
+      response = await DNSolve().lookup(domain, type: RecordType.aaaa);
+    } else {
+      response = await DNSolve().lookup(domain);
+    }
+
+    if (response.answer != null && response.answer!.records != null) {
+      for (final record in response.answer!.records!) {
+        results.add(Tuple3(domain, record.name, _port));
+      }
+    }
+
+    if (results.isNotEmpty) {
+      _dnsAnswers = results.iterator;
+
+      try {
+        return _dnsAnswers!.moveNext() ? _dnsAnswers!.current : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  /// Wraps basic send method declared in this class privately. Helps to send
+  /// stanza objects.
+  void send(Tuple2<StanzaBase?, String?> data, {bool useFilters = true}) {}
+
+  void _sendRaw(dynamic data) {
+    List<int> rawData;
+    if (data is List<int>) {
+      rawData = data;
+    } else if (data is String) {
+      rawData = Echotils.stringToArrayBuffer(data);
+    } else {
+      throw ArgumentError(
+        'passed data to be sent is neither List<int> nor String',
+      );
+    }
+    if (_connecta != null) {
+      _connecta!.send(rawData);
+    } else {
+      /// TODO: throw not connected error
+    }
+  }
+
+  /// On session start, queue all pending stanzas to be sent.
+  // void _setSessionStart() {
+  //   _sessionStarted = true;
+  //   for (final stanza in _queuedStanzas.activeItems) {
+  //     _waitingQueue.add(() => stanza);
+  //   }
+  // }
+
+  void _setDisconnected() => _sessionStarted = false;
+
+  Tuple2<String, int> get address => _address;
+
+  bool get isConnected => _socket != null;
+
+  bool get isConnectionSecured => _isConnectionSecured;
+}
