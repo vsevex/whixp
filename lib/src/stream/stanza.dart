@@ -7,6 +7,7 @@ class StanzaBase extends XMLBase {
     String? stanzaTo,
     String? stanzaFrom,
     String? stanzaID,
+    this.recv = false,
     Set<String> types = const <String>{},
     super.name,
     super.namespace,
@@ -59,6 +60,7 @@ class StanzaBase extends XMLBase {
     addDeleters({const Symbol('payload'): (_, __) => deletePayload()});
   }
 
+  final bool recv;
   late final Transport? _transport;
   late Set<String> _types;
 
@@ -139,7 +141,7 @@ class StanzaBase extends XMLBase {
   /// Meant to be overridden.
   void exception(Exception excp) {
     /// TODO: replace with proper log
-    print('Exception handled in $_tag stanza: $excp');
+    print('Exception handled in $tag stanza: $excp');
   }
 
   void send() {
@@ -151,10 +153,16 @@ class StanzaBase extends XMLBase {
   }
 
   @override
-  StanzaBase copy([xml.XmlElement? element, XMLBase? parent]) => StanzaBase(
-        name: _name,
+  StanzaBase copy([
+    xml.XmlElement? element,
+    XMLBase? parent,
+    bool recv = false,
+  ]) =>
+      StanzaBase(
+        name: name,
         namespace: _namespace,
         interfaces: _interfaces,
+        recv: recv,
         pluginAttribute: _pluginAttribute,
         pluginTagMapping: _pluginTagMapping,
         pluginAttributeMapping: _pluginAttributeMapping,
