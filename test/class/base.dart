@@ -3,7 +3,7 @@ import 'package:echox/src/stream/base.dart';
 import 'package:xml/src/xml/nodes/element.dart';
 
 XMLBase createTestStanza({
-  String? name,
+  required String name,
   String? namespace,
   String? pluginAttribute,
   String? pluginMultiAttribute,
