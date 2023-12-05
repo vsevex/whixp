@@ -3,6 +3,7 @@ import 'package:dartz/dartz.dart';
 import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/jid/jid.dart';
 import 'package:echox/src/transport/transport.dart';
+import 'package:meta/meta.dart';
 
 import 'package:xml/xml.dart' as xml;
 import 'package:xpath_selector_xml_parser/xpath_selector_xml_parser.dart';
@@ -69,7 +70,7 @@ void registerStanzaPlugin(
   bool iterable = false,
   bool overrides = false,
 }) {
-  final tag = '<${plugin._name} xmlns="${plugin._namespace}"/>';
+  final tag = '<${plugin.name} xmlns="${plugin._namespace}"/>';
 
   stanza._pluginAttributeMapping[plugin._pluginAttribute] = plugin;
   stanza._pluginTagMapping[tag] = plugin;
@@ -221,7 +222,8 @@ class _XMLBaseIterator implements Iterator<XMLBase> {
 
 class XMLBase {
   XMLBase({
-    String? name,
+    /// If no `name` is passed, sets the default name of the stanza to `stanza`
+    this.name = 'stanza',
 
     /// If `null`, then default stanza namespace will be used
     String? namespace,
@@ -248,9 +250,6 @@ class XMLBase {
     this.element,
     XMLBase? parent,
   }) {
-    /// If passed `name`, null, set the default name of the stanza to `stanza`.
-    _name = name ?? 'stanza';
-
     /// Equal `namespace` to `CLIENT` by default.
     _namespace = namespace ?? Echotils.getNamespace('CLIENT');
 
@@ -295,7 +294,7 @@ class XMLBase {
 
     _index = 0;
 
-    _tag = _tagName;
+    tag = _tagName;
 
     _parent = null;
     if (parent != null) _parent = parent;
@@ -316,7 +315,7 @@ class XMLBase {
   }
 
   /// The XML tag name of the element, not including any namespace prefixes.
-  late final String _name;
+  final String name;
 
   /// The XML namespace for the element. Given `<foo xmlns="bar" />`, then
   /// `namespace = "bar"` should be used.
@@ -424,7 +423,9 @@ class XMLBase {
 
   /// Index to keep for iterables.
   late int _index;
-  late final String _tag;
+
+  @internal
+  late final String tag;
 
   /// The stanza's XML contents initializer.
   ///
@@ -445,7 +446,7 @@ class XMLBase {
 
     xml.XmlElement lastXML = xml.XmlElement(xml.XmlName(''));
     int index = 0;
-    for (final ename in _name.split('/')) {
+    for (final ename in name.split('/')) {
       final newElement = index == 0 && _includeNamespace
           ? Echotils.xmlElement(ename, namespace: _namespace)
           : Echotils.xmlElement(ename);
@@ -1107,7 +1108,7 @@ class XMLBase {
   /// Returns the namespaced name of the stanza's root element.
   ///
   /// The format for the tag name is: '{namespace}elementName'.
-  String get _tagName => '<$_name xmlns="$_namespace"/>';
+  String get _tagName => '<$name xmlns="$_namespace"/>';
 
   String? _lang(xml.XmlNode element) {
     final result = element
@@ -1178,7 +1179,7 @@ class XMLBase {
         if (submap.containsKey('__childtag__')) {
           for (final subclass in _pluginIterables) {
             final childtag =
-                '<${subclass._name} xmlns="${subclass._namespace}"/>';
+                '<${subclass.name} xmlns="${subclass._namespace}"/>';
             if (submap['__childtag__'] == childtag) {
               final sub = subclass.copy(null, this);
               sub.values = submap;
@@ -1241,7 +1242,7 @@ class XMLBase {
       for (final stanza in _iterables) {
         iterables.add(stanza.values);
         if (iterables.length - 1 >= 0) {
-          iterables[iterables.length - 1]['__childtag__'] = stanza._tag;
+          iterables[iterables.length - 1]['__childtag__'] = stanza.tag;
         }
       }
       values['substanzas'] = iterables;
@@ -1279,7 +1280,7 @@ class XMLBase {
   /// }
   /// ```
   XMLBase copy([xml.XmlElement? element, XMLBase? parent]) => XMLBase(
-        name: _name,
+        name: name,
         namespace: _namespace,
         interfaces: _interfaces,
         pluginAttribute: _pluginAttribute,
