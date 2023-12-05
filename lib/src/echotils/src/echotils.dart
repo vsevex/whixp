@@ -454,12 +454,12 @@ class Echotils {
   ///
   /// If the input [text] is a byte sequence (bytes), it is decoded using the
   /// UTF-8 encoding. If the input is already a string, it is returned as is.
-  static String unicode(dynamic text /** List<int> || String */) {
-    if (text! is String) {
-      return utf8.decode(text as List<int>);
+  static String unicode(dynamic data /** List<int> || String */) {
+    if (data is! String) {
+      return utf8.decode(data as List<int>);
     }
 
-    return text as String;
+    return data;
   }
 
   /// Retrieves namespace [String] from namespace [Map] according to the passed
@@ -469,7 +469,7 @@ class Echotils {
   /// ```dart
   /// final streamNamespace = Echotils.getNamespace('STREAM');
   /// ```
-  static String getNamespace(String ns) => _namespace[ns]!;
+  static String getNamespace(String ns) => _namespace[ns.toUpperCase()]!;
 
   /// Adds a namespace to the current list of namespaces for a server
   /// configuration.
