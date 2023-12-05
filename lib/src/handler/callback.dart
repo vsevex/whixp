@@ -36,15 +36,18 @@ class FutureCallbackHandler extends Handler {
 
   @override
   void prerun(StanzaBase payload) {
+    print('prerun is called');
     if (once) {
       destroy = true;
     }
-
-    run(payload, instream: instream);
+    if (instream) {
+      run(payload, instream: true);
+    }
   }
 
   @override
   void run(StanzaBase payload, {bool instream = false}) {
+    print('run is called');
     if (!this.instream || instream) {
       future.complete(callback(payload));
     }

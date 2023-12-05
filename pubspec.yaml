@@ -16,6 +16,7 @@ dependencies:
   events_emitter: ^0.5.2
   logger: ^2.0.2
   memoize: ^3.0.0
+  meta: ^1.11.0
   unorm_dart: ^0.2.0
   web_socket_client: ^0.1.0
   xml: ^6.3.0
