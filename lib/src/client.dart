@@ -15,13 +15,15 @@ class Whixp extends WhixpBase {
     transport.streamHeader =
         "<stream:stream to='${boundJID.host}' xmlns:stream='$streamNamespace' xmlns='$defaultNamespace' xml:lang='$language' version='1.0'>";
 
-    transport.registerHandler(
-      FutureCallbackHandler(
-        'Stream Features',
-        (stanza) => _handleStreamFeatures(stanza as StreamFeatures),
-        matcher: XPathMatcher('<features xmlns="$streamNamespace"/>'),
-      ),
-    );
+    transport
+      ..registerStanza(StreamFeatures())
+      ..registerHandler(
+        FutureCallbackHandler(
+          'Stream Features',
+          (stanza) => _handleStreamFeatures(stanza as StreamFeatures),
+          matcher: XPathMatcher('<features xmlns="$streamNamespace"/>'),
+        ),
+      );
   }
 
   /// Default language to use in stanza communication.
