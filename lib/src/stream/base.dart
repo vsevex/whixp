@@ -2,9 +2,12 @@ import 'package:dartz/dartz.dart';
 
 import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/jid/jid.dart';
+import 'package:echox/src/transport/transport.dart';
 
 import 'package:xml/xml.dart' as xml;
 import 'package:xpath_selector_xml_parser/xpath_selector_xml_parser.dart';
+
+part 'stanza.dart';
 
 typedef _GetterOrDeleter = dynamic Function(dynamic, XMLBase);
 
@@ -101,15 +104,15 @@ XMLBase multifactory(XMLBase stanza, String pluginAttribute) {
 
   multistanza
     ..addGetters({
-      Symbol('get_$pluginAttribute'): (args, base) =>
+      Symbol(pluginAttribute): (args, base) =>
           multistanza.getMulti(base, args as String?),
     })
     ..addSetters({
-      Symbol('set_$pluginAttribute'): (value, args, base) =>
+      Symbol(pluginAttribute): (value, args, base) =>
           multistanza.setMulti(base, value as List<dynamic>, args as String?),
     })
     ..addDeleters({
-      Symbol('delete_$pluginAttribute'): (args, base) =>
+      Symbol(pluginAttribute): (args, base) =>
           multistanza.deleteMulti(base, args as String?),
     });
 
@@ -141,7 +144,7 @@ class _Multi extends XMLBase {
 
   void setMulti(XMLBase base, List<dynamic> value, [String? language]) {
     final parent = failWithoutParent(base);
-    _deleters[Symbol('delete_$_pluginAttribute')]?.call(language, base);
+    _deleters[Symbol(_pluginAttribute)]?.call(language, base);
     for (final sub in value) {
       parent.add(Tuple2(null, sub as XMLBase));
     }
@@ -861,7 +864,7 @@ class XMLBase {
     if (attribute == 'substanzas') {
       return _iterables;
     } else if (_interfaces.contains(attribute) || attribute == 'lang') {
-      final getMethod = 'get_${attribute.toLowerCase()}';
+      final getMethod = attribute.toLowerCase();
 
       if (_pluginOverrides.isNotEmpty) {
         final name = _pluginOverrides[getMethod];
@@ -927,7 +930,7 @@ class XMLBase {
 
     if (_interfaces.contains(attrib) || attrib == 'lang') {
       if (value != null) {
-        final setMethod = 'set_${attrib.toLowerCase()}';
+        final setMethod = attrib.toLowerCase();
 
         if (_pluginOverrides.isNotEmpty) {
           final name = _pluginOverrides[setMethod];
@@ -1013,7 +1016,7 @@ class XMLBase {
     }
 
     if (_interfaces.contains(attrib) || attrib == 'lang') {
-      final deleteMethod = 'delete_${attrib.toLowerCase()}';
+      final deleteMethod = attrib.toLowerCase();
 
       if (_pluginOverrides.isNotEmpty) {
         final name = _pluginOverrides[deleteMethod];
@@ -1068,7 +1071,7 @@ class XMLBase {
   /// Allows stanza objects to be used like lists.
   XMLBase add(Tuple2<xml.XmlElement?, XMLBase?> item) {
     if (item.value1 != null) {
-      if (item.value1!.nodeType is xml.XmlNode) {
+      if (item.value1!.nodeType == xml.XmlNodeType.ELEMENT) {
         return _addXML(item.value1!);
       } else {
         throw ArgumentError('The provided element is not in type of XmlNode');
@@ -1129,6 +1132,8 @@ class XMLBase {
   }
 
   bool get boolean => true;
+
+  Map<Tuple2<String, String>, XMLBase> get plugins => _plugins;
 
   /// Returns the names of all stanza interfaces provided by the stanza object.
   ///
@@ -1242,6 +1247,15 @@ class XMLBase {
       values['substanzas'] = iterables;
     }
     return values;
+  }
+
+  /// Remove all XML element contents and plugins.
+  void clear() {
+    element!.children.clear();
+
+    for (final plugin in _plugins.keys) {
+      _plugins.remove(plugin);
+    }
   }
 
   Map<String, dynamic> get values => _values;
