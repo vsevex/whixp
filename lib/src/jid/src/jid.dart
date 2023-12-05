@@ -165,7 +165,7 @@ class _Jabbered {
 }
 
 class JabberIDTemp {
-  JabberIDTemp({String? jid}) {
+  JabberIDTemp([String? jid]) {
     if (jid == null) return;
     final jabberID = _Jabbered._parse(jid);
     _node = jabberID.value1;
