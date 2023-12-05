@@ -9,6 +9,8 @@ import 'package:dnsolve/dnsolve.dart';
 import 'package:echox/src/echotils/src/echotils.dart';
 import 'package:echox/src/handler/eventius.dart';
 import 'package:echox/src/handler/handler.dart';
+import 'package:echox/src/stanza/handshake.dart';
+import 'package:echox/src/stanza/root.dart';
 import 'package:echox/src/stream/base.dart';
 import 'package:echox/src/transport/queue.dart';
 
@@ -75,11 +77,11 @@ class Transport {
   late async.Completer<dynamic> _runOutFilters;
   async.Completer<void>? _currentConnectionAttempt;
   late async.Completer<void> _abortCompleter;
+  late bool alwaysSendEverything;
   String? _disconnectReason;
   late int _xmlDepth;
   xml.XmlElement? _rootXML;
   late Connecta? _connecta;
-  io.Socket? _socket;
   Iterator<Tuple3<String, String, int>>? _dnsAnswers;
   late String streamHeader;
   void Function(List<parser.XmlEventAttribute> attributes, Transport transport)?
@@ -110,6 +112,7 @@ class Transport {
   String? peerDefaultLanguage;
 
   late final List<Handler> _handlers;
+  final _rootStanza = <StanzaBase>[];
 
   void _setup() {
     _reset();
@@ -138,10 +141,12 @@ class Transport {
     _xmlDepth = 0;
     _eventWhenConnected = 'connected';
 
+    alwaysSendEverything = false;
     defaultNamespace = '';
     peerDefaultLanguage = null;
 
     _handlers = <Handler>[];
+    _rootStanza.clear();
   }
 
   void connect() {
@@ -206,7 +211,7 @@ class Transport {
     );
 
     try {
-      _socket = await _connecta!.connect(
+      await _connecta!.connect(
         onData: (data) => _dataReceived(data),
         onError: (error, trace) {
           print(error);
@@ -233,7 +238,7 @@ class Transport {
   }
 
   void _dataReceived(List<int> bytes) {
-    final data = Echotils.unicode(bytes);
+    final data = _streamWrapper(Echotils.unicode(bytes));
 
     void onStartElement(parser.XmlStartElementEvent event) {
       if (_xmlDepth == 0) {
@@ -242,20 +247,97 @@ class Transport {
       _xmlDepth++;
     }
 
+    String temp = '';
     void onEndElement(parser.XmlEndElementEvent event) {
       _xmlDepth--;
       if (_xmlDepth == 0) {
-      } else if (_xmlDepth == 1) {}
+      } else if (_xmlDepth == 1) {
+        if (event.name == 'stream:stream') {
+          final index = data.indexOf('<$temp');
+          final element =
+              xml.XmlDocument.parse(data.substring(index, event.start))
+                  .rootElement;
+          String? namespace;
+          for (final attribute in event.parent!.attributes) {
+            if (attribute.name == 'xmlns:stream') {
+              namespace = attribute.value;
+            }
+          }
+          if (namespace != null) {
+            element.setAttribute('xmlns', namespace);
+          }
+          _spawnEvent(element);
+        } else {}
+      }
+      temp = event.name;
     }
 
     Stream.value(data)
-        .toXmlEvents()
+        .toXmlEvents(withLocation: true, withParent: true)
         .normalizeEvents()
         .tapEachEvent(
           onStartElement: onStartElement,
           onEndElement: onEndElement,
         )
-        .listen(id);
+        .listen((event) {});
+  }
+
+  String _streamWrapper(String data) {
+    if (data.contains('<stream:stream')) {
+      return '$data</stream:stream>';
+    }
+    return data;
+  }
+
+  void _spawnEvent(xml.XmlElement element) {
+    final stanza = _buildStanza(element);
+
+    bool handled = false;
+    final handlers = <Handler>[];
+    for (final handler in _handlers) {
+      if (handler.match(stanza)) {
+        handlers.add(handler);
+      }
+    }
+
+    for (final handler in handlers) {
+      handler.prerun(stanza);
+      try {
+        handler.run(stanza);
+      } on Exception catch (excp) {
+        stanza.exception(excp);
+      }
+      if (handler.checkDelete) {
+        _handlers.remove(handler);
+      }
+      handled = true;
+    }
+
+    if (!handled) {
+      stanza.unhandled();
+    }
+  }
+
+  StanzaBase _buildStanza(xml.XmlElement element, {String? defaultNamespace}) {
+    final namespace = defaultNamespace ?? this.defaultNamespace;
+
+    StanzaBase stanzaClass = StanzaBase();
+
+    String tag() =>
+        '<${element.localName} xmlns="${element.getAttribute('xmlns')}"/>';
+
+    for (final stanza in _rootStanza) {
+      if ((element.localName == stanza.name &&
+              element.getAttribute('xmlns') == namespace) ||
+          tag() == stanza.tag) {
+        stanzaClass = stanza.copy(element, null, true);
+        break;
+      }
+    }
+    if (stanzaClass['lang'] == null && peerDefaultLanguage != null) {
+      stanzaClass['lang'] = peerDefaultLanguage;
+    }
+    return stanzaClass;
   }
 
   /// Init the XML parser. The parser must always be reset for each new
@@ -267,8 +349,8 @@ class Transport {
 
   /// Forcibly close the connection.
   void abort() {
-    if (_socket != null) {
-      _abortCompleter.complete(_socket!.flush());
+    if (_connecta!.socket.ioSocket != null) {
+      _abortCompleter.complete(_connecta!.socket.ioSocket!.flush());
       if (_abortCompleter.isCompleted) {
         _cancelConnectionAttempt();
         emit('killed');
@@ -287,6 +369,8 @@ class Transport {
         _eventius.createListener('disconnected', handler, disposable: true);
     _eventius.addEvent(listener);
   }
+
+  void registerStanza(StanzaBase stanza) => _rootStanza.add(stanza);
 
   void registerHandler(Handler handler) {
     if (handler.transport == null) {
@@ -308,7 +392,6 @@ class Transport {
   void _cancelConnectionAttempt() {
     _currentConnectionAttempt = null;
     _connecta = null;
-    _socket = null;
   }
 
   void _rescheduleConnectionAttempt() {
@@ -411,7 +494,18 @@ class Transport {
 
   /// Wraps basic send method declared in this class privately. Helps to send
   /// stanza objects.
-  void send(Tuple2<StanzaBase?, String?> data, {bool useFilters = true}) {}
+  void send(Tuple2<StanzaBase?, String?> data, {bool useFilters = true}) {
+    if (!alwaysSendEverything && !_sessionStarted) {
+      bool passthrough = false;
+      if (data.value1 != null && data.value1 is Handshake) {
+        passthrough = true;
+      }
+
+      if (data is Tuple2<RootStanza?, String?> && !passthrough) {
+        print('not sent: $data');
+      }
+    }
+  }
 
   void _sendRaw(dynamic data) {
     List<int> rawData;
@@ -425,6 +519,7 @@ class Transport {
       );
     }
     if (_connecta != null) {
+      print('send: $data');
       _connecta!.send(rawData);
     } else {
       /// TODO: throw not connected error
@@ -443,7 +538,7 @@ class Transport {
 
   Tuple2<String, int> get address => _address;
 
-  bool get isConnected => _socket != null;
+  bool get isConnected => _connecta!.socket.ioSocket != null;
 
   bool get isConnectionSecured => _isConnectionSecured;
 }
