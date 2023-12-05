@@ -13,7 +13,7 @@ class Whixp extends WhixpBase {
   }) : super(jabberID: jabberID) {
     /// Set [streamHeader] of declared transport for initial send.
     transport.streamHeader =
-        "<stream:stream to='${boundJID.host}' xmlns:stre/am='$streamNamespace' xmlns='$defaultNamespace' xml:lang='$language' version='1.0'>";
+        "<stream:stream to='${boundJID.host}' xmlns:stream='$streamNamespace' xmlns='$defaultNamespace' xml:lang='$language' version='1.0'>";
 
     transport.registerHandler(
       FutureCallbackHandler(
