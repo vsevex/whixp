@@ -9,8 +9,10 @@ environment:
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
+  connecta: ^1.0.0-beta2
   crypto: ^3.0.3
   dartz: ^0.10.1
+  dnsolve: ^1.0.0
   events_emitter: ^0.5.2
   logger: ^2.0.2
   memoize: ^3.0.0
