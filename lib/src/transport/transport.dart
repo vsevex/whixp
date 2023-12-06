@@ -17,6 +17,12 @@ import 'package:echox/src/transport/queue.dart';
 import 'package:xml/xml.dart' as xml;
 import 'package:xml/xml_events.dart' as parser;
 
+typedef SyncFilter = Function(StanzaBase stanza, [StanzaBase? base]);
+typedef AsyncFilter = Future Function(
+  StanzaBase stanza, [
+  Future<StanzaBase>? callback,
+]);
+
 class Transport {
   Transport(
     this._host, {
@@ -72,9 +78,8 @@ class Transport {
   late bool _useIPv6;
   String? _dnsService;
 
-  late Queue _queuedStanzas;
-  late Queue _waitingQueue;
-  late async.Completer<dynamic> _runOutFilters;
+  final _waitingQueue = AsyncQueue<Tuple2<dynamic, bool>>();
+  late async.Completer<dynamic>? _runOutFilters;
   async.Completer<void>? _currentConnectionAttempt;
   late async.Completer<void> _abortCompleter;
   late bool alwaysSendEverything;
@@ -86,6 +91,8 @@ class Transport {
   late String streamHeader;
   void Function(List<parser.XmlEventAttribute> attributes, Transport transport)?
       _startStreamHandlerOverrider;
+
+  final _slowTasks = <Task>[];
 
   bool isComponent;
 
@@ -114,6 +121,8 @@ class Transport {
   late final List<Handler> _handlers;
   final _rootStanza = <StanzaBase>[];
 
+  final _filters = <String, List<Tuple2<SyncFilter?, AsyncFilter?>>>{};
+
   void _setup() {
     _reset();
 
@@ -134,7 +143,7 @@ class Transport {
 
     _sessionStarted = false;
 
-    _runOutFilters = async.Completer<dynamic>();
+    _runOutFilters = null;
     _abortCompleter = async.Completer<void>();
 
     _connectFutureWait = 0;
@@ -147,11 +156,21 @@ class Transport {
 
     _handlers = <Handler>[];
     _rootStanza.clear();
+
+    _filters
+      ..clear()
+      ..addAll({
+        'in': <Tuple2<SyncFilter, AsyncFilter>>[],
+        'out': <Tuple2<SyncFilter, AsyncFilter>>[],
+        'outSync': <Tuple2<SyncFilter, AsyncFilter>>[],
+      });
+    _slowTasks.clear();
   }
 
   void connect() {
-    if (_runOutFilters.isCompleted) {
-      _runOutFilters.complete(_runFilters());
+    if (_runOutFilters == null || _runOutFilters!.isCompleted) {
+      _runOutFilters ??= async.Completer<dynamic>();
+      _runOutFilters!.complete(runFilters());
     }
 
     _disconnectReason = null;
@@ -237,6 +256,10 @@ class Transport {
     _dnsAnswers = null;
   }
 
+  Future<bool> startTLS() async {
+    return true;
+  }
+
   void _dataReceived(List<int> bytes) {
     final data = _streamWrapper(Echotils.unicode(bytes));
 
@@ -267,6 +290,9 @@ class Transport {
             element.setAttribute('xmlns', namespace);
           }
           _spawnEvent(element);
+          if (_rootXML != null) {
+            _rootXML!.children.clear();
+          }
         } else {}
       }
       temp = event.name;
@@ -340,6 +366,80 @@ class Transport {
     return stanzaClass;
   }
 
+  Future<void> _slowSend(
+    Task task,
+    Set<Tuple2<SyncFilter?, AsyncFilter?>> alreadyUsed,
+  ) async {
+    final completer = async.Completer<dynamic>();
+    completer.complete(task.run());
+
+    final data = await completer.future;
+    _slowTasks.remove(task);
+    if (data == null && !completer.isCompleted) {
+      return;
+    }
+    for (final filter
+        in _filters['out'] ?? <Tuple2<SyncFilter?, AsyncFilter?>>[]) {
+      if (alreadyUsed.contains(filter)) {
+        continue;
+      }
+      if (filter.value2 != null) {
+        completer.complete(filter.value2!.call(data as StanzaBase));
+      } else {
+        completer.complete(filter.value1?.call(data as StanzaBase));
+      }
+      if (data == null) {
+        return;
+      }
+    }
+  }
+
+  Future<void> runFilters() async {
+    while (true) {
+      Tuple2<dynamic, bool> data;
+      data = await _waitingQueue.dequeue();
+
+      dynamic result;
+
+      if (data.value1 != null && data.value1 is StanzaBase) {
+        if (data.value2) {
+          final alreadyRunFilters = <Tuple2<SyncFilter?, AsyncFilter?>>{};
+          for (final filter
+              in _filters['out'] ?? <Tuple2<SyncFilter?, AsyncFilter?>>[]) {
+            alreadyRunFilters.add(filter);
+            if (filter.value2 != null) {
+              final task =
+                  Task(() => filter.value2!.call(data.value1 as StanzaBase));
+              try {
+                result = await task.timeout(const Duration(seconds: 1)).run();
+
+                // Handle the completed value
+              } on async.TimeoutException {
+                // Handle the case where the timeout occurred
+                print('Timeout occurred and add to slow tasks');
+
+                _slowSend(task, alreadyRunFilters);
+              }
+            } else if (data.value1 is StanzaBase) {
+              filter.value1!.call(data.value1 as StanzaBase);
+            }
+          }
+        }
+      }
+      if (result != null && result is StanzaBase) {
+        if (data.value2) {
+          for (final filter in _filters['outSync']!) {
+            filter.value1!.call(data.value1 as StanzaBase);
+          }
+        }
+        final raw = data.value1.toString();
+        _sendRaw(raw);
+      } else if (data is String) {
+        _sendRaw(data);
+      }
+    }
+  }
+
   /// Init the XML parser. The parser must always be reset for each new
   /// connection.
   void _initParser() {
@@ -385,14 +485,12 @@ class Transport {
     _eventius.emit<T>(event, data);
   }
 
-  Future<void> _runFilters() async {
-    print('runFilter');
-  }
-
   void _cancelConnectionAttempt() {
     _currentConnectionAttempt = null;
     _connecta = null;
   }
+
+  void registerPlugin(String plugin) {}
 
   void _rescheduleConnectionAttempt() {
     if (_currentConnectionAttempt == null) {
@@ -495,6 +593,7 @@ class Transport {
   /// Wraps basic send method declared in this class privately. Helps to send
   /// stanza objects.
   void send(Tuple2<StanzaBase?, String?> data, {bool useFilters = true}) {
+    print('send data');
     if (!alwaysSendEverything && !_sessionStarted) {
       bool passthrough = false;
       if (data.value1 != null && data.value1 is Handshake) {
@@ -505,6 +604,7 @@ class Transport {
         print('not sent: $data');
       }
     }
+    _waitingQueue.enqueue(Tuple2(data, useFilters));
   }
 
   void _sendRaw(dynamic data) {
@@ -541,4 +641,6 @@ class Transport {
   bool get isConnected => _connecta!.socket.ioSocket != null;
 
   bool get isConnectionSecured => _isConnectionSecured;
+
+  bool get disableStartTLS => _disableStartTLS;
 }
