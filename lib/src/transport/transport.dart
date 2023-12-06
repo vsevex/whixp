@@ -78,7 +78,8 @@ class Transport {
   late bool _useIPv6;
   String? _dnsService;
 
-  final _waitingQueue = AsyncQueue<Tuple2<dynamic, bool>>();
+  final _waitingQueue =
+      AsyncQueue<Tuple2<Tuple2<StanzaBase?, String?>, bool>>();
   late async.Completer<dynamic>? _runOutFilters;
   async.Completer<void>? _currentConnectionAttempt;
   late async.Completer<void> _abortCompleter;
@@ -210,11 +211,12 @@ class Transport {
       context = io.SecurityContext(withTrustedRoots: true);
       if (_caCerts.isNotEmpty) {
         for (final caCert in _caCerts) {
-          context.setClientAuthorities(caCert.value1, password: caCert.value2);
+          context.setClientAuthorities(caCert.value1);
         }
       }
       if (certificatePath.isNotEmpty && keyPath.isNotEmpty) {
         context
+          ..setClientAuthorities('localhost/ca.pem')
           ..useCertificateChain(certificatePath)
           ..usePrivateKey(keyPath);
       }
@@ -225,7 +227,6 @@ class Transport {
         hostname: address.value1,
         port: address.value2,
         context: context,
-        startTLS: _useTLS,
       ),
     );
 
@@ -257,11 +258,29 @@ class Transport {
   }
 
   Future<bool> startTLS() async {
-    return true;
+    if (_connecta == null) return false;
+    _eventWhenConnected = 'tlsSuccess';
+    try {
+      await _connecta!.upgradeConnection();
+      _connectionMade();
+      return true;
+    } on Exception catch (error) {
+      print('error occured on connection upgrade: $error');
+      rethrow;
+    }
   }
 
   void _dataReceived(List<int> bytes) {
-    final data = _streamWrapper(Echotils.unicode(bytes));
+    String data = Echotils.unicode(bytes);
+    if (data.contains('<stream:stream')) {
+      data = _streamWrapper(data);
+    }
+    print('data received: $data');
+
+    void spawn() {
+      final element = xml.XmlDocument.parse(data).rootElement;
+      _spawnEvent(element);
+    }
 
     void onStartElement(parser.XmlStartElementEvent event) {
       if (_xmlDepth == 0) {
@@ -290,10 +309,12 @@ class Transport {
             element.setAttribute('xmlns', namespace);
           }
           _spawnEvent(element);
-          if (_rootXML != null) {
-            _rootXML!.children.clear();
-          }
-        } else {}
+        } else {
+          spawn();
+        }
+        if (_rootXML != null) {
+          _rootXML!.children.clear();
+        }
       }
       temp = event.name;
     }
@@ -305,7 +326,11 @@ class Transport {
           onStartElement: onStartElement,
           onEndElement: onEndElement,
         )
-        .listen((event) {});
+        .listen((events) {
+      if (events.length == 1) {
+        spawn();
+      }
+    });
   }
 
   String _streamWrapper(String data) {
@@ -396,12 +421,10 @@ class Transport {
 
   Future<void> runFilters() async {
     while (true) {
-      Tuple2<dynamic, bool> data;
+      Tuple2<Tuple2<StanzaBase?, String?>, bool> data;
       data = await _waitingQueue.dequeue();
 
-      dynamic result;
-
-      if (data.value1 != null && data.value1 is StanzaBase) {
+      if (data.value1.value1 != null) {
         if (data.value2) {
           final alreadyRunFilters = <Tuple2<SyncFilter?, AsyncFilter?>>{};
           for (final filter
@@ -411,7 +434,7 @@ class Transport {
               final task =
                   Task(() => filter.value2!.call(data.value1 as StanzaBase));
               try {
-                result = await task.timeout(const Duration(seconds: 1)).run();
+                // data = await task.timeout(const Duration(seconds: 1)).run();
 
                 // Handle the completed value
               } on async.TimeoutException {
@@ -426,15 +449,20 @@ class Transport {
           }
         }
       }
-      if (result != null && result is StanzaBase) {
+      if (data.value1.value1 != null) {
         if (data.value2) {
           for (final filter in _filters['outSync']!) {
             filter.value1!.call(data.value1 as StanzaBase);
           }
         }
-        final raw = data.value1.toString();
-        _sendRaw(raw);
-      } else if (data is String) {
+        late String rawData;
+        if (data.value1.value1 != null) {
+          rawData = data.value1.value1.toString();
+        } else {
+          rawData = data.value1.value2!;
+        }
+        _sendRaw(rawData);
+      } else if (data.value1.value2 != null) {
         _sendRaw(data);
       }
     }
@@ -474,6 +502,7 @@ class Transport {
 
   void registerHandler(Handler handler) {
     if (handler.transport == null) {
+      handler.transport = this;
       _handlers.add(handler);
     }
   }
@@ -489,8 +518,6 @@ class Transport {
     _currentConnectionAttempt = null;
     _connecta = null;
   }
-
-  void registerPlugin(String plugin) {}
 
   void _rescheduleConnectionAttempt() {
     if (_currentConnectionAttempt == null) {
@@ -593,7 +620,6 @@ class Transport {
   /// Wraps basic send method declared in this class privately. Helps to send
   /// stanza objects.
   void send(Tuple2<StanzaBase?, String?> data, {bool useFilters = true}) {
-    print('send data');
     if (!alwaysSendEverything && !_sessionStarted) {
       bool passthrough = false;
       if (data.value1 != null && data.value1 is Handshake) {
