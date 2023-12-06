@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:echox/src/handler/callback.dart';
+import 'package:echox/src/plugins/starttls/stanza.dart';
 import 'package:echox/src/plugins/starttls/starttls.dart';
 import 'package:echox/src/stanza/features.dart';
 import 'package:echox/src/stream/base.dart';
@@ -30,7 +31,11 @@ class Whixp extends WhixpBase {
       ..registerHandler(
         FutureCallbackHandler(
           'Stream Features',
-          (stanza) => _handleStreamFeatures(stanza),
+          (stanza) async {
+            registerStanzaPlugin(stanza, StartTLS());
+            await _handleStreamFeatures(stanza);
+            return;
+          },
           matcher: XPathMatcher('<features xmlns="$streamNamespace"/>'),
         ),
       );
@@ -45,23 +50,26 @@ class Whixp extends WhixpBase {
   /// Default language to use in stanza communication.
   final String language;
 
-  Future<bool?> _handleStreamFeatures(StanzaBase features) async {
-    for (final feature in streamFeatureHandlers.entries) {
-      final name = feature.key;
+  Future<bool> _handleStreamFeatures(StanzaBase features) async {
+    for (final feature in streamFeatureOrder) {
+      final name = feature.value2;
+
+      if (features['starttls'] == null) return false;
 
       if ((features['features'] as Map<String, XMLBase>).containsKey(name) &&
-          (features['features'] as Map<String, XMLBase>)['name'] != null) {
-        final handler = streamFeatureHandlers['name']!.value1;
-        final restart = streamFeatureHandlers['name']!.value2;
+          (features['features'] as Map<String, XMLBase>)[name] != null) {
+        final handler = streamFeatureHandlers[name]!.value1;
+        final restart = streamFeatureHandlers[name]!.value2;
 
         final result = await handler(features);
+
         if (result != null && restart) {
           return true;
         }
       }
     }
 
-    return null;
+    return false;
   }
 
   void connect() {
