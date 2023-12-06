@@ -25,7 +25,7 @@ Tuple2<String?, List<String>?> fixNamespace(
   for (final block in namespaceBlocks) {
     late String namespace;
     late List<String> elements;
-    if (block.contains('xmlns')) {
+    if (block.contains('>') && block.contains('xmlns')) {
       final namespaceBlockSplit = block.split('>');
       namespace = namespaceBlockSplit[0];
       elements = namespaceBlockSplit[1].split('/');
@@ -38,7 +38,7 @@ Tuple2<String?, List<String>?> fixNamespace(
       late String tag;
       if (element.isNotEmpty) {
         if (propogateNamespace && element[0] != '*') {
-          tag = '{$namespace}$element';
+          tag = '<$element xmlns="$namespace"/>';
         } else {
           tag = element;
         }
