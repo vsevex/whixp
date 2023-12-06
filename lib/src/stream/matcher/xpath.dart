@@ -12,9 +12,10 @@ class XPathMatcher extends BaseMatcher {
   @override
   bool match(XMLBase base) {
     final element = base.element;
-    final x = xml.XmlElement(xml.XmlName('x'));
-    x.children.add(element!);
 
-    return x.getElement(fixNamespace(criteria as String).value1!) != null;
+    String tag() =>
+        '<${element!.localName} xmlns="${element.getAttribute('xmlns')}"/>';
+
+    return criteria as String == tag();
   }
 }
