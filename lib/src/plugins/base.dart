@@ -36,13 +36,13 @@ class PluginManager {
     _lockCompleter = Completer<dynamic>();
 
     _lockCompleter.complete(
-      _lock.synchronized(() async {
+      _lock.synchronized(() {
         enabledTemp.add(name);
         enabledPlugins.add(name);
         if (_pluginRegistery.containsKey(name) &&
-            _pluginRegistery['name'] != null) {
-          final plugin = _pluginRegistery['name']!;
-          activePlugins['name'] = plugin;
+            _pluginRegistery[name] != null) {
+          final plugin = _pluginRegistery[name]!;
+          activePlugins[name] = plugin;
           if (plugin.dependencies.isNotEmpty) {
             for (final dependency in plugin.dependencies) {
               enable(dependency, enabled: enabledTemp);
@@ -50,6 +50,7 @@ class PluginManager {
           }
           plugin.initialize();
         }
+        return;
       }),
     );
   }
