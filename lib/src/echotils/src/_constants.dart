@@ -32,6 +32,7 @@ final _namespace = <String, String>{
   'JABBER_STREAM': "http://etherx.jabber.org/streams",
   'FRAMING': "urn:ietf:params:xml:ns:xmpp-framing",
   'BIND': "urn:ietf:params:xml:ns:xmpp-bind",
+  'STARTTLS': "urn:ietf:params:xml:ns:xmpp-tls",
   'SESSION': "urn:ietf:params:xml:ns:xmpp-session",
   'VERSION': "jabber:iq:version",
   'STANZAS': "urn:ietf:params:xml:ns:xmpp-stanzas",
