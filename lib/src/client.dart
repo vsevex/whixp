@@ -15,6 +15,7 @@ class Whixp extends WhixpBase {
     super.port,
     this.language = 'en',
     super.useTLS = false,
+    super.dnsService = 'xmpp-client',
   }) : super(jabberID: jabberID) {
     setup();
   }
@@ -32,7 +33,9 @@ class Whixp extends WhixpBase {
         FutureCallbackHandler(
           'Stream Features',
           (stanza) async {
-            registerStanzaPlugin(stanza, StartTLS());
+            final starttls = StartTLS();
+            registerStanzaPlugin(stanza, starttls);
+            stanza.enable(starttls.name);
             await _handleStreamFeatures(stanza);
             return;
           },
@@ -53,8 +56,6 @@ class Whixp extends WhixpBase {
   Future<bool> _handleStreamFeatures(StanzaBase features) async {
     for (final feature in streamFeatureOrder) {
       final name = feature.value2;
-
-      if (features['starttls'] == null) return false;
 
       if ((features['features'] as Map<String, XMLBase>).containsKey(name) &&
           (features['features'] as Map<String, XMLBase>)[name] != null) {
