@@ -215,10 +215,9 @@ class Transport {
         }
       }
       if (certificatePath.isNotEmpty && keyPath.isNotEmpty) {
-        context
-          ..setClientAuthorities('localhost/ca.pem')
-          ..useCertificateChain(certificatePath)
-          ..usePrivateKey(keyPath);
+        context.setTrustedCertificates('localhost/cert.pem');
+        // ..useCertificateChain(certificatePath)
+        // ..usePrivateKey(keyPath);
       }
     }
 
@@ -227,6 +226,7 @@ class Transport {
         hostname: address.value1,
         port: address.value2,
         context: context,
+        continueEmittingOnBadCert: false,
       ),
     );
 
@@ -264,15 +264,15 @@ class Transport {
       await _connecta!.upgradeConnection();
       _connectionMade();
       return true;
-    } on Exception catch (error) {
-      print('error occured on connection upgrade: $error');
+    } on ConnectaException catch (error) {
+      print(error.message);
       rethrow;
     }
   }
 
   void _dataReceived(List<int> bytes) {
     String data = Echotils.unicode(bytes);
-    if (data.contains('<stream:stream')) {
+    if (data.contains('<stream:stream') && !data.contains('</stream:stream>')) {
       data = _streamWrapper(data);
     }
     print('data received: $data');
