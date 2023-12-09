@@ -13,9 +13,14 @@ class Whixp extends WhixpBase {
     String jabberID, {
     super.host,
     super.port,
+    super.securePort,
+    super.useIPv6,
+    super.useTLS = true,
+    super.directTLS,
+    super.disableStartTLS,
+    super.certs,
     this.language = 'en',
-    super.useTLS = false,
-    super.dnsService = 'xmpp-client',
+    super.connectionTimeout,
   }) : super(jabberID: jabberID) {
     setup();
   }

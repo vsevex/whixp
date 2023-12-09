@@ -11,11 +11,16 @@ import 'package:meta/meta.dart';
 abstract class WhixpBase {
   WhixpBase({
     String? host,
-    int? port,
+    int port = 5222,
+    int? securePort,
     String jabberID = '',
-    String? dnsService,
     String? defaultNamespace,
+    bool useIPv6 = false,
     bool useTLS = false,
+    bool directTLS = false,
+    bool disableStartTLS = false,
+    List<Tuple2<String, String?>>? certs,
+    int connectionTimeout = 3000,
   }) {
     streamNamespace = Echotils.getNamespace('JABBER_STREAM');
     this.defaultNamespace = defaultNamespace ?? Echotils.getNamespace('CLIENT');
@@ -24,25 +29,39 @@ abstract class WhixpBase {
     pluginManager = PluginManager();
 
     /// Assignee for later.
-    String address;
+    late String address;
+    late String? dnsService;
 
-    /// Check if this class is not used for component initialization, and try
-    /// to point [host] and [port] properly.
-    if (!_isComponent && host == null) {
-      address = boundJID.host;
-      port = 5222;
-    } else {
-      address = host!;
-      dnsService = null;
+    if (!_isComponent) {
+      /// Check if this class is not used for component initialization, and try
+      /// to point [host] and [port] properly.
+      if (host == null) {
+        address = boundJID.host;
+
+        if (useTLS) {
+          dnsService = 'xmpps-client';
+        } else {
+          dnsService = 'xmpp-client';
+        }
+      } else {
+        address = host;
+        dnsService = null;
+      }
     }
 
     /// Declare [Transport] with the passed params.
     transport = Transport(
       address,
       port: port,
+      useIPv6: useIPv6,
+      securePort: securePort,
+      directTLS: directTLS,
+      disableStartTLS: disableStartTLS,
       isComponent: _isComponent,
       dnsService: dnsService,
       useTLS: useTLS,
+      caCerts: certs,
+      connectionTimeout: connectionTimeout,
       startStreamHandler: (attributes, transport) {
         String streamVersion = '';
 
