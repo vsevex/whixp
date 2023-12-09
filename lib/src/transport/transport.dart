@@ -26,30 +26,31 @@ typedef AsyncFilter = Future Function(
 class Transport {
   Transport(
     this._host, {
-    int? port,
+    int port = 5222,
+    int? securePort,
     this.test = false,
     String? dnsService,
     this.isComponent = false,
     bool useIPv6 = false,
     bool debug = true,
     bool useTLS = false,
-    bool forceStartTLS = false,
+    bool directTLS = false,
     bool disableStartTLS = false,
     List<Tuple2<String, String?>>? caCerts,
+    this.connectionTimeout,
     void Function(
       List<parser.XmlEventAttribute> attributes,
       Transport transport,
     )? startStreamHandler,
-    this.certificatePath = '',
-    this.keyPath = '',
   }) {
-    _port = port ?? 80;
+    _port = port;
+    _securePort = securePort;
 
     _setup();
 
     _debug = debug;
     _useTLS = useTLS;
-    _forceStartTLS = forceStartTLS;
+    _directTLS = directTLS;
     _disableStartTLS = disableStartTLS;
     _useIPv6 = useIPv6;
     _dnsService = dnsService;
@@ -64,15 +65,20 @@ class Transport {
   final String _host;
   late String _serviceName;
 
-  /// Defaults to 80;
+  /// Defaults to 5222;
   late int _port;
+
+  /// Defaults to null;
+  int? _securePort;
+
+  int? _connectedPort;
   late Tuple2<String, int> _address;
 
   late final Eventius _eventius;
   final bool test;
   late bool _debug;
   late bool _useTLS;
-  late bool _forceStartTLS;
+  late bool _directTLS;
   late bool _disableStartTLS;
   late bool _sessionStarted;
   late bool _useIPv6;
@@ -87,7 +93,10 @@ class Transport {
   String? _disconnectReason;
   late int _xmlDepth;
   xml.XmlElement? _rootXML;
-  late Connecta? _connecta;
+  late io.Socket? _socket;
+
+  /// in milliseconds.
+  final int? connectionTimeout;
   Iterator<Tuple3<String, String, int>>? _dnsAnswers;
   late String streamHeader;
   void Function(List<parser.XmlEventAttribute> attributes, Transport transport)?
@@ -104,14 +113,6 @@ class Transport {
   late String _eventWhenConnected;
 
   late List<Tuple2<String, String?>> _caCerts;
-
-  /// The path to the certificate file for `TLS` connection (defaults to an
-  /// empty string).
-  final String certificatePath;
-
-  /// The path to the key file for `TLS` connection (defaults to an empty
-  /// string).
-  final String keyPath;
 
   String _defaultDomain = '';
   late String defaultNamespace;
@@ -140,7 +141,7 @@ class Transport {
     _address = Tuple2(_host, _port);
 
     _eventius = Eventius();
-    _connecta = null;
+    _socket = null;
 
     _sessionStarted = false;
 
@@ -196,7 +197,7 @@ class Transport {
 
     if (record != null) {
       final host = record.value1;
-      final address = record.value2;
+      final address = record.value2.substring(0, record.value2.length - 1);
       final port = record.value3;
 
       _address = Tuple2(address, port);
@@ -205,68 +206,137 @@ class Transport {
       _dnsAnswers = null;
     }
 
-    io.SecurityContext? context;
-
     if (_useTLS) {
-      context = io.SecurityContext(withTrustedRoots: true);
+      io.SecurityContext? context;
+
       if (_caCerts.isNotEmpty) {
+        context = io.SecurityContext(withTrustedRoots: true);
         for (final caCert in _caCerts) {
-          context.setClientAuthorities(caCert.value1);
+          context.setTrustedCertificates(
+            caCert.value1,
+            password: caCert.value2,
+          );
         }
       }
-      if (certificatePath.isNotEmpty && keyPath.isNotEmpty) {
-        context.setTrustedCertificates('localhost/cert.pem');
-        // ..useCertificateChain(certificatePath)
-        // ..usePrivateKey(keyPath);
+
+      if (_directTLS) {
+        print(_address.value1);
+        print(_port);
+        _socket = await io.SecureSocket.connect(
+          _address.value1,
+          _address.value2,
+          context: context,
+          supportedProtocols: ['TLSv1.1', 'TLSv1.2', 'TLSv1.3', 'xmpp'],
+          timeout: Duration(milliseconds: connectionTimeout!),
+          onBadCertificate: (_) => true,
+        );
+
+        _connectedPort = address.value2;
+      } else {
+        _socket = await io.Socket.connect(
+          'xmpp.is',
+          _port,
+          timeout: Duration(milliseconds: connectionTimeout!),
+        );
+
+        _connectedPort = _port;
       }
+    } else {
+      _socket = await io.Socket.connect(
+        _address.value1,
+        _port,
+        timeout: Duration(milliseconds: connectionTimeout!),
+      );
+
+      _connectedPort = address.value2;
     }
 
-    _connecta = Connecta(
-      ConnectaToolkit(
-        hostname: address.value1,
-        port: address.value2,
-        context: context,
-        continueEmittingOnBadCert: false,
-      ),
-    );
-
     try {
-      await _connecta!.connect(
-        onData: (data) => _dataReceived(data),
+      _socket!.listen(
+        (data) => _dataReceived(data),
         onError: (error, trace) {
           print(error);
         },
       );
+
       _connectionMade();
     } on ConnectaException catch (error) {
       emit<Object>('connectionFailed', data: error.message);
       _rescheduleConnectionAttempt();
     } on Exception catch (error) {
+      print(error);
       emit<Object>('connectionFailed', data: error);
       _rescheduleConnectionAttempt();
     }
 
-    _isConnectionSecured = _connecta!.isSecure;
+    _isConnectionSecured = _socket! is io.SecureSocket;
   }
 
-  void _connectionMade() {
+  void _connectionMade([bool clearAnswers = false]) {
     emit(_eventWhenConnected);
     _currentConnectionAttempt = null;
     _sendRaw(streamHeader);
     _initParser();
-    _dnsAnswers = null;
+    if (clearAnswers) {
+      _dnsAnswers = null;
+    }
   }
 
   Future<bool> startTLS() async {
-    if (_connecta == null) return false;
+    if (_socket == null) return false;
+    if (_disableStartTLS) {
+      print('disable start TLS is true');
+      return false;
+    }
     _eventWhenConnected = 'tlsSuccess';
     try {
-      await _connecta!.upgradeConnection();
-      _connectionMade();
+      final context = io.SecurityContext(withTrustedRoots: true);
+      for (final caCert in _caCerts) {
+        context.setTrustedCertificates(
+          caCert.value1,
+          password: caCert.value2,
+        );
+      }
+
+      if (_connectedPort != _port) {
+        _socket = await io.SecureSocket.secure(
+          _socket!,
+          host: address.value1,
+          context: context,
+          supportedProtocols: ['TLSv1.1', 'TLSv1.2', 'TLSv1.3', 'xmpp'],
+          onBadCertificate: (_) => true,
+        );
+      } else {
+        _socket = await io.SecureSocket.connect(
+          address.value1,
+          () {
+            return _connectedPort = _securePort ??
+                (_dnsAnswers != null
+                    ? _connectedPort = _dnsAnswers!.current.value3
+                    : _connectedPort = address.value2);
+          }(),
+          supportedProtocols: ['TLSv1.1', 'TLSv1.2', 'TLSv1.3', 'xmpp'],
+          context: context,
+          onBadCertificate: (_) => true,
+        );
+      }
+
+      _socket!.listen(
+        (data) => _dataReceived(data),
+        onError: (error, trace) {
+          print(error);
+        },
+      );
+
+      _connectionMade(true);
       return true;
-    } on ConnectaException catch (error) {
-      print(error.message);
-      rethrow;
+    } on ConnectaException {
+      if (_dnsAnswers != null && _dnsAnswers!.moveNext()) {
+        startTLS();
+      } else {
+        rethrow;
+      }
+      return false;
     }
   }
 
@@ -275,13 +345,8 @@ class Transport {
     if (data.contains('<stream:stream') && !data.contains('</stream:stream>')) {
       data = _streamWrapper(data);
     }
+
     print('data received: $data');
-
-    void spawn() {
-      final element = xml.XmlDocument.parse(data).rootElement;
-      _spawnEvent(element);
-    }
-
     void onStartElement(parser.XmlStartElementEvent event) {
       if (_xmlDepth == 0) {
         _startStreamHandler(event.attributes);
@@ -310,7 +375,17 @@ class Transport {
           }
           _spawnEvent(element);
         } else {
-          spawn();
+          final element = xml.XmlDocument.parse(data).rootElement;
+          String? namespace;
+          for (final attribute in event.parent!.attributes) {
+            if (attribute.name == 'xmlns:stream') {
+              namespace = attribute.value;
+            }
+          }
+          if (namespace != null) {
+            element.setAttribute('xmlns', namespace);
+          }
+          _spawnEvent(element);
         }
         if (_rootXML != null) {
           _rootXML!.children.clear();
@@ -328,7 +403,8 @@ class Transport {
         )
         .listen((events) {
       if (events.length == 1) {
-        spawn();
+        final element = xml.XmlDocument.parse(data).rootElement;
+        _spawnEvent(element);
       }
     });
   }
@@ -346,6 +422,7 @@ class Transport {
     bool handled = false;
     final handlers = <Handler>[];
     for (final handler in _handlers) {
+      print(handler.name);
       if (handler.match(stanza)) {
         handlers.add(handler);
       }
@@ -376,6 +453,7 @@ class Transport {
 
     String tag() =>
         '<${element.localName} xmlns="${element.getAttribute('xmlns')}"/>';
+    print(tag());
 
     for (final stanza in _rootStanza) {
       if ((element.localName == stanza.name &&
@@ -477,8 +555,8 @@ class Transport {
 
   /// Forcibly close the connection.
   void abort() {
-    if (_connecta!.socket.ioSocket != null) {
-      _abortCompleter.complete(_connecta!.socket.ioSocket!.flush());
+    if (_socket != null) {
+      _abortCompleter.complete(_socket!.flush());
       if (_abortCompleter.isCompleted) {
         _cancelConnectionAttempt();
         emit('killed');
@@ -516,7 +594,7 @@ class Transport {
 
   void _cancelConnectionAttempt() {
     _currentConnectionAttempt = null;
-    _connecta = null;
+    _socket = null;
   }
 
   void _rescheduleConnectionAttempt() {
@@ -542,10 +620,14 @@ class Transport {
       print(
         'because of test flag is true and this is used to be tested locally, do not look for dns records',
       );
-      return Tuple3(domain, domain, _port);
+      if (_useTLS && _securePort != null) {
+        return Tuple3(domain, domain, _securePort!);
+      } else {
+        return Tuple3(domain, domain, _port);
+      }
     }
     ResolveResponse? response;
-    final srvs = <String>[];
+    final srvs = <SRVRecord>[];
     final results = <Tuple3<String, String, int>>[];
 
     if (service != null) {
@@ -558,7 +640,7 @@ class Transport {
         (response.answer!.srvs != null && response.answer!.srvs!.isNotEmpty)) {
       for (final record in SRVRecord.sort(response.answer!.srvs!)) {
         if (record.target != null) {
-          srvs.add(record.target!);
+          srvs.add(record);
         }
       }
     }
@@ -566,17 +648,18 @@ class Transport {
     if (srvs.isNotEmpty) {
       for (final srv in srvs) {
         if (_useIPv6) {
-          final response = await DNSolve().lookup(srv, type: RecordType.aaaa);
+          final response =
+              await DNSolve().lookup(srv.target!, type: RecordType.aaaa);
           if (response.answer != null && response.answer!.records != null) {
             for (final record in response.answer!.records!) {
-              results.add(Tuple3(domain, record.name, _port));
+              results.add(Tuple3(domain, record.name, srv.port));
             }
           }
         }
-        final response = await DNSolve().lookup(srv);
+        final response = await DNSolve().lookup(srv.target!);
         if (response.answer != null) {
           for (final record in response.answer!.records!) {
-            results.add(Tuple3(domain, record.name, _port));
+            results.add(Tuple3(domain, record.name, srv.port));
           }
         }
       }
@@ -600,7 +683,9 @@ class Transport {
 
     if (response.answer != null && response.answer!.records != null) {
       for (final record in response.answer!.records!) {
-        results.add(Tuple3(domain, record.name, _port));
+        results.add(
+          Tuple3(domain, record.name, _useTLS ? (_securePort ?? _port) : _port),
+        );
       }
     }
 
@@ -634,19 +719,19 @@ class Transport {
   }
 
   void _sendRaw(dynamic data) {
-    List<int> rawData;
+    String rawData;
     if (data is List<int>) {
-      rawData = data;
+      rawData = Echotils.unicode(data);
     } else if (data is String) {
-      rawData = Echotils.stringToArrayBuffer(data);
+      rawData = data;
     } else {
       throw ArgumentError(
         'passed data to be sent is neither List<int> nor String',
       );
     }
-    if (_connecta != null) {
+    if (_socket != null) {
       print('send: $data');
-      _connecta!.send(rawData);
+      _socket!.write(rawData);
     } else {
       /// TODO: throw not connected error
     }
@@ -664,7 +749,7 @@ class Transport {
 
   Tuple2<String, int> get address => _address;
 
-  bool get isConnected => _connecta!.socket.ioSocket != null;
+  bool get isConnected => _socket != null;
 
   bool get isConnectionSecured => _isConnectionSecured;
 
