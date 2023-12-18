@@ -239,8 +239,6 @@ class Scram {
         return crypto.sha384;
       case 'SHA-512':
         return crypto.sha512;
-      case 'SHA3-256':
-        return crypto.sha512256;
       default:
         throw ArgumentError('Invalid hash algorithm: $hashName');
     }
