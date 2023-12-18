@@ -13,10 +13,8 @@ class Whixp extends WhixpBase {
     String jabberID, {
     super.host,
     super.port,
-    super.securePort,
     super.useIPv6,
     super.useTLS = true,
-    super.directTLS,
     super.disableStartTLS,
     super.certs,
     this.language = 'en',
