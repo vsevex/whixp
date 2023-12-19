@@ -8,7 +8,9 @@ class StartTLS extends StanzaBase {
           namespace: Echotils.getNamespace('STARTTLS'),
           interfaces: {'required'},
           pluginAttribute: 'starttls',
-          getters: {const Symbol('required'): (args, base) => true},
+          getters: <Symbol, dynamic Function(dynamic args, XMLBase base)>{
+            const Symbol('required'): (args, base) => true,
+          },
         );
 }
 
