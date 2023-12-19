@@ -10,7 +10,7 @@ import 'package:xpath_selector_xml_parser/xpath_selector_xml_parser.dart';
 
 part 'stanza.dart';
 
-typedef _GetterOrDeleter = dynamic Function(dynamic, XMLBase);
+typedef _GetterOrDeleter = dynamic Function(dynamic args, XMLBase base);
 
 /// Applies the stanza's namespace to elements in an [xPath] expression.
 Tuple2<String?, List<String>?> fixNamespace(
@@ -322,7 +322,7 @@ class XMLBase {
   ///
   /// Defaults namespace in the constructor scope to `jabber:client` since this
   /// is being used in an XMPP library.
-  late final String _namespace;
+  late String _namespace;
 
   late final String _pluginAttribute;
 

@@ -196,19 +196,19 @@ class Transport {
       _dnsAnswers = null;
     }
 
-    if (_useTLS) {
-      io.SecurityContext? context;
+    io.SecurityContext? context;
 
-      if (_caCerts.isNotEmpty) {
-        context = io.SecurityContext(withTrustedRoots: true);
-        for (final caCert in _caCerts) {
-          context.setTrustedCertificates(
-            caCert.value1,
-            password: caCert.value2,
-          );
-        }
+    if (_caCerts.isNotEmpty) {
+      context = io.SecurityContext(withTrustedRoots: true);
+      for (final caCert in _caCerts) {
+        context.setTrustedCertificates(
+          caCert.value1,
+          password: caCert.value2,
+        );
       }
+    }
 
+    if (_useTLS) {
       _connecta = Connecta(
         ConnectaToolkit(
           hostname: _address.value1,
@@ -223,6 +223,7 @@ class Transport {
         ConnectaToolkit(
           hostname: _address.value1,
           port: _address.value2,
+          context: _disableStartTLS ? null : context,
           connectionType: _disableStartTLS
               ? ConnectionType.tcp
               : ConnectionType.upgradableTcp,
@@ -231,6 +232,9 @@ class Transport {
     }
 
     try {
+      print(
+        'trying to connect to ${_address.value1} on port ${_address.value2}',
+      );
       await _connecta!.connect(
         ConnectaListener(
           onData: _dataReceived,
@@ -269,14 +273,6 @@ class Transport {
     }
     _eventWhenConnected = 'tlsSuccess';
     try {
-      final context = io.SecurityContext(withTrustedRoots: true);
-      for (final caCert in _caCerts) {
-        context.setTrustedCertificates(
-          caCert.value1,
-          password: caCert.value2,
-        );
-      }
-
       await _connecta!.upgradeConnection(
         listener: ConnectaListener(
           onData: _dataReceived,
