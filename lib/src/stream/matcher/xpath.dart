@@ -1,8 +1,6 @@
 import 'package:echox/src/stream/base.dart';
 import 'package:echox/src/stream/matcher/base.dart';
 
-import 'package:xml/xml.dart' as xml;
-
 class XPathMatcher extends BaseMatcher {
   XPathMatcher(super.criteria);
 

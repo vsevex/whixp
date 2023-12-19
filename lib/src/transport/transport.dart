@@ -296,7 +296,7 @@ class Transport {
     }
   }
 
-  void _dataReceived(List<int> bytes) {
+  Future<void> _dataReceived(List<int> bytes) async {
     String data = Echotils.unicode(bytes);
     if (data.contains('<stream:stream') && !data.contains('</stream:stream>')) {
       data = _streamWrapper(data);
@@ -310,7 +310,7 @@ class Transport {
       if (!event.isSelfClosing) _xmlDepth++;
     }
 
-    void onEndElement(parser.XmlEndElementEvent event) {
+    Future<void> onEndElement(parser.XmlEndElementEvent event) async {
       if (event.name == 'stream:stream') return;
       _xmlDepth--;
       if (_xmlDepth == 0) {
@@ -321,7 +321,7 @@ class Transport {
         if (element.getAttribute('xmlns') == null) {
           element.setAttribute('xmlns', Echotils.getNamespace('JABBER_STREAM'));
         }
-        _spawnEvent(element);
+        await _spawnEvent(element);
       }
     }
 
@@ -332,10 +332,10 @@ class Transport {
           onStartElement: onStartElement,
           onEndElement: onEndElement,
         )
-        .listen((events) {
+        .listen((events) async {
       if (events.length == 1) {
         final element = xml.XmlDocument.parse(data).rootElement;
-        _spawnEvent(element);
+        await _spawnEvent(element);
       }
     });
   }
@@ -347,7 +347,7 @@ class Transport {
     return data;
   }
 
-  void _spawnEvent(xml.XmlElement element) {
+  Future<void> _spawnEvent(xml.XmlElement element) async {
     final stanza = _buildStanza(element);
 
     bool handled = false;
@@ -359,9 +359,10 @@ class Transport {
     }
 
     for (final handler in handlers) {
-      handler.prerun(stanza);
+      await handler.prerun(stanza);
+      print(handler.name);
       try {
-        handler.run(stanza);
+        await handler.run(stanza);
       } on Exception catch (excp) {
         stanza.exception(excp);
       }
@@ -383,7 +384,6 @@ class Transport {
 
     String tag() =>
         '<${element.localName} xmlns="${element.getAttribute('xmlns')}"/>';
-    print('build stanza from element: $element');
 
     for (final stanza in _rootStanza) {
       if ((element.localName == stanza.name &&

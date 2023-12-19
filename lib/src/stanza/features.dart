@@ -1,5 +1,3 @@
-import 'package:dartz/dartz.dart';
-
 import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/stream/base.dart';
 

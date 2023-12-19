@@ -36,9 +36,11 @@ class Whixp extends WhixpBase {
         FutureCallbackHandler(
           'Stream Features',
           (stanza) async {
-            final starttls = StartTLS();
-            registerStanzaPlugin(stanza, starttls);
-            stanza.enable(starttls.name);
+            if (stanza.payload.first.name.qualified == 'starttls') {
+              final starttls = StartTLS();
+              registerStanzaPlugin(stanza, starttls);
+              stanza.enable(starttls.name);
+            }
             await _handleStreamFeatures(stanza);
             return;
           },

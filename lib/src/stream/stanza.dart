@@ -109,7 +109,7 @@ class StanzaBase extends XMLBase {
   StanzaBase reply({bool clear = true}) {
     final newStanza = copy();
 
-    if (_transport != null && _transport!.isComponent) {
+    if (_transport != null && _transport.isComponent) {
       newStanza['from'] = this['to'];
       newStanza['to'] = this['from'];
     } else {
@@ -146,7 +146,7 @@ class StanzaBase extends XMLBase {
 
   void send() {
     if (_transport != null) {
-      _transport!.send(Tuple2(this, null));
+      _transport.send(Tuple2(this, null));
     } else {
       print('tried to send stanza without a stanza: $this');
     }

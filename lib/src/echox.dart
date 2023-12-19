@@ -1266,7 +1266,7 @@ class EchoX extends EventEmitter {
 
       /// Check if server signature is valid.
       if (serverSignature != null &&
-          serverSignature != _saslData!['server-signature']) {
+          serverSignature != _saslData['server-signature']) {
         /// Remove old handlers
         deleteHandler(_saslFailureHandler!);
 
@@ -1280,7 +1280,7 @@ class EchoX extends EventEmitter {
         }
 
         /// Clear sasl data.
-        _saslData!.clear();
+        _saslData.clear();
         return _saslFailureCallback();
       }
     }

@@ -3,16 +3,18 @@ import 'dart:async';
 import 'package:echox/src/handler/handler.dart';
 import 'package:echox/src/stream/base.dart';
 
+import 'package:synchronized/synchronized.dart';
+
 class CallbackHandler extends Handler {
   CallbackHandler(super.name, {required super.matcher});
 
   @override
-  void prerun(StanzaBase payload) {
+  Future<void> prerun(StanzaBase payload) async {
     // TODO: implement prerun
   }
 
   @override
-  void run(StanzaBase payload) {
+  Future<void> run(StanzaBase payload) async {
     // TODO: implement run
   }
 }
@@ -29,27 +31,27 @@ class FutureCallbackHandler extends Handler {
 
   final Future<void> Function(StanzaBase stanza) callback;
   final bool once;
-  final future = Completer<dynamic>();
+  final _lock = Lock();
 
   /// Indicates if the callback should be executed during stream processing.
   final bool instream;
 
   @override
-  void prerun(StanzaBase payload) {
+  Future<void> prerun(StanzaBase payload) async {
     print('prerun is called');
     if (once) {
       destroy = true;
     }
     if (instream) {
-      run(payload, instream: true);
+      await run(payload, instream: true);
     }
   }
 
   @override
-  void run(StanzaBase payload, {bool instream = false}) {
-    print('run is called');
+  Future<void> run(StanzaBase payload, {bool instream = false}) async {
+    print('run is called: $payload');
     if (!this.instream || instream) {
-      future.complete(callback(payload));
+      await _lock.synchronized(() => callback(payload));
     }
     if (once) {
       destroy = true;

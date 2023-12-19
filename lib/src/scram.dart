@@ -295,7 +295,7 @@ class Scram {
     final cnonce = testCNonce ?? generateCNonce;
     final clientFirstMessageBare = 'n=${connection._authcid},r=$cnonce';
     connection._saslData!['cnonce'] = cnonce;
-    connection._saslData!['client-first-message-bare'] = clientFirstMessageBare;
+    connection._saslData['client-first-message-bare'] = clientFirstMessageBare;
 
     /// The method returns a string value containing the client first message in
     /// the following format: "n,,n=<authentication identity>,r=<nonce>".
@@ -392,7 +392,7 @@ class Scram {
     }
 
     final clientFirstMessageBare =
-        connection._saslData!['client-first-message-bare'];
+        connection._saslData['client-first-message-bare'];
     final serverFirstMessage = challenge;
     final clientFinalMessageBare = 'c=biws,r=${challengeData['nonce']}';
 
@@ -402,8 +402,8 @@ class Scram {
     final proof = clientProof(message, clientKey!, hashName);
     final serverSignature = serverSign(message, serverKey!, hashName);
 
-    connection._saslData!['server-signature'] = Echotils.btoa(serverSignature);
-    connection._saslData!['keys'] = {
+    connection._saslData['server-signature'] = Echotils.btoa(serverSignature);
+    connection._saslData['keys'] = {
       'name': hashName,
       'iter': challengeData['iter'],
       'salt': Echotils.arrayBufferToBase64(

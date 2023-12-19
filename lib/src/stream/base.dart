@@ -78,8 +78,8 @@ void registerStanzaPlugin(
   if (iterable) {
     stanza._pluginIterables.add(plugin);
     if (plugin._pluginMultiAttribute != null &&
-        plugin._pluginMultiAttribute!.isNotEmpty) {
-      final multiplugin = multifactory(plugin, plugin._pluginMultiAttribute!);
+        plugin._pluginMultiAttribute.isNotEmpty) {
+      final multiplugin = multifactory(plugin, plugin._pluginMultiAttribute);
       registerStanzaPlugin(stanza, multiplugin);
     }
   }
@@ -545,7 +545,7 @@ class XMLBase {
         .isNotEmpty) {
       _iterables.add(plugin);
       if (pluginClass._pluginMultiAttribute != null) {
-        _initPlugin(pluginClass._pluginMultiAttribute!);
+        _initPlugin(pluginClass._pluginMultiAttribute);
       }
     }
 
@@ -1091,8 +1091,8 @@ class XMLBase {
       } else if (_pluginIterables.contains(base)) {
         _iterables.add(base);
         if (base._pluginMultiAttribute != null &&
-            base._pluginMultiAttribute!.isNotEmpty) {
-          _initPlugin(base._pluginMultiAttribute!);
+            base._pluginMultiAttribute.isNotEmpty) {
+          _initPlugin(base._pluginMultiAttribute);
         }
       } else {
         _iterables.add(base);

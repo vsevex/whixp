@@ -19,9 +19,9 @@ abstract class Handler {
 
   bool match(StanzaBase stanza) => matcher.match(stanza);
 
-  void prerun(StanzaBase payload);
+  Future<void> prerun(StanzaBase payload);
 
-  void run(StanzaBase payload);
+  Future<void> run(StanzaBase payload);
 
   bool get checkDelete => destroy;
 }
