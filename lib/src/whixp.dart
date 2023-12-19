@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dartz/dartz.dart';
+
 import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/jid/jid.dart';
 import 'package:echox/src/plugins/base.dart';
@@ -22,7 +23,7 @@ abstract class WhixpBase {
   }) {
     streamNamespace = Echotils.getNamespace('JABBER_STREAM');
     this.defaultNamespace = defaultNamespace ?? Echotils.getNamespace('CLIENT');
-    _requestedJID = JabberIDTemp(jabberID);
+    requestedJID = JabberIDTemp(jabberID);
     boundJID = JabberIDTemp(jabberID);
     pluginManager = PluginManager();
 
@@ -84,7 +85,7 @@ abstract class WhixpBase {
   late final String defaultNamespace;
 
   /// The JabberID (JID) requested for this connection.
-  late final JabberIDTemp _requestedJID;
+  late final JabberIDTemp requestedJID;
 
   /// The JabberID (JID) used by this connection, as set after session binding.
   ///
@@ -98,6 +99,8 @@ abstract class WhixpBase {
   /// The distinction between clients and components can be important, primarily
   /// for choosing how to handle the `to` and `from` JIDs of stanzas.
   final bool _isComponent = false;
+
+  final credentials = <String, String>{};
 
   @internal
   late final PluginManager pluginManager;

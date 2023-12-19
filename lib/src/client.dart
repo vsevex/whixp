@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:echox/src/handler/callback.dart';
+import 'package:echox/src/plugins/mechanisms/feature.dart';
+import 'package:echox/src/plugins/mechanisms/stanza/stanza.dart';
 import 'package:echox/src/plugins/starttls/stanza.dart';
 import 'package:echox/src/plugins/starttls/starttls.dart';
 import 'package:echox/src/stanza/features.dart';
@@ -10,7 +12,8 @@ import 'package:echox/src/whixp.dart';
 
 class Whixp extends WhixpBase {
   Whixp(
-    String jabberID, {
+    String jabberID,
+    String password, {
     super.host,
     super.port,
     super.useIPv6,
@@ -21,6 +24,8 @@ class Whixp extends WhixpBase {
     super.connectionTimeout,
   }) : super(jabberID: jabberID) {
     setup();
+
+    credentials.addAll({'password': password});
   }
 
   void setup() {
@@ -36,11 +41,7 @@ class Whixp extends WhixpBase {
         FutureCallbackHandler(
           'Stream Features',
           (stanza) async {
-            if (stanza.payload.first.name.qualified == 'starttls') {
-              final starttls = StartTLS();
-              registerStanzaPlugin(stanza, starttls);
-              stanza.enable(starttls.name);
-            }
+            _registerStanzas(stanza);
             await _handleStreamFeatures(stanza);
             return;
           },
@@ -49,6 +50,7 @@ class Whixp extends WhixpBase {
       );
 
     registerPlugin('starttls', FeatureStartTLS(base: this));
+    registerPlugin('mechanisms', FeatureMechanisms(base: this));
   }
 
   void reset() {
@@ -57,6 +59,19 @@ class Whixp extends WhixpBase {
 
   /// Default language to use in stanza communication.
   final String language;
+
+  void _registerStanzas(StanzaBase stanza) {
+    if (stanza.payload.first.name.qualified == 'starttls') {
+      final starttls = StartTLS();
+      registerStanzaPlugin(stanza, starttls);
+      stanza.enable(starttls.name);
+    }
+    if (stanza.payload.first.name.qualified == 'mechanisms') {
+      final mechanisms = Mechanisms();
+      registerStanzaPlugin(stanza, mechanisms);
+      stanza.enable(mechanisms.name);
+    }
+  }
 
   Future<bool> _handleStreamFeatures(StanzaBase features) async {
     for (final feature in streamFeatureOrder) {
@@ -81,4 +96,6 @@ class Whixp extends WhixpBase {
   void connect() {
     transport.connect();
   }
+
+  String get password => credentials['password']!;
 }
