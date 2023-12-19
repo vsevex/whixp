@@ -6,6 +6,7 @@ import 'package:memoize/memoize.dart';
 class StringPreparationProfiles {
   final _nodePrep = StringPreparation().preps['nodeprep'];
   final _resourcePrep = StringPreparation().preps['resourceprep'];
+  final _saslPrep = StringPreparation().preps['saslprep'];
 
   // Characters not allowed in a domain part
   final _illegalChars = '\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\x0c\r'
@@ -16,6 +17,11 @@ class StringPreparationProfiles {
   String nodePrep(String node) {
     final check = memo1((String node) => _nodePrep!(node));
     return check(node);
+  }
+
+  String saslPrep(String sasl) {
+    final check = memo1((String node) => _saslPrep!(node));
+    return check(sasl);
   }
 
   String resourcePrep(String resource) {
