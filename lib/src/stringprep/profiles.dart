@@ -3,6 +3,23 @@
 // A profile is a list of operations.
 
 final Map<String, List<List<String>>> profiles = {
+  "saslprep": [
+    ['map', 'rfc3454-B_1'],
+    ['map', 'rfc3454-C_1_2'],
+    ['nfkc'],
+    ['prohibit', 'rfc3454-C_1_2'],
+    ['prohibit', 'rfc3454-C_2_1'],
+    ['prohibit', 'rfc3454-C_2_2'],
+    ['prohibit', 'rfc3454-C_3'],
+    ['prohibit', 'rfc3454-C_4'],
+    ['prohibit', 'rfc3454-C_5'],
+    ['prohibit', 'rfc3454-C_6'],
+    ['prohibit', 'rfc3454-C_7'],
+    ['prohibit', 'rfc3454-C_8'],
+    ['prohibit', 'rfc3454-C_9'],
+    ['bidi'],
+    ['unassigned', 'rfc3454-A_1'],
+  ],
   "nodeprep": [
     ['map', 'rfc3454-B_1'],
     ['map', 'rfc3454-B_2'],
@@ -66,8 +83,9 @@ final Map<String, List<List<String>>> profiles = {
 };
 
 final List<String> profileNames = [
-  "nodeprep",
-  "nameprep",
-  "resourceprep",
+  'nodeprep',
+  'nameprep',
+  'resourceprep',
+  'saslprep',
   'nodeprep-prohibit',
 ];
