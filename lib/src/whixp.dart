@@ -100,7 +100,7 @@ abstract class WhixpBase {
   /// for choosing how to handle the `to` and `from` JIDs of stanzas.
   final bool _isComponent = false;
 
-  final credentials = <String, String>{};
+  Map<String, String> credentials = <String, String>{};
 
   @internal
   late final PluginManager pluginManager;

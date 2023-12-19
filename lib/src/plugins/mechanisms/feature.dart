@@ -3,12 +3,14 @@ import 'dart:typed_data';
 import 'package:echox/echox.dart';
 import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/plugins/base.dart';
+import 'package:echox/src/plugins/starttls/stanza.dart';
 import 'package:echox/src/sasl/sasl.dart';
 import 'package:echox/src/stream/base.dart';
 
 import 'package:xml/xml.dart' as xml;
 
 part 'stanza/_auth.dart';
+part 'stanza/_failure.dart';
 
 typedef SASLCallback = Map<String, String> Function(
   Set<String> required,
@@ -36,6 +38,10 @@ class FeatureMechanisms extends PluginBase {
       restart: true,
       order: 100,
     );
+
+    base.transport
+      ..registerStanza(_Failure())
+      ..registerStanza(_Auth());
 
     saslCallback ??= _defaultCredentials;
     securityCallback ??= _defaultSecurity;
@@ -104,12 +110,13 @@ class FeatureMechanisms extends PluginBase {
 
     final response = _Auth(transport: base.transport);
     response['mechanism'] = mech.name;
+    print(mech.process());
 
     try {
       response['value'] = mech.process();
     } catch (error) {
       attemptedMechanisms.add(mech.name);
-      print(error);
+      // print(error);
     }
 
     response.send();

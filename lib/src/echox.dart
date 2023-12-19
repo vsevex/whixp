@@ -366,7 +366,7 @@ class EchoX extends EventEmitter {
   void _setProtocol() {
     /// Check if the service is not empty.
     if (_service.isEmpty) {
-      throw TransportException.emptyService();
+      // throw TransportException.emptyService();
     }
 
     _transport = WebSocketProtocol(this);
