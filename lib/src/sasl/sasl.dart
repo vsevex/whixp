@@ -1,9 +1,8 @@
 import 'dart:math' as math;
 
+import 'package:echox/echox.dart';
 import 'package:echox/src/client.dart';
-import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/echotils/src/stringprep.dart';
-import 'package:echox/src/echox.dart';
 import 'package:echox/src/plugins/mechanisms/feature.dart';
 import 'package:echox/src/stringprep/stringprep.dart';
 
@@ -86,13 +85,14 @@ abstract class Mechanism {
   final Set<String> optionalCredentials;
   final Set<String> securityOptions;
 
-  void setup([Set<String>? securityOptions]) {
+  void setup(Map<String, String> credentials, [Set<String>? securityOptions]) {
     if (securityOptions != null) {
       this.securityOptions.addAll(securityOptions);
     }
+    base.credentials = credentials;
   }
 
-  List<int> process([List<int>? challenge]);
+  String process([List<int>? challenge]);
 }
 
 class SASLTemp {
@@ -160,23 +160,30 @@ class SASLTemp {
 
     try {
       final credentials = saslCallback(
-          bestMech!.requiredCredentials, bestMech.optionalCredentials);
+        bestMech!.requiredCredentials,
+        bestMech.optionalCredentials,
+      );
+
       final creds = <String>{'username', 'password', 'authzid'};
       for (final required in bestMech.requiredCredentials) {
         if (!credentials.containsKey(required)) {
           /// TODO: throw missing credential
         }
       }
+
       for (final optional in bestMech.optionalCredentials) {
         if (!credentials.containsKey(optional)) {
           credentials[optional] = '';
         }
       }
+
       for (final credential in credentials.entries) {
         if (creds.contains(credential.key)) {
-          print(
-            'mapping c-1_2: ${StandaloneStringPreparation.inTablec12(credential.value)}',
-          );
+          if (credential.value.isNotEmpty) {
+            print(
+              'mapping ${credential.value} c-1_2: ${StandaloneStringPreparation.inTablec12(credential.value)}',
+            );
+          }
           credentials[credential.key] =
               StringPreparationProfiles().saslPrep(credential.value);
         } else {
@@ -186,8 +193,9 @@ class SASLTemp {
 
       final securityOptions = securityCallback(bestMech.securityOptions);
 
-      return bestMech..setup(securityOptions.keys.toSet());
+      return bestMech..setup(credentials, securityOptions.keys.toSet());
     } catch (error) {
+      rethrow;
       _mechanisms.removeWhere((key, value) => value == bestMech);
       return choose(_mechanisms.keys, saslCallback, securityCallback);
     }
@@ -199,10 +207,7 @@ class SASLTEMPAnonymous extends Mechanism {
       : super(name: 'ANONYMOUS', priority: 20);
 
   @override
-  void setup([Set<String>? securityOptions]) {}
-
-  @override
-  List<int> process([List<int>? challenge]) => 'Anonymous, Suelta'.codeUnits;
+  String process([List<int>? challenge]) => 'Anonymous, Suelta';
 }
 
 class SASLTEMPPlain extends Mechanism {
@@ -210,28 +215,41 @@ class SASLTEMPPlain extends Mechanism {
       : super(
           name: 'PLAIN',
           priority: 50,
+          requiredCredentials: {'username', 'password'},
+          optionalCredentials: {'authzid'},
           securityOptions: <String>{
             'encrypted',
-            'encrypted_plain',
-            'unencrypted_plain'
+            'encryptedPlain',
+            'unencryptedPlain',
           },
         );
 
   @override
-  void setup([Set<String>? securityOptions]) {}
+  void setup(Map<String, String> credentials, [Set<String>? securityOptions]) {
+    super.setup(credentials, securityOptions);
+    if (!this.securityOptions.contains('encrypted')) {
+      if (!this.securityOptions.contains('unencryptedPlain')) {
+        throw SASLException.cancelled('PLAIN without encryption');
+      }
+    } else {
+      if (!this.securityOptions.contains('encryptedPlain')) {
+        throw SASLException.cancelled('PLAIN with encryption');
+      }
+    }
+  }
 
   @override
-  List<int> process([List<int>? challenge]) {
-    final authzid = base.credentials['authzid'];
-    final authcid = base.credentials['authcid'];
+  String process([List<int>? challenge]) {
+    final authzid = base.credentials['authzid']!;
+    final username = base.credentials['username'];
     final password = base.credentials['password'];
 
     String auth =
-        (authzid != '$authcid@${base.requestedJID.domain}') ? authzid! : '';
+        (authzid != '$username@${base.requestedJID.domain}') ? authzid : '';
     auth = '$auth\u0000';
-    auth = '$auth$authcid';
+    auth = '$auth$username';
     auth = '$auth\u0000';
     auth = '$auth$password';
-    return Echotils.stringToArrayBuffer(Echotils.utf16to8(auth));
+    return Echotils.utf16to8(auth);
   }
 }
