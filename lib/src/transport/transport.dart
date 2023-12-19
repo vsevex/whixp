@@ -1,4 +1,5 @@
 import 'dart:async' as async;
+import 'dart:async';
 import 'dart:io' as io;
 import 'dart:math' as math;
 
@@ -12,7 +13,6 @@ import 'package:echox/src/handler/handler.dart';
 import 'package:echox/src/stanza/handshake.dart';
 import 'package:echox/src/stanza/root.dart';
 import 'package:echox/src/stream/base.dart';
-import 'package:echox/src/transport/queue.dart';
 
 import 'package:xml/xml.dart' as xml;
 import 'package:xml/xml_events.dart' as parser;
@@ -77,7 +77,7 @@ class Transport {
   String? _dnsService;
 
   final _waitingQueue =
-      AsyncQueue<Tuple2<Tuple2<StanzaBase?, String?>, bool>>();
+      StreamController<Tuple2<Tuple2<StanzaBase?, String?>, bool>>.broadcast();
   late async.Completer<dynamic>? _runOutFilters;
   async.Completer<void>? _currentConnectionAttempt;
   late async.Completer<void> _abortCompleter;
@@ -424,10 +424,7 @@ class Transport {
   }
 
   Future<void> runFilters() async {
-    while (true) {
-      Tuple2<Tuple2<StanzaBase?, String?>, bool> data;
-      data = await _waitingQueue.dequeue();
-
+    _waitingQueue.stream.listen((data) {
       if (data.value1.value1 != null) {
         if (data.value2) {
           final alreadyRunFilters = <Tuple2<SyncFilter?, AsyncFilter?>>{};
@@ -469,7 +466,7 @@ class Transport {
       } else if (data.value1.value2 != null) {
         _sendRaw(data);
       }
-    }
+    });
   }
 
   /// Init the XML parser. The parser must always be reset for each new
@@ -637,7 +634,7 @@ class Transport {
         print('not sent: $data');
       }
     }
-    _waitingQueue.enqueue(Tuple2(data, useFilters));
+    _waitingQueue.add(Tuple2(data, useFilters));
   }
 
   void _sendRaw(dynamic data) {
