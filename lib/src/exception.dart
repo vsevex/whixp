@@ -45,4 +45,6 @@ class SASLException extends WhixpException {
   SASLException(super.message);
 
   factory SASLException.cancelled(String message) => SASLException(message);
+  factory SASLException.unknownHash(String name) =>
+      SASLException('The $name hashing is not supported');
 }
