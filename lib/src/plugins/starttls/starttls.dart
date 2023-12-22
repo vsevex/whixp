@@ -24,7 +24,6 @@ class FeatureStartTLS extends PluginBase {
         'STARTTLS Proceed',
         (_) => _handleStartTLSProceed(),
         matcher: XPathMatcher(proceed.tag),
-        instream: true,
       ),
     );
     base.registerFeature('starttls', _handleStartTLS, restart: true);

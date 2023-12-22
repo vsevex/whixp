@@ -8,6 +8,7 @@ import 'package:dartz/dartz.dart';
 import 'package:dnsolve/dnsolve.dart';
 
 import 'package:echox/src/echotils/src/echotils.dart';
+import 'package:echox/src/handler/callback.dart';
 import 'package:echox/src/handler/eventius.dart';
 import 'package:echox/src/handler/handler.dart';
 import 'package:echox/src/stanza/handshake.dart';
@@ -355,15 +356,16 @@ class Transport {
     }
 
     for (final handler in handlers) {
-      await handler.prerun(stanza);
-      print(handler.name);
       try {
-        await handler.run(stanza);
+        if (Handler is FutureCallbackHandler) {
+          await handler.run(stanza);
+        } else {
+          handler.run(stanza);
+        }
+        print('Handler ${handler.name} ran...');
       } on Exception catch (excp) {
+        /// TODO: catch callback exceptions in here.
         stanza.exception(excp);
-      }
-      if (handler.checkDelete) {
-        _handlers.remove(handler);
       }
       handled = true;
     }
