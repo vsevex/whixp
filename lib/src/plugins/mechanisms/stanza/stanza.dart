@@ -17,8 +17,7 @@ class Mechanisms extends XMLBase {
             const Symbol('required'): (_, __) => true,
             const Symbol('mechanisms'): (args, base) {
               final results = <String>[];
-              final mechs =
-                  base.parent!.element!.findAllElements('mechanism').toList();
+              final mechs = base.element!.findAllElements('mechanism').toList();
               if (mechs.isNotEmpty) {
                 for (final mech in mechs) {
                   results.add(mech.innerText);
@@ -34,17 +33,16 @@ class Mechanisms extends XMLBase {
               for (final value in values as List<String>) {
                 final mech = xml.XmlElement(xml.XmlName('mechanism'));
                 mech.innerText = value;
-                base.parent!.add(Tuple2(mech, null));
+                base.add(Tuple2(mech, null));
               }
             },
           },
           deleters: <Symbol, dynamic Function(dynamic args, XMLBase base)>{
             const Symbol('mechanisms'): (args, base) {
-              final mechs =
-                  base.parent!.element!.findAllElements('mechanism').toList();
+              final mechs = base.element!.findAllElements('mechanism').toList();
               if (mechs.isNotEmpty) {
                 for (final mech in mechs) {
-                  base.parent!.element!.children.remove(mech);
+                  base.element!.children.remove(mech);
                 }
               }
             },
