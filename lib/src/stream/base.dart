@@ -70,7 +70,7 @@ void registerStanzaPlugin(
   bool iterable = false,
   bool overrides = false,
 }) {
-  final tag = '<${plugin.name} xmlns="${plugin._namespace}"/>';
+  final tag = '<${plugin.name} xmlns="${plugin.namespace}"/>';
 
   stanza._pluginAttributeMapping[plugin._pluginAttribute] = plugin;
   stanza._pluginTagMapping[tag] = plugin;
@@ -97,10 +97,8 @@ XMLBase multifactory(XMLBase stanza, String pluginAttribute) {
     interfaces: {pluginAttribute},
     languageInterfaces: {pluginAttribute},
     isExtension: true,
-    setupOverride: (base, [element]) {
-      base.element = xml.XmlElement(xml.XmlName(''));
-      return false;
-    },
+    setupOverride: (base, [element]) =>
+        base.element = xml.XmlElement(xml.XmlName('')),
   );
 
   multistanza
@@ -246,12 +244,14 @@ class XMLBase {
     Map<Symbol, void Function(dynamic value, dynamic args, XMLBase base)>?
         setters,
     Map<Symbol, _GetterOrDeleter>? deleters,
+    this.receive = false,
+    this.transport,
     this.setupOverride,
     this.element,
     XMLBase? parent,
   }) {
     /// Equal `namespace` to `CLIENT` by default.
-    _namespace = namespace ?? Echotils.getNamespace('CLIENT');
+    this.namespace = namespace ?? Echotils.getNamespace('CLIENT');
 
     _pluginAttribute = pluginAttribute ?? 'plugin';
     _pluginMultiAttribute = pluginMultiAttribute;
@@ -301,10 +301,12 @@ class XMLBase {
 
     if (_setup(element)) return;
 
-    for (final child in element!.descendantElements) {
-      if (_pluginTagMapping.containsKey(child.name.local) &&
-          _pluginTagMapping[child.name.local] != null) {
-        final pluginClass = _pluginTagMapping[child.name.local];
+    for (final child in element!.childElements) {
+      final tag =
+          '<${child.qualifiedName} xmlns="${child.getAttribute('xmlns')}"/>';
+      if (_pluginTagMapping.containsKey(tag) &&
+          _pluginTagMapping[tag] != null) {
+        final pluginClass = _pluginTagMapping[tag];
         _initPlugin(
           pluginClass!._pluginAttribute,
           existingXML: child,
@@ -314,6 +316,9 @@ class XMLBase {
     }
   }
 
+  final bool receive;
+  late final Transport? transport;
+
   /// The XML tag name of the element, not including any namespace prefixes.
   final String name;
 
@@ -322,7 +327,7 @@ class XMLBase {
   ///
   /// Defaults namespace in the constructor scope to `jabber:client` since this
   /// is being used in an XMPP library.
-  late String _namespace;
+  late String namespace;
 
   late final String _pluginAttribute;
 
@@ -412,7 +417,7 @@ class XMLBase {
       <Symbol, _GetterOrDeleter>{};
 
   /// Overrider for [setup] for method.
-  final bool Function(XMLBase base, [xml.XmlElement? element])? setupOverride;
+  final void Function(XMLBase base, [xml.XmlElement? element])? setupOverride;
 
   /// The underlying [element] for the stanza.
   xml.XmlElement? element;
@@ -434,7 +439,7 @@ class XMLBase {
   /// object.
   bool _setup([xml.XmlElement? element]) {
     if (setupOverride != null) {
-      return setupOverride!(this, element);
+      setupOverride?.call(this, element);
     }
     if (this.element != null) {
       return false;
@@ -448,7 +453,7 @@ class XMLBase {
     int index = 0;
     for (final ename in name.split('/')) {
       final newElement = index == 0 && _includeNamespace
-          ? Echotils.xmlElement(ename, namespace: _namespace)
+          ? Echotils.xmlElement(ename, namespace: namespace)
           : Echotils.xmlElement(ename);
       if (this.element == null) {
         this.element = newElement;
@@ -528,7 +533,11 @@ class XMLBase {
     if (element != null) {
       plugin = element;
     } else {
+      // if (existingXML != null) {
       plugin = pluginClass.copy(existingXML, this);
+      // } else {
+      //   plugin = pluginClass;
+      // }
     }
 
     if (plugin._isExtension) {
@@ -792,7 +801,7 @@ class XMLBase {
         xPath,
         split: split,
         propogateNamespace: propogateNamespace,
-        defaultNamespace: _namespace,
+        defaultNamespace: namespace,
       );
 
   /// Return the value of top level attribute of the XML object.
@@ -886,7 +895,7 @@ class XMLBase {
         if (_subInterfaces.contains(attribute)) {
           return getSubText(attribute, language: language);
         } else if (_boolInterfaces.contains(attribute)) {
-          return element!.getElement(attribute, namespace: _namespace) != null;
+          return element!.getElement(attribute, namespace: namespace) != null;
         } else {
           return _getAttribute(attribute);
         }
@@ -1108,7 +1117,7 @@ class XMLBase {
   /// Returns the namespaced name of the stanza's root element.
   ///
   /// The format for the tag name is: '{namespace}elementName'.
-  String get _tagName => '<$name xmlns="$_namespace"/>';
+  String get _tagName => '<$name xmlns="$namespace"/>';
 
   String? _lang(xml.XmlNode element) {
     final result = element
@@ -1179,7 +1188,7 @@ class XMLBase {
         if (submap.containsKey('__childtag__')) {
           for (final subclass in _pluginIterables) {
             final childtag =
-                '<${subclass.name} xmlns="${subclass._namespace}"/>';
+                '<${subclass.name} xmlns="${subclass.namespace}"/>';
             if (submap['__childtag__'] == childtag) {
               final sub = subclass.copy(null, this);
               sub.values = submap;
@@ -1281,7 +1290,7 @@ class XMLBase {
   /// ```
   XMLBase copy([xml.XmlElement? element, XMLBase? parent]) => XMLBase(
         name: name,
-        namespace: _namespace,
+        namespace: namespace,
         interfaces: _interfaces,
         pluginAttribute: _pluginAttribute,
         pluginTagMapping: _pluginTagMapping,
