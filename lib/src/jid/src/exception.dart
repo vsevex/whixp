@@ -1,6 +1,6 @@
 import 'package:echox/echox.dart';
 
-class JabberIDException extends EchoException {
+class JabberIDException extends WhixpException {
   JabberIDException(super.message);
 
   factory JabberIDException.invalid() =>
