@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:mirrors' as mirrors;
 import 'dart:typed_data';
 
@@ -339,6 +340,35 @@ class Echotils {
       }
     }
     return out;
+  }
+
+  /// Generates a unique ID for use in <iq /> stanzas.
+  ///
+  /// All <iq /> stanzas are required to have unique id attributes. This
+  /// function makes creating this ease. Each connection instance has a counter
+  /// which starts from zero, and the value of this counter plus a colon
+  /// followed by the `suffix` becomes the unique id. If no suffix is supplied,
+  /// the counter is used as the unique id.
+  ///
+  /// Returns the generated ID.
+  static String getUniqueId([dynamic suffix]) {
+    /// It follows the format specified by the UUID version 4 standart.
+    final uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+        .replaceAllMapped(RegExp('[xy]'), (match) {
+      final r = math.Random.secure().nextInt(16);
+      final v = match.group(0) == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toRadixString(16);
+    });
+
+    if (suffix != null) {
+      /// Check whether the provided suffix is [String] or [int], so if type is
+      /// one of them, proceed to concatting.
+      if (suffix is String || suffix is num) {
+        return '$uuid:$suffix';
+      }
+    }
+
+    return uuid;
   }
 
   /// Performs an XOR operation on two [String]s of the same length and
