@@ -1,127 +1,38 @@
-import 'dart:math' as math;
+part of '../plugins/mechanisms/feature.dart';
 
-import 'package:echox/echox.dart';
-import 'package:echox/src/client.dart';
-import 'package:echox/src/echotils/src/stringprep.dart';
-import 'package:echox/src/plugins/mechanisms/feature.dart';
-import 'package:echox/src/stringprep/stringprep.dart';
-
-/// Represents a SASL authentication mechanism in XMPP, providing a common
-/// interface for SASL mechanisms to be implemented. This class has several
-/// abstract methods and properties that must be implemented by concrete
-/// subclass.
-abstract class SASL {
-  /// Constructor that accepts defined variables.
-  SASL({required this.name, this.priority, this.isClientFirst});
-
-  /// A [String] representing the name of the SASL mechanism.
-  final String name;
-
-  /// An [int] representing the priorityof the SASL mechanism.
-  final int? priority;
-
-  /// A [bool] indicating whether the client should send its response first
-  /// without receiving a challenge from the server.
-  final bool? isClientFirst;
-
-  /// Connection late initializer.
-  late EchoX? connection;
-
-  /// A [bool] method indicating whether the SASL mechanism is able to run.
-  ///
-  /// * @param connection An [EchoX] object representing the XAMPP connection.
-  bool test() => true;
-
-  /// An abstract method that is called when the SASL mechanism receives a
-  /// challenge from the server. This method should be implemented by concrete
-  /// subclass to handle the specific SASL mechanism's response to [challenge]s.
-  String onChallenge({String? challenge}) =>
-      throw Exception('You should implement challenge handling!');
-
-  /// A method that is called if the SASL mechanism is expected to send its
-  /// response first without receiving a challenge from the server. This method
-  /// should be overridden in concrete subclases if `isClientFirst` is `true`.
-  String clientChallenge({String? testCNonce}) {
-    if (!isClientFirst!) {
-      throw Exception(
-        'clientChallenge shoud not be called if isClientFirst is false!',
-      );
-    }
-    return onChallenge();
-  }
-
-  /// A method that is called if SASL authentication fails.
-  void onFailure() => connection = null;
-
-  /// A method that is called if SASL authentication succeeds.
-  void onSuccess() => connection = null;
-}
-
-abstract class Mechanism {
-  Mechanism({
-    required this.name,
-    required this.base,
-    int? priority,
-    this.requiredCredentials = const <String>{},
-    this.optionalCredentials = const <String>{},
-    this.securityOptions = const <String>{},
-  }) {
-    if (priority == null) {
-      this.priority = math.Random().nextInt(100) + 100;
-    } else {
-      this.priority = priority;
-    }
-  }
-
-  final Whixp base;
-
-  /// A [String] representing the name of the SASL mechanism.
-  final String name;
-
-  /// An [int] representing the priorityof the SASL mechanism.
-  late final int? priority;
-
-  final Set<String> requiredCredentials;
-  final Set<String> optionalCredentials;
-  final Set<String> securityOptions;
-
-  void setup(Map<String, String> credentials, [Set<String>? securityOptions]) {
-    if (securityOptions != null) {
-      this.securityOptions.addAll(securityOptions);
-    }
-    base.credentials = credentials;
-  }
-
-  String process([List<int>? challenge]);
-}
-
-class SASLTemp {
-  SASLTemp(this.base) {
+class SASL {
+  SASL(this._client) {
+    _scram = Scram(_client);
     _registerMechanisms();
   }
 
-  final Whixp base;
+  final Whixp _client;
+  late final Scram _scram;
 
-  final _mechanisms = <String, Mechanism>{};
+  final _mechanisms = <String, _Mechanism>{};
 
   /// Register a single [SASL] `mechanism`, to be supported by this client.
-  void _registerMechanism(Mechanism mechanism) =>
+  void _registerMechanism(_Mechanism mechanism) =>
       _mechanisms[mechanism.name] = mechanism;
 
   /// Register the SASL `mechanisms` which will be supported by this instance of
   /// [EchoX] (i.e. which this XMPP client will support).
   void _registerMechanisms() {
     /// The list of all available authentication mechanisms.
-    late final mechanismList = <Mechanism>[
-      SASLTEMPAnonymous(base: base),
-      SASLTEMPPlain(base: base),
+    late final mechanismList = <_Mechanism>[
+      _SASLAnonymous(_client),
+      _SASLPlain(_client),
+      _SASLSHA1(_client, scram: _scram),
+      _SASLSHA256(_client, scram: _scram),
+      _SASLSHA384(_client, scram: _scram),
+      _SASLSHA512(_client, scram: _scram),
     ];
     mechanismList.map((mechanism) => _registerMechanism(mechanism)).toList();
   }
 
   /// Sorts a list of objects with prototype SASLMechanism according to their
   /// properties.
-  List<Mechanism?> _sortMechanismsByPriority(List<Mechanism> mechanisms) {
+  List<_Mechanism?> _sortMechanismsByPriority(List<_Mechanism> mechanisms) {
     /// Iterate over all the available mechanisms.
     for (int i = 0; i < mechanisms.length - 1; i++) {
       int higher = i;
@@ -139,7 +50,7 @@ class SASLTemp {
     return mechanisms;
   }
 
-  Mechanism choose(
+  _Mechanism choose(
     Iterable<String> mechanisms,
     SASLCallback saslCallback,
     SecurityCallback securityCallback, [
@@ -156,22 +67,26 @@ class SASLTemp {
           .toList(),
     );
 
-    final bestMech = filteredList.first;
+    final bestMech = filteredList.isEmpty ? null : filteredList.first;
+
+    if (bestMech == null) {
+      throw SASLException.noAppropriateMechanism();
+    }
 
     try {
       final credentials = saslCallback(
-        bestMech!.requiredCredentials,
-        bestMech.optionalCredentials,
+        bestMech._requiredCredentials,
+        bestMech._optionalCredentials,
       );
 
       final creds = <String>{'username', 'password', 'authzid'};
-      for (final required in bestMech.requiredCredentials) {
+      for (final required in bestMech._requiredCredentials) {
         if (!credentials.containsKey(required)) {
-          /// TODO: throw missing credential
+          throw SASLException.missingCredentials(required);
         }
       }
 
-      for (final optional in bestMech.optionalCredentials) {
+      for (final optional in bestMech._optionalCredentials) {
         if (!credentials.containsKey(optional)) {
           credentials[optional] = '';
         }
@@ -179,11 +94,6 @@ class SASLTemp {
 
       for (final credential in credentials.entries) {
         if (creds.contains(credential.key)) {
-          if (credential.value.isNotEmpty) {
-            print(
-              'mapping ${credential.value} c-1_2: ${StandaloneStringPreparation.inTablec12(credential.value)}',
-            );
-          }
           credentials[credential.key] =
               StringPreparationProfiles().saslPrep(credential.value);
         } else {
@@ -191,27 +101,29 @@ class SASLTemp {
         }
       }
 
-      final securityOptions = securityCallback(bestMech.securityOptions);
+      final securityOptions = securityCallback(bestMech._securityOptions);
 
-      return bestMech..setup(credentials, securityOptions.keys.toSet());
-    } catch (error) {
+      return bestMech.._setup(credentials, securityOptions.keys.toSet());
+    } on Exception {
       rethrow;
-      _mechanisms.removeWhere((key, value) => value == bestMech);
-      return choose(_mechanisms.keys, saslCallback, securityCallback);
     }
   }
 }
 
-class SASLTEMPAnonymous extends Mechanism {
-  SASLTEMPAnonymous({required super.base})
-      : super(name: 'ANONYMOUS', priority: 20);
+class _SASLAnonymous extends _Mechanism {
+  _SASLAnonymous(super.client) : super(name: 'ANONYMOUS', priority: 10);
 
   @override
-  String process([List<int>? challenge]) => 'Anonymous, Suelta';
+  String process([String? challenge]) => 'Anonymous';
+
+  @override
+  String challenge(String challenge) {
+    throw SASLException.unimplementedChallenge(name);
+  }
 }
 
-class SASLTEMPPlain extends Mechanism {
-  SASLTEMPPlain({required super.base})
+class _SASLPlain extends _Mechanism {
+  _SASLPlain(super.client)
       : super(
           name: 'PLAIN',
           priority: 50,
@@ -225,31 +137,116 @@ class SASLTEMPPlain extends Mechanism {
         );
 
   @override
-  void setup(Map<String, String> credentials, [Set<String>? securityOptions]) {
-    super.setup(credentials, securityOptions);
-    if (!this.securityOptions.contains('encrypted')) {
-      if (!this.securityOptions.contains('unencryptedPlain')) {
+  void _setup(Map<String, String> credentials, [Set<String>? securityOptions]) {
+    super._setup(credentials, securityOptions);
+    if (!_securityOptions.contains('encrypted')) {
+      if (!_securityOptions.contains('unencryptedPlain')) {
         throw SASLException.cancelled('PLAIN without encryption');
       }
     } else {
-      if (!this.securityOptions.contains('encryptedPlain')) {
+      if (!_securityOptions.contains('encryptedPlain')) {
         throw SASLException.cancelled('PLAIN with encryption');
       }
     }
   }
 
   @override
-  String process([List<int>? challenge]) {
-    final authzid = base.credentials['authzid']!;
-    final username = base.credentials['username'];
-    final password = base.credentials['password'];
+  String process([String? challenge]) {
+    final authzid = _client.credentials['authzid']!;
+    final username = _client.credentials['username'];
+    final password = _client.credentials['password'];
 
     String auth =
-        (authzid != '$username@${base.requestedJID.domain}') ? authzid : '';
+        (authzid != '$username@${_client.requestedJID.domain}') ? authzid : '';
     auth = '$auth\u0000';
     auth = '$auth$username';
     auth = '$auth\u0000';
     auth = '$auth$password';
     return Echotils.utf16to8(auth);
   }
+
+  @override
+  String challenge(String challenge) {
+    throw SASLException.unimplementedChallenge(name);
+  }
+}
+
+class _SASLSHA1 extends _Mechanism {
+  _SASLSHA1(super.client, {required this.scram})
+      : super(
+          name: 'SCRAM-SHA-1',
+          priority: 80,
+          requiredCredentials: {'username', 'password'},
+          optionalCredentials: {'authzid'},
+          securityOptions: {'encrypted', 'unencryptedScram'},
+        );
+
+  final Scram scram;
+
+  @override
+  String process() => scram.clientChallenge();
+
+  @override
+  String challenge(String challenge) =>
+      scram.scramResponse(challenge, 'SHA-1', 160);
+}
+
+class _SASLSHA256 extends _Mechanism {
+  _SASLSHA256(super.client, {required this.scram})
+      : super(
+          name: 'SCRAM-SHA-256',
+          priority: 70,
+          requiredCredentials: {'username', 'password'},
+          optionalCredentials: {'authzid'},
+          securityOptions: {'encrypted', 'unencryptedScram'},
+        );
+
+  final Scram scram;
+
+  @override
+  String process() => scram.clientChallenge();
+
+  @override
+  String challenge(String challenge) =>
+      scram.scramResponse(challenge, 'SHA-256', 256);
+}
+
+class _SASLSHA384 extends _Mechanism {
+  _SASLSHA384(super.client, {required this.scram})
+      : super(
+          name: 'SCRAM-SHA-384',
+          priority: 71,
+          requiredCredentials: {'username', 'password'},
+          optionalCredentials: {'authzid'},
+          securityOptions: {'encrypted', 'unencryptedScram'},
+        );
+
+  final Scram scram;
+
+  @override
+  String process() => scram.clientChallenge();
+
+  @override
+  String challenge(String challenge) =>
+      scram.scramResponse(challenge, 'SHA-384', 384);
+}
+
+class _SASLSHA512 extends _Mechanism {
+  _SASLSHA512(super.client, {required this.scram})
+      : super(
+          name: 'SCRAM-SHA-512',
+          priority: 72,
+          requiredCredentials: {'username', 'password'},
+          optionalCredentials: {'authzid'},
+          securityOptions: {'encrypted', 'unencryptedScram'},
+        );
+
+  final Scram scram;
+
+  @override
+  String process() => scram.clientChallenge();
+
+  @override
+  String challenge(String challenge) =>
+      scram.scramResponse(challenge, 'SHA-512', 512);
 }
