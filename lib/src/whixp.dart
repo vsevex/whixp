@@ -5,6 +5,7 @@ import 'package:dartz/dartz.dart';
 import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/jid/jid.dart';
 import 'package:echox/src/plugins/base.dart';
+import 'package:echox/src/stanza/iq.dart';
 import 'package:echox/src/stream/base.dart';
 import 'package:echox/src/transport/transport.dart';
 import 'package:meta/meta.dart';
@@ -24,7 +25,7 @@ abstract class WhixpBase {
     streamNamespace = Echotils.getNamespace('JABBER_STREAM');
     this.defaultNamespace = defaultNamespace ?? Echotils.getNamespace('CLIENT');
     requestedJID = JabberIDTemp(jabberID);
-    boundJID = JabberIDTemp(jabberID);
+    final boundJID = JabberIDTemp(jabberID);
     pluginManager = PluginManager();
 
     /// Assignee for later.
@@ -58,6 +59,7 @@ abstract class WhixpBase {
       dnsService: dnsService,
       useTLS: useTLS,
       caCerts: certs,
+      boundJID: boundJID,
       connectionTimeout: connectionTimeout,
       startStreamHandler: (attributes, transport) {
         String streamVersion = '';
@@ -75,6 +77,8 @@ abstract class WhixpBase {
         }
       },
     );
+
+    transport.registerStanza(IQ(generateID: false));
   }
   late final Transport transport;
 
@@ -86,11 +90,6 @@ abstract class WhixpBase {
 
   /// The JabberID (JID) requested for this connection.
   late final JabberIDTemp requestedJID;
-
-  /// The JabberID (JID) used by this connection, as set after session binding.
-  ///
-  /// This may even be a different bare JID than what was requested.
-  late final JabberIDTemp boundJID;
 
   /// The maximum number of consecutive `see-other-host` redirections that will
   /// be followed before quitting.
