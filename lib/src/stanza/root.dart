@@ -4,7 +4,17 @@ import 'package:echox/src/stream/base.dart';
 ///
 /// Provides a more XMPP specific exception handler than the provided by the
 /// generic [StanzaBase] class.
-class RootStanza extends StanzaBase {
+abstract class RootStanza extends StanzaBase {
+  RootStanza({
+    super.name,
+    super.namespace,
+    super.interfaces,
+    super.types,
+    super.pluginAttribute,
+    super.transport,
+    super.setupOverride,
+  });
+
   /// Creates and sends an error reply.
   ///
   /// Typically called when an event handler raises an exception. The error's
