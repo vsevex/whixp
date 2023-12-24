@@ -1,3 +1,5 @@
+import 'package:echox/src/stream/base.dart';
+
 /// The given given class is a custom written [Exception] class for [Whixp].
 ///
 /// This abstract class provides a way to encapsulate all possible exceptions
@@ -26,6 +28,34 @@ abstract class WhixpException implements Exception {
       '''Whixp Exception: $message${code != null ? ' (code: $code)' : ''} ''';
 }
 
+class StanzaException extends WhixpException {
+  StanzaException(
+    super.message,
+    this.stanza, {
+    this.text = '',
+    this.condition = 'undefined-condition',
+    this.errorType = 'cancel',
+  });
+
+  final String text;
+  final String condition;
+  final String errorType;
+  final StanzaBase stanza;
+
+  factory StanzaException.timeout(StanzaBase stanza) => StanzaException(
+        'Waiting for response from the server is timed out',
+        stanza,
+        condition: 'remote-server-timeout',
+      );
+  factory StanzaException.iq(StanzaBase stanza) => StanzaException(
+        'IQ error is occured',
+        stanza,
+        text: (stanza['error'] as XMLBase)['text'] as String,
+        condition: (stanza['error'] as XMLBase)['condition'] as String,
+        errorType: (stanza['error'] as XMLBase)['type'] as String,
+      );
+}
+
 class StringPreparationException extends WhixpException {
   StringPreparationException(super.message);
 
@@ -45,6 +75,15 @@ class SASLException extends WhixpException {
   SASLException(super.message);
 
   factory SASLException.cancelled(String message) => SASLException(message);
+  factory SASLException.missingCredentials(String credential) =>
+      SASLException('Missing credential in SASL mechanism: $credential');
+  factory SASLException.noAppropriateMechanism() =>
+      SASLException('No appropriate mechanism was found');
+  factory SASLException.unimplementedChallenge(String mechanism) =>
+      SASLException('Challenge is not implemented for: $mechanism');
+  factory SASLException.scram(String message) => SASLException(message);
+  factory SASLException.cnonce() =>
+      SASLException('Client nonce is not applicable');
   factory SASLException.unknownHash(String name) =>
       SASLException('The $name hashing is not supported');
 }
