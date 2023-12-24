@@ -1,18 +1,18 @@
-part of 'echox.dart';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
-/// [Scram] is a singleton class used for the SCRAM (Saited Challenge Response
-/// Authentication Mechanism) authentication in the XMPP protocol. It has a
-/// private constructor and a factory method that returns the constant instance
-/// of the class.
+import 'package:crypto/crypto.dart' as crypto;
+
+import 'package:echox/src/client.dart';
+import 'package:echox/src/echotils/echotils.dart';
+import 'package:echox/src/exception.dart';
+
+/// [Scram] is a class used for the SCRAM (Saited Challenge Response
+/// Authentication Mechanism) authentication in the XMPP protocol.
 class Scram {
-  /// Factory method which returns private instance of this class.
-  factory Scram() => _instance;
+  Scram(this.client);
 
-  /// Private constructor of the class.
-  const Scram._();
-
-  /// Constant instance of private constructor.
-  static const Scram _instance = Scram._();
+  final Whixp client;
 
   /// This method is used to generate the proof of the client's identity to the
   /// server, which is required for the SCRAM authentication mechanism. Without
@@ -30,11 +30,8 @@ class Scram {
     /// Declare the hashing algorithm.
     final hash = _getDigest(hashName);
     final storedKey = hashShaConvert(clientKey, hash);
-    final signature = hmacShaConvert(
-      storedKey,
-      Uint8List.fromList(message.codeUnits),
-      hash,
-    );
+    final signature =
+        hmacShaConvert(storedKey, Uint8List.fromList(message.codeUnits), hash);
 
     return Echotils.xorUint8Lists(clientKey, signature);
   }
@@ -54,11 +51,11 @@ class Scram {
     );
   }
 
-  /// Parses SCRAM challenge string and returns a [Map] of three values,
+  /// Parses SCRAM [challenge] [String] and returns a [Map] of three values,
   /// including the `nonce`, `salt`, and `iteration` count, if they exist
-  /// in the [challenge] string. Otherwise, it returns null if any of these
+  /// in the [challenge] string. Otherwise, it returns `null` if any of these
   /// values is missing or invalid.
-  static Map<String, dynamic>? parseChallenge(String? challenge) {
+  static Map<String, dynamic> parseChallenge(String? challenge) {
     /// A [String] representing the server's `nonce` value.
     String? nonce;
 
@@ -69,8 +66,10 @@ class Scram {
     /// derivation.
     int? iter;
 
-    /// If challenge is null, then return the function.
-    if (challenge == null) return null;
+    /// If challenge is null, throw a SCRAM error.
+    if (challenge == null) {
+      throw SASLException.scram('The challenge from the server is null');
+    }
 
     /// An attribute for matching attribute-value pairs of the passed challenge.
     final attribute = RegExp(r'([a-z]+)=([^,]+)(,|$)');
@@ -85,7 +84,6 @@ class Scram {
       final matches = attribute.firstMatch(passedChallenge);
       passedChallenge = passedChallenge.replaceFirst(matches![0]!, "");
 
-      /// TODO: migrate to wildcard pattern
       if (matches[1] == 'r') {
         nonce = matches[2];
       } else if (matches[1] == 's') {
@@ -93,20 +91,18 @@ class Scram {
       } else if (matches[1] == 'i') {
         iter = int.parse(matches[2]!, radix: 10);
       } else {
-        return null;
+        throw SASLException.scram('Error happened while parsing the challenge');
       }
     }
 
-    /// If the iteration count is less than 4096, log a warning message and
-    /// return `null`.
+    /// If the iteration count is less than 4096, throw an error.
     if (iter == null || iter < 4096) {
-      return null;
+      throw SASLException.scram('Iteration is null or lesser than 4096');
     }
 
-    /// If the salt value is not present, log a warning message and return
-    /// `null`.
+    /// If the salt value is not present, throw an error.
     if (salt == null) {
-      return null;
+      throw SASLException.scram('Parsed salt from the challenge is null');
     }
 
     /// Return a Map containing the `nonce`, `salt`, and `iter` values.
@@ -115,19 +111,20 @@ class Scram {
 
   /// A function that derives client and server keys using the `PBKDF2`
   /// algorithm with a given `password`, `salt`, `iterations`, and
-  /// `hash function`.
-  ///
-  /// - [password] The password to use for key derivation.
-  /// - [iterations] The number of iterations to use for key derivation.
-  /// - [hashName] The name of the hash function to use for key derivation.
-  /// - [salt] The salt to use for key derivation.
-  ///
-  /// * @return A map containing the derived client and server keys, as [String].
+  /// `hash function`. Returns a map containing the derived client and server
+  /// keys, as [String].
   Map<String, String> deriveKeys({
+    /// The password to use for key derivation.
     required String password,
-    required String hashName,
-    required String salt,
+
+    /// The number of iterations to use for key derivation.
     required int iterations,
+
+    /// The name of the hash function to use for key derivation.
+    required String hashName,
+
+    /// The salt to use for key derivation.
+    required String salt,
   }) {
     final hash = _getDigest(hashName);
 
@@ -145,12 +142,12 @@ class Scram {
     return <String, String>{
       'ck': hmacShaConvert(
         saltedPasswordBites,
-        Uint8List.fromList(utf8.encode('Client Key')),
+        Echotils.stringToArrayBuffer('Client Key'),
         hash,
       ),
       'sk': hmacShaConvert(
         saltedPasswordBites,
-        Uint8List.fromList('Server Key'.codeUnits),
+        Echotils.stringToArrayBuffer('Server Key'),
         hash,
       ),
     };
@@ -160,32 +157,29 @@ class Scram {
   ///
   /// This method applies the HMAC (Hash-based Message Authentication Code)
   /// iteration process to derive a cryptographic key from the given inputs. It
-  /// uses a specific `key`, `salt`, `number of iterations`, `hash algorithm`,
-  /// and `block number` to generate the resulting key material.
-  ///
-  /// * @param key The key used for HMAC computation.
-  /// * @param salt The salt value used in the HMAC iteration.
-  /// * @param iterations The number of iterations to perform.
-  /// * @param hashName The name of hash algorithm to use (defaults to 'SHA-1').
-  /// * @param blockNr The block number used in the HMAC iteration (defaults to
-  /// 1).
-  /// * @return The derived cryptographic key as String.
+  /// uses a specific [key], [salt], number of [iterations], [hash] algorithm,
+  /// and [blockNumber] to generate the resulting key material.
   static String hmacIteration({
+    /// The key used for HMAC computation.
     required String key,
+
+    /// The salt value used in the HMAC iteration.
     required String salt,
+
+    /// The number of iterations to perform.
     required int iterations,
 
-    /// Default to `SHA-1` hash.
+    /// The name of hash algorithm to use (defaults to 'SHA-1').
     String hashName = 'SHA-1',
 
     /// Defaults to 1.
-    int blockNr = 1,
+    int blockNumber = 1,
   }) {
     /// Get the hashing algorithm
     final hash = _getDigest(hashName);
 
     /// Convert the block number to a [ByteData] object.
-    final blockNrBytes = _packIntToBytes(blockNr);
+    final blockNrBytes = _packIntToBytes(blockNumber);
 
     /// Create a Uint8List by concatenating the salt and block number bytes.
     final dataWithBlock = Uint8List.fromList([
@@ -213,11 +207,8 @@ class Scram {
 
   /// Packs an integer value into a [ByteData] object.
   ///
-  /// This method takes an integer value and converts it into a [ByteData]
+  /// This method takes an integer [value] and converts it into a [ByteData]
   /// object with a length of 4 bytes.
-  ///
-  /// * @param value The [int] value to be packed into the [ByteData] object.
-  /// * @return The [ByteData] object containing the packed integer value.
   static ByteData _packIntToBytes(int value) {
     /// Set the value of the Uint32 at the beginning of the [ByteData] object.
     final list = ByteData.view(Uint8List(4).buffer)..setUint32(0, value);
@@ -229,7 +220,7 @@ class Scram {
   /// Determine the hash function to use based on the provided `hashName`
   /// parameter.
   static crypto.Hash _getDigest(String hashName) {
-    /// If the `hashName` is not supported, then throw an [ArgumentError].
+    /// If the `hashName` is not supported, then throw an [SASLException].
     switch (hashName) {
       case 'SHA-1':
         return crypto.sha1;
@@ -240,7 +231,7 @@ class Scram {
       case 'SHA-512':
         return crypto.sha512;
       default:
-        throw ArgumentError('Invalid hash algorithm: $hashName');
+        throw SASLException.unknownHash(hashName);
     }
   }
 
@@ -265,7 +256,7 @@ class Scram {
         crypto.Hmac(hash, key.codeUnits).convert(data).bytes,
       );
 
-  /// This method generates a client nonce, which is used as part of the SCRAM
+  /// Generates a client nonce, which is used as part of the SCRAM
   /// authentication protocol. It generates 16 random bytes, encodes them them
   /// in base64, and removes any commas from the resulting string.
   static String get generateCNonce {
@@ -273,7 +264,7 @@ class Scram {
     final bytes = List<int>.generate(16, (index) => math.Random().nextInt(256));
 
     /// Base64-encode the nonce
-    return base64.encode(bytes);
+    return Echotils.arrayBufferToBase64(Uint8List.fromList(bytes));
   }
 
   /// Returns a string containing the client first message.
@@ -282,20 +273,17 @@ class Scram {
   /// to be used in the authentication process, and other information about the
   /// authentication exchange.
   ///
-  /// The `connection` parameter is an object containing the connection details,
-  /// including the authentication identity to be used (`connection.authcid`).
-  ///
-  /// The `clientChallenge` method updates the `connection._sasl_data` object
-  /// with information about the authentication process, including the client
-  /// nonce (`cnonce`) and the client first message (`client-first-message-bare`).
-  static String clientChallenge(EchoX connection, String? testCNonce) {
-    /// The optional `test_cnonce` parameter is a string value that can be used
-    /// for testing purposes instead of generating a random nonce. If it is not
-    /// provided, a random nonce will be generated.
-    final cnonce = testCNonce ?? generateCNonce;
-    final clientFirstMessageBare = 'n=${connection._authcid},r=$cnonce';
-    connection._saslData!['cnonce'] = cnonce;
-    connection._saslData['client-first-message-bare'] = clientFirstMessageBare;
+  /// Updates the `whixp.saslData` variable with information about the
+  /// authentication process, including the client nonce (`cnonce`) and the
+  /// client first message (`clientFirstMessageBare`).
+  String clientChallenge() {
+    /// A random nonce will be generated.
+    final cnonce = generateCNonce;
+
+    final clientFirstMessageBare =
+        'n=${client.credentials['username']},r=$cnonce';
+    client.saslData['cnonce'] = cnonce;
+    client.saslData['clientFirstMessageBare'] = clientFirstMessageBare;
 
     /// The method returns a string value containing the client first message in
     /// the following format: "n,,n=<authentication identity>,r=<nonce>".
@@ -305,14 +293,9 @@ class Scram {
   /// Generates a SCRAM (Salted Challenge Response Authentication Mechanism)
   /// response string.
   ///
-  /// - [connection] An instance of [EchoX] representing the
-  /// connection to the server
-  /// - [challenge] A string representing the challenge received from the
-  /// server
-  /// - [hashName] A string representing the name of the hash function to
-  /// be used in the HMAC operation.
-  /// - [hashBits] An integer representing the number of bits of the hash
-  /// function.
+  /// - [challenge]
+  /// - [hashName]
+  /// - [hashBits]
   ///
   /// Returns a SCRAM response string or `null` if authentication fails.
   ///
@@ -326,17 +309,11 @@ class Scram {
   ///
   /// ### Example:
   /// ```dart
-  /// final connection = EchoX();
-  /// final challenge = 'server_challenge_string';
+  /// final client = Whixp();
+  /// final challenge = 'challengeString';
   /// final hashName = 'SHA-256';
   /// final hashBits = 256;
-  /// final response = scramResponse(connection, challenge, hashName, hashBits);
-  /// if (response != null) {
-  ///   // Successfully generated SCRAM response.
-  ///   // Send the response to the server for authentication.
-  /// } else {
-  ///   // Authentication failed. Handle the failure.
-  /// }
+  /// final response = Scram(client).scramResponse(challenge, hashName, hashBits);
   /// ```
   ///
   /// See also:
@@ -347,15 +324,20 @@ class Scram {
   /// - [clientProof], a method used to compute the client proof.
   /// - [serverSign], a method used to compute the server signature.
   ///
-  String? scramResponse(
-    EchoX connection,
+  String scramResponse(
+    /// A string representing the challenge received from the server.
     String? challenge,
+
+    /// A string representing the name of the hash function to be used in the
+    /// HMAC operation.
     String hashName,
+
+    /// An integer representing the number of bits of the hash function.
     int hashBits,
   ) {
     /// Check if the `cnonce` key is present in `saslData` object of
     /// `connection`.
-    final cnonce = connection._saslData!['cnonce'] as String;
+    final cnonce = client.saslData['cnonce'] as String;
 
     /// Parse the received challenge string.
     final challengeData = parseChallenge(challenge);
@@ -364,35 +346,27 @@ class Scram {
     ///
     /// The RFC requires that we verify the (server) nonce has the client nonce
     /// as an initial substring.
-    if (challengeData == null ||
-        (challengeData['nonce'] as String).substring(0, cnonce.length) !=
-            cnonce) {
-      connection._saslData = {};
-      connection._saslFailureCallback();
-      return null;
+    if ((challengeData['nonce'] as String).substring(0, cnonce.length) !=
+        cnonce) {
+      client.saslData.clear();
+      throw SASLException.cnonce();
     }
 
     String? clientKey;
     String? serverKey;
 
-    final password = connection._password;
+    final password = client.password;
 
-    if (password != null) {
-      final keys = deriveKeys(
-        password: password,
-        iterations: challengeData['iter'] as int,
-        hashName: hashName,
-        salt: String.fromCharCodes(challengeData['salt'] as Uint8List),
-      );
-      clientKey = keys['ck'];
-      serverKey = keys['sk'];
-    } else {
-      connection._saslFailureCallback();
-      return null;
-    }
+    final keys = deriveKeys(
+      password: password,
+      iterations: challengeData['iter'] as int,
+      hashName: hashName,
+      salt: String.fromCharCodes(challengeData['salt'] as Uint8List),
+    );
+    clientKey = keys['ck'];
+    serverKey = keys['sk'];
 
-    final clientFirstMessageBare =
-        connection._saslData['client-first-message-bare'];
+    final clientFirstMessageBare = client.saslData['clientFirstMessageBare'];
     final serverFirstMessage = challenge;
     final clientFinalMessageBare = 'c=biws,r=${challengeData['nonce']}';
 
@@ -402,8 +376,8 @@ class Scram {
     final proof = clientProof(message, clientKey!, hashName);
     final serverSignature = serverSign(message, serverKey!, hashName);
 
-    connection._saslData['server-signature'] = Echotils.btoa(serverSignature);
-    connection._saslData['keys'] = {
+    client.saslData['server-signature'] = Echotils.btoa(serverSignature);
+    client.saslData['keys'] = {
       'name': hashName,
       'iter': challengeData['iter'],
       'salt': Echotils.arrayBufferToBase64(
