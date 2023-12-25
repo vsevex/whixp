@@ -1,14 +1,22 @@
 import 'dart:async';
 
+import 'package:dartz/dartz.dart';
+
+import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/handler/callback.dart';
+import 'package:echox/src/plugins/base.dart';
+import 'package:echox/src/plugins/bind/bind.dart';
 import 'package:echox/src/plugins/mechanisms/feature.dart';
-import 'package:echox/src/plugins/mechanisms/stanza/stanza.dart';
-import 'package:echox/src/plugins/starttls/stanza.dart';
-import 'package:echox/src/plugins/starttls/starttls.dart';
+import 'package:echox/src/plugins/preapproval/preapproval.dart';
+import 'package:echox/src/plugins/rosterver/rosterver.dart';
+import 'package:echox/src/plugins/session/session.dart';
 import 'package:echox/src/stanza/features.dart';
 import 'package:echox/src/stream/base.dart';
 import 'package:echox/src/stream/matcher/xpath.dart';
 import 'package:echox/src/whixp.dart';
+
+part 'plugins/starttls/starttls.dart';
+part 'plugins/starttls/stanza.dart';
 
 class Whixp extends WhixpBase {
   Whixp(
@@ -33,24 +41,33 @@ class Whixp extends WhixpBase {
 
     /// Set [streamHeader] of declared transport for initial send.
     transport.streamHeader =
-        "<stream:stream to='${boundJID.host}' xmlns:stream='$streamNamespace' xmlns='$defaultNamespace' xml:lang='$language' version='1.0'>";
+        "<stream:stream to='${transport.boundJID.host}' xmlns:stream='$streamNamespace' xmlns='$defaultNamespace' xml:lang='$language' version='1.0'>";
+
+    StanzaBase features = StreamFeatures();
+
+    registerPlugin('starttls', FeatureStartTLS(features, base: this));
+    registerPlugin('mechanisms', FeatureMechanisms(features, base: this));
+    registerPlugin('bind', FeatureBind(features, base: this));
+    registerPlugin(
+      'rosterversioning',
+      FeatureRosterVersioning(features, base: this),
+    );
+    registerPlugin('session', FeatureSession(features, base: this));
+    registerPlugin('preapproval', FeaturePreApproval(features, base: this));
 
     transport
-      ..registerStanza(StreamFeatures())
+      ..registerStanza(features)
       ..registerHandler(
         FutureCallbackHandler(
           'Stream Features',
           (stanza) async {
-            _registerStanzas(stanza);
-            await _handleStreamFeatures(stanza);
+            features = features.copy(stanza.element);
+            _handleStreamFeatures(features);
             return;
           },
           matcher: XPathMatcher('<features xmlns="$streamNamespace"/>'),
         ),
       );
-
-    registerPlugin('starttls', FeatureStartTLS(base: this));
-    registerPlugin('mechanisms', FeatureMechanisms(base: this));
   }
 
   void reset() {
@@ -60,18 +77,7 @@ class Whixp extends WhixpBase {
   /// Default language to use in stanza communication.
   final String language;
 
-  void _registerStanzas(StanzaBase stanza) {
-    if (stanza.payload.first.name.qualified == 'starttls') {
-      final starttls = StartTLS();
-      registerStanzaPlugin(stanza, starttls);
-      stanza.enable(starttls.name);
-    }
-    if (stanza.payload.first.name.qualified == 'mechanisms') {
-      final mechanisms = Mechanisms();
-      registerStanzaPlugin(stanza, mechanisms);
-      stanza.enable(mechanisms.name);
-    }
-  }
+  final saslData = <String, dynamic>{};
 
   Future<bool> _handleStreamFeatures(StanzaBase features) async {
     for (final feature in streamFeatureOrder) {
