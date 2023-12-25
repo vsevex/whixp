@@ -2,12 +2,12 @@ part of 'base.dart';
 
 class StanzaBase extends XMLBase {
   StanzaBase({
-    Transport? transport,
     String? stanzaType,
     String? stanzaTo,
     String? stanzaFrom,
     String? stanzaID,
-    this.recv = false,
+    super.receive,
+    super.transport,
     Set<String> types = const <String>{},
     super.name,
     super.namespace,
@@ -31,12 +31,10 @@ class StanzaBase extends XMLBase {
     super.element,
     super.parent,
   }) {
-    _transport = transport;
-
     _types = types;
 
     if (transport != null) {
-      _namespace = transport.defaultNamespace;
+      namespace = transport!.defaultNamespace;
     }
 
     if (stanzaType != null) {
@@ -60,8 +58,6 @@ class StanzaBase extends XMLBase {
     addDeleters({const Symbol('payload'): (_, __) => deletePayload()});
   }
 
-  final bool recv;
-  late final Transport? _transport;
   late Set<String> _types;
 
   /// Sets the stanza's `type` attribute.
@@ -109,7 +105,7 @@ class StanzaBase extends XMLBase {
   StanzaBase reply({bool clear = true}) {
     final newStanza = copy();
 
-    if (_transport != null && _transport.isComponent) {
+    if (transport != null && transport!.isComponent) {
       newStanza['from'] = this['to'];
       newStanza['to'] = this['from'];
     } else {
@@ -145,8 +141,8 @@ class StanzaBase extends XMLBase {
   }
 
   void send() {
-    if (_transport != null) {
-      _transport.send(Tuple2(this, null));
+    if (transport != null) {
+      transport!.send(Tuple2(this, null));
     } else {
       print('tried to send stanza without a stanza: $this');
     }
@@ -156,13 +152,13 @@ class StanzaBase extends XMLBase {
   StanzaBase copy([
     xml.XmlElement? element,
     XMLBase? parent,
-    bool recv = false,
+    bool receive = false,
   ]) =>
       StanzaBase(
         name: name,
-        namespace: _namespace,
+        namespace: namespace,
         interfaces: _interfaces,
-        recv: recv,
+        receive: receive,
         pluginAttribute: _pluginAttribute,
         pluginTagMapping: _pluginTagMapping,
         pluginAttributeMapping: _pluginAttributeMapping,
@@ -178,7 +174,7 @@ class StanzaBase extends XMLBase {
         isExtension: _isExtension,
         includeNamespace: _includeNamespace,
         setupOverride: setupOverride,
-        transport: _transport,
+        transport: transport,
         element: element,
         parent: parent,
       );

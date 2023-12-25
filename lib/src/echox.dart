@@ -9,10 +9,8 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:echox/src/builder.dart';
 import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/error/error.dart';
-import 'package:echox/src/exception.dart';
 import 'package:echox/src/jid/jid.dart';
 import 'package:echox/src/mishaps.dart';
-import 'package:echox/src/sasl/sasl.dart';
 import 'package:events_emitter/events_emitter.dart';
 
 import 'package:web_socket_client/web_socket_client.dart' as ws;
@@ -20,16 +18,16 @@ import 'package:xml/xml.dart' as xml;
 
 part '_extension.dart';
 part 'handler.dart';
-part 'sasl/sasl_anon.dart';
-part 'sasl/sasl_external.dart';
-part 'sasl/sasl_oauthbearer.dart';
-part 'sasl/sasl_plain.dart';
-part 'sasl/sasl_sha1.dart';
-part 'sasl/sasl_sha256.dart';
-part 'sasl/sasl_sha384.dart';
-part 'sasl/sasl_sha512.dart';
-part 'sasl/sasl_xoauth2.dart';
-part 'scram.dart';
+// part 'sasl/sasl_anon.dart';
+// part 'sasl/sasl_external.dart';
+// part 'sasl/sasl_oauthbearer.dart';
+// part 'sasl/sasl_plain.dart';
+// part 'sasl/sasl_sha1.dart';
+// part 'sasl/sasl_sha256.dart';
+// part 'sasl/sasl_sha384.dart';
+// part 'sasl/sasl_sha512.dart';
+// part 'sasl/sasl_xoauth2.dart';
+// part 'scram.dart';
 part 'websocket.dart';
 
 /// Serves as the foundation for establishing and managing XMPP (Extensible
@@ -111,7 +109,7 @@ class EchoX extends EventEmitter {
     _disconnectTimeout = null;
 
     /// Equal to empty map.
-    _mechanisms = {};
+    // _mechanisms = {};
 
     /// Allows to make authentation.
     _doAuthentication = true;
@@ -238,7 +236,7 @@ class EchoX extends EventEmitter {
   late final Map<String, dynamic>? _saslData;
 
   /// Holds all available mechanisms that are supported by the server.
-  Map<String, SASL>? _mechanisms;
+  // Map<String, SASL>? _mechanisms;
 
   late bool _doAuthentication;
   late bool _authenticated;
@@ -295,7 +293,7 @@ class EchoX extends EventEmitter {
   final _extensions = <Extension>[];
 
   /// The selected mechanism to provide authentication.
-  late SASL? _mechanism;
+  // late SASL? _mechanism;
 
   /// This variable holds an instance of the [Handler] class that serves as a
   /// fallback handler for IQ (Info/Query) stanzas.
@@ -748,26 +746,26 @@ class EchoX extends EventEmitter {
   /// Register the SASL `mechanisms` which will be supported by this instance of
   /// [EchoX] (i.e. which this XMPP client will support).
   void _registerMechanisms() {
-    _mechanisms = {};
+    // _mechanisms = {};
 
     /// The list of all available authentication mechanisms.
-    late final mechanismList = <SASL>[
-      SASLAnonymous(),
-      SASLExternal(),
-      SASLOAuthBearer(),
-      SASLXOAuth2(),
-      SASLPlain(),
-      SASLSHA1(),
-      SASLSHA256(),
-      SASLSHA384(),
-      SASLSHA512(),
-    ];
-    mechanismList.map((mechanism) => _registerSASL(mechanism)).toList();
+    // late final mechanismList = <SASL>[
+    // SASLAnonymous(),
+    // SASLExternal(),
+    // SASLOAuthBearer(),
+    // SASLXOAuth2(),
+    // SASLPlain(),
+    // SASLSHA1(),
+    // SASLSHA256(),
+    // SASLSHA384(),
+    // SASLSHA512(),
+    // ];
+    // mechanismList.map((mechanism) => _registerSASL(mechanism)).toList();
   }
 
   /// Register a single [SASL] `mechanism`, to be supported by this client.
-  void _registerSASL(SASL mechanism) =>
-      _mechanisms![mechanism.name] = mechanism;
+  // void _registerSASL(SASL mechanism) =>
+  //     _mechanisms![mechanism.name] = mechanism;
 
   /// Start the graceful disconnection process with provided [reason].
   ///
@@ -1091,7 +1089,7 @@ class EchoX extends EventEmitter {
 
     final matched = List.from(bodyWrap.findAllElements('mechanism'))
         .map(
-          (mechanism) => _mechanisms![(mechanism as xml.XmlElement).innerText],
+          (mechanism) => true,
         )
         .where((element) => element != null)
         .toList();
@@ -1108,87 +1106,87 @@ class EchoX extends EventEmitter {
       }
     }
 
-    if (_doAuthentication) _authenticate(matched);
+    // if (_doAuthentication) _authenticate(matched);
   }
 
-  void _authenticate(List<SASL?> mechanisms) {
-    if (!_attemptSASLAuth(mechanisms)) {
-      _attemptLegacyAuth();
-    }
-  }
+  // void _authenticate(List<SASL?> mechanisms) {
+  //   if (!_attemptSASLAuth(mechanisms)) {
+  //     _attemptLegacyAuth();
+  //   }
+  // }
 
   /// Sorts a list of objects with prototype SASLMechanism according to their
   /// properties.
-  List<SASL?> _sortMechanismsByPriority(List<SASL?> mechanisms) {
-    /// Iterate over all the available mechanisms.
-    for (int i = 0; i < mechanisms.length - 1; i++) {
-      int higher = i;
-      for (int j = i + 1; j < mechanisms.length; ++j) {
-        if (mechanisms[j]!.priority! > mechanisms[higher]!.priority!) {
-          higher = j;
-        }
-      }
-      if (higher != i) {
-        final swap = mechanisms[i];
-        mechanisms[i] = mechanisms[higher];
-        mechanisms[higher] = swap;
-      }
-    }
-    return mechanisms;
-  }
+  // List<SASL?> _sortMechanismsByPriority(List<SASL?> mechanisms) {
+  //   /// Iterate over all the available mechanisms.
+  //   for (int i = 0; i < mechanisms.length - 1; i++) {
+  //     int higher = i;
+  //     for (int j = i + 1; j < mechanisms.length; ++j) {
+  //       if (mechanisms[j]!.priority! > mechanisms[higher]!.priority!) {
+  //         higher = j;
+  //       }
+  //     }
+  //     if (higher != i) {
+  //       final swap = mechanisms[i];
+  //       mechanisms[i] = mechanisms[higher];
+  //       mechanisms[higher] = swap;
+  //     }
+  //   }
+  //   return mechanisms;
+  // }
 
   /// Iterate through an array of SASL [mechanisms] and attempt authentication
   /// with the highest priority (enabled) mechanism.
-  bool _attemptSASLAuth(List<SASL?> mechanisms) {
-    final mechs = _sortMechanismsByPriority(mechanisms);
-    bool mechanismFound = false;
-    for (int i = 0; i < mechs.length; i++) {
-      mechanisms[i]!.connection = this;
-      if (!mechs[i]!.test()) {
-        continue;
-      }
-      _saslSuccessHandler = _addSystemHandler(
-        (element) => _saslSuccessCallback(element),
-        name: 'success',
-      );
-      _saslFailureHandler = _addSystemHandler(
-        (element) => _saslFailureCallback(element),
-        name: 'failure',
-      );
-      _saslChallengeHandler = _addSystemHandler(
-        (element) => _saslChallengeCallback(element),
-        name: 'challenge',
-      );
+  // bool _attemptSASLAuth(List<SASL?> mechanisms) {
+  //   final mechs = _sortMechanismsByPriority(mechanisms);
+  //   bool mechanismFound = false;
+  //   for (int i = 0; i < mechs.length; i++) {
+  //     mechanisms[i]!.connection = this;
+  //     if (!mechs[i]!.test()) {
+  //       continue;
+  //     }
+  //     _saslSuccessHandler = _addSystemHandler(
+  //       (element) => _saslSuccessCallback(element),
+  //       name: 'success',
+  //     );
+  //     _saslFailureHandler = _addSystemHandler(
+  //       (element) => _saslFailureCallback(element),
+  //       name: 'failure',
+  //     );
+  //     _saslChallengeHandler = _addSystemHandler(
+  //       (element) => _saslChallengeCallback(element),
+  //       name: 'challenge',
+  //     );
 
-      _mechanism = mechanisms[i];
+  //     _mechanism = mechanisms[i];
 
-      final requestAuthExchange = EchoBuilder('auth', {
-        'xmlns': Echotils.getNamespace('SASL'),
-        'mechanism': _mechanism!.name,
-      });
-      if (_mechanism!.isClientFirst!) {
-        final response = _mechanism!.clientChallenge();
-        requestAuthExchange.t(Echotils.btoa(response));
-      }
-      send(requestAuthExchange.nodeTree);
-      mechanismFound = true;
-      break;
-    }
-    return mechanismFound;
-  }
+  //     final requestAuthExchange = EchoBuilder('auth', {
+  //       'xmlns': Echotils.getNamespace('SASL'),
+  //       'mechanism': _mechanism!.name,
+  //     });
+  //     if (_mechanism!.isClientFirst!) {
+  //       final response = _mechanism!.clientChallenge();
+  //       requestAuthExchange.t(Echotils.btoa(response));
+  //     }
+  //     send(requestAuthExchange.nodeTree);
+  //     mechanismFound = true;
+  //     break;
+  //   }
+  //   return mechanismFound;
+  // }
 
-  bool _saslChallengeCallback(xml.XmlElement element) {
-    final challenge = Echotils.atob(Echotils.getText(element));
-    final response = _mechanism?.onChallenge(challenge: challenge);
-    final stanza =
-        EchoBuilder('response', {'xmlns': Echotils.getNamespace('SASL')});
-    if (response!.isNotEmpty) {
-      stanza.t(Echotils.btoa(response));
-    }
-    send(stanza.nodeTree);
+  // bool _saslChallengeCallback(xml.XmlElement element) {
+  //   final challenge = Echotils.atob(Echotils.getText(element));
+  //   final response = _mechanism?.onChallenge(challenge: challenge);
+  //   final stanza =
+  //       EchoBuilder('response', {'xmlns': Echotils.getNamespace('SASL')});
+  //   if (response!.isNotEmpty) {
+  //     stanza.t(Echotils.btoa(response));
+  //   }
+  //   send(stanza.nodeTree);
 
-    return true;
-  }
+  //   return true;
+  // }
 
   /// Attempt legacy (i.e. non-SASL) authentication.
   void _attemptLegacyAuth() {
@@ -1288,9 +1286,9 @@ class EchoX extends EventEmitter {
     emit<String>('info', 'SASL authentication succeeded');
 
     /// Invoke onSuccess callback for the specific mechanism.
-    if (_mechanism != null) {
-      _mechanism?.onSuccess();
-    }
+    // if (_mechanism != null) {
+    // _mechanism?.onSuccess();
+    // }
 
     /// Remove old handlers
     deleteHandler(_saslFailureHandler!);
@@ -1447,9 +1445,9 @@ class EchoX extends EventEmitter {
       deleteHandler(_saslSuccessHandler!);
       _saslSuccessHandler = null;
     }
-    if (_mechanism != null) {
-      _mechanism?.onFailure();
-    }
+    // if (_mechanism != null) {
+    // _mechanism?.onFailure();
+    // }
 
     emit<StatusEmitter>(
       'status',

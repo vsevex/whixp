@@ -11,6 +11,8 @@ import 'package:echox/src/echotils/src/echotils.dart';
 import 'package:echox/src/handler/callback.dart';
 import 'package:echox/src/handler/eventius.dart';
 import 'package:echox/src/handler/handler.dart';
+import 'package:echox/src/jid/jid.dart';
+import 'package:echox/src/plugins/bind/stanza.dart';
 import 'package:echox/src/stanza/handshake.dart';
 import 'package:echox/src/stanza/root.dart';
 import 'package:echox/src/stream/base.dart';
@@ -35,6 +37,7 @@ class Transport {
     bool debug = true,
     bool useTLS = false,
     bool disableStartTLS = false,
+    required this.boundJID,
     List<Tuple2<String, String?>>? caCerts,
     this.connectionTimeout,
     void Function(
@@ -73,7 +76,7 @@ class Transport {
   late bool _debug;
   late bool _useTLS;
   late bool _disableStartTLS;
-  late bool _sessionStarted;
+  late bool sessionStarted;
   late bool _useIPv6;
   String? _dnsService;
 
@@ -114,6 +117,15 @@ class Transport {
   late final List<Handler> _handlers;
   final _rootStanza = <StanzaBase>[];
 
+  late bool sessionBind;
+
+  /// The JabberID (JID) used by this connection, as set after session binding.
+  ///
+  /// This may even be a different bare JID than what was requested.
+  JabberIDTemp boundJID;
+
+  late bool _startStreamHandlerCalled;
+
   final _filters = <String, List<Tuple2<SyncFilter?, AsyncFilter?>>>{};
 
   void _setup() {
@@ -133,7 +145,8 @@ class Transport {
 
     _eventius = Eventius();
 
-    _sessionStarted = false;
+    sessionStarted = false;
+    _startStreamHandlerCalled = false;
 
     _runOutFilters = null;
     _abortCompleter = async.Completer<void>();
@@ -148,6 +161,8 @@ class Transport {
 
     _handlers = <Handler>[];
     _rootStanza.clear();
+
+    sessionBind = false;
 
     _filters
       ..clear()
@@ -259,7 +274,7 @@ class Transport {
   void _connectionMade([bool clearAnswers = false]) {
     emit(_eventWhenConnected);
     _currentConnectionAttempt = null;
-    _sendRaw(streamHeader);
+    sendRaw(streamHeader);
     _initParser();
     if (clearAnswers) {
       _dnsAnswers = null;
@@ -294,21 +309,26 @@ class Transport {
   }
 
   Future<void> _dataReceived(List<int> bytes) async {
+    bool wrapped = false;
     String data = Echotils.unicode(bytes);
     if (data.contains('<stream:stream') && !data.contains('</stream:stream>')) {
       data = _streamWrapper(data);
+      wrapped = true;
     }
 
     print('data received: $data');
     void onStartElement(parser.XmlStartElementEvent event) {
+      if (event.isSelfClosing ||
+          (event.name == 'stream:stream' && _startStreamHandlerCalled)) return;
       if (_xmlDepth == 0) {
         _startStreamHandler(event.attributes);
+        _startStreamHandlerCalled = true;
       }
-      if (!event.isSelfClosing) _xmlDepth++;
+      _xmlDepth++;
     }
 
     Future<void> onEndElement(parser.XmlEndElementEvent event) async {
-      if (event.name == 'stream:stream') return;
+      if (event.name == 'stream:stream' && wrapped) return;
       _xmlDepth--;
       if (_xmlDepth == 0) {
       } else if (_xmlDepth == 1) {
@@ -345,7 +365,10 @@ class Transport {
   }
 
   Future<void> _spawnEvent(xml.XmlElement element) async {
-    final stanza = _buildStanza(element);
+    final stanza = _buildStanza(
+      element,
+      defaultNamespace: Echotils.getNamespace('JABBER_STREAM'),
+    );
 
     bool handled = false;
     final handlers = <Handler>[];
@@ -356,14 +379,12 @@ class Transport {
     }
 
     for (final handler in handlers) {
+      print('Handler ${handler.name} ran...');
       try {
-        if (Handler is FutureCallbackHandler) {
-          await handler.run(stanza);
-        } else {
-          handler.run(stanza);
-        }
-        print('Handler ${handler.name} ran...');
+        await handler.run(stanza);
       } on Exception catch (excp) {
+        print(excp);
+
         /// TODO: catch callback exceptions in here.
         stanza.exception(excp);
       }
@@ -464,9 +485,9 @@ class Transport {
         } else {
           rawData = data.value1.value2!;
         }
-        _sendRaw(rawData);
+        sendRaw(rawData);
       } else if (data.value1.value2 != null) {
-        _sendRaw(data);
+        sendRaw(data);
       }
     });
   }
@@ -475,6 +496,7 @@ class Transport {
   /// connection.
   void _initParser() {
     _xmlDepth = 0;
+    _startStreamHandlerCalled = false;
   }
 
   /// Forcibly close the connection.
@@ -500,9 +522,13 @@ class Transport {
     _eventius.addEvent(listener);
   }
 
-  void registerStanza(StanzaBase stanza) => _rootStanza.add(stanza);
+  void registerStanza(StanzaBase stanza) {
+    print('registering stanza: $stanza');
+    _rootStanza.add(stanza);
+  }
 
   void registerHandler(Handler handler) {
+    print('registered handler: ${handler.name}');
     if (handler.transport == null) {
       handler.transport = this;
       _handlers.add(handler);
@@ -626,7 +652,7 @@ class Transport {
   /// Wraps basic send method declared in this class privately. Helps to send
   /// stanza objects.
   void send(Tuple2<StanzaBase?, String?> data, {bool useFilters = true}) {
-    if (!alwaysSendEverything && !_sessionStarted) {
+    if (!alwaysSendEverything && !sessionStarted) {
       bool passthrough = false;
       if (data.value1 != null && data.value1 is Handshake) {
         passthrough = true;
@@ -639,7 +665,7 @@ class Transport {
     _waitingQueue.add(Tuple2(data, useFilters));
   }
 
-  void _sendRaw(dynamic data) {
+  void sendRaw(dynamic data) {
     String rawData;
     if (data is List<int>) {
       rawData = Echotils.unicode(data);
@@ -660,13 +686,13 @@ class Transport {
 
   /// On session start, queue all pending stanzas to be sent.
   // void _setSessionStart() {
-  //   _sessionStarted = true;
+  //   sessionStarted = true;
   //   for (final stanza in _queuedStanzas.activeItems) {
   //     _waitingQueue.add(() => stanza);
   //   }
   // }
 
-  void _setDisconnected() => _sessionStarted = false;
+  void _setDisconnected() => sessionStarted = false;
 
   Tuple2<String, int> get address => _address;
 
