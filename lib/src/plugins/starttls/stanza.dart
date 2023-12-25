@@ -1,8 +1,7 @@
-import 'package:echox/echox.dart';
-import 'package:echox/src/stream/base.dart';
+part of '../../client.dart';
 
-class StartTLS extends StanzaBase {
-  StartTLS()
+class _StartTLS extends StanzaBase {
+  _StartTLS()
       : super(
           name: 'starttls',
           namespace: Echotils.getNamespace('STARTTLS'),
@@ -14,8 +13,8 @@ class StartTLS extends StanzaBase {
         );
 }
 
-class Proceed extends StanzaBase {
-  Proceed()
+class _Proceed extends StanzaBase {
+  _Proceed()
       : super(
           name: 'proceed',
           namespace: Echotils.getNamespace('STARTTLS'),
@@ -28,8 +27,8 @@ class Proceed extends StanzaBase {
   }
 }
 
-class Failure extends StanzaBase {
-  Failure()
+class _Failure extends StanzaBase {
+  _Failure()
       : super(
           name: 'failure',
           namespace: Echotils.getNamespace('STARTTLS'),

@@ -1,23 +1,19 @@
-import 'package:dartz/dartz.dart';
-
-import 'package:echox/src/handler/callback.dart';
-import 'package:echox/src/plugins/base.dart';
-import 'package:echox/src/plugins/starttls/stanza.dart';
-import 'package:echox/src/stream/base.dart';
-import 'package:echox/src/stream/matcher/xpath.dart';
+part of '../../client.dart';
 
 class FeatureStartTLS extends PluginBase {
-  const FeatureStartTLS({required super.base})
+  const FeatureStartTLS(this._features, {required super.base})
       : super(
           'starttls',
           description: 'Stream Feature: STARTTLS',
           dependencies: const {},
         );
 
+  final StanzaBase _features;
+
   @override
   void initialize() {
-    final proceed = Proceed();
-    final failure = Failure();
+    final proceed = _Proceed();
+    final failure = _Failure();
 
     base.transport.registerHandler(
       FutureCallbackHandler(
@@ -29,10 +25,14 @@ class FeatureStartTLS extends PluginBase {
     base.registerFeature('starttls', _handleStartTLS, restart: true);
     base.transport.registerStanza(proceed);
     base.transport.registerStanza(failure);
+
+    final startTLS = _StartTLS();
+    registerStanzaPlugin(_features, startTLS);
+    _features.enable(startTLS.name);
   }
 
   bool _handleStartTLS(StanzaBase features) {
-    final stanza = StartTLS();
+    final stanza = _StartTLS();
 
     if (base.features.contains('starttls')) {
       return false;
