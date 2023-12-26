@@ -4,6 +4,7 @@ import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/exception.dart';
 import 'package:echox/src/handler/callback.dart';
 import 'package:echox/src/handler/handler.dart';
+import 'package:echox/src/stanza/error.dart';
 import 'package:echox/src/stanza/root.dart';
 import 'package:echox/src/stream/base.dart';
 import 'package:echox/src/stream/matcher/base.dart';
@@ -32,7 +33,7 @@ class IQ extends RootStanza {
   String? _handlerID;
 
   Future<void> sendIQ<T>({
-    FutureOr<T> Function(StanzaBase)? callback,
+    FutureOr<T> Function(StanzaBase stanza)? callback,
     FutureOr<void> Function()? timeoutCallback,
     int timeout = 2000,
   }) async {
@@ -54,13 +55,15 @@ class IQ extends RootStanza {
 
     Future<void> successCallback(StanzaBase stanza) async {
       final type = stanza['type'];
+      final error = StanzaError().copy(stanza.element!.getElement('error'));
+
       if (type == 'result') {
         if (!completer.isCompleted) {
           completer.complete(stanza);
         }
       } else if (type == 'error') {
         if (!completer.isCompleted) {
-          completer.completeError(StanzaException.iq(stanza));
+          completer.completeError(StanzaException.iq(error));
         }
       } else {
         if (callback is Future) {

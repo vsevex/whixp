@@ -48,7 +48,7 @@ class FeatureBind extends PluginBase {
     if (!(_features!['features'] as Map<String, XMLBase>)
         .containsKey('session')) {
       base.transport.sessionStarted = true;
-      base.transport.emit<void>('sessionStart');
+      base.transport.emit('sessionStart');
     }
   }
 }

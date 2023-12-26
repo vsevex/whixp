@@ -22,8 +22,9 @@ class FeatureSession extends PluginBase {
   }
 
   Future<void> _handleSessionStart(StanzaBase features) async {
-    if ((features['session'] as XMLBase)['optional'] != null) {
+    if ((features['session'] as XMLBase)['optional'] as bool) {
       base.transport.sessionStarted = true;
+      base.transport.emit('sessionStart');
       return;
     }
 
@@ -33,7 +34,6 @@ class FeatureSession extends PluginBase {
   }
 
   void _onStartSession(StanzaBase response) {
-    print('session start response: $response');
     base.features.add('session');
 
     base.transport.sessionStarted = true;
