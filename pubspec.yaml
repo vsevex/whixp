@@ -13,7 +13,6 @@ dependencies:
   crypto: ^3.0.3
   dartz: ^0.10.1
   dnsolve: ^1.0.0
-  events_emitter: ^0.5.2
   logger: ^2.0.2
   memoize: ^3.0.0
   meta: ^1.11.0
