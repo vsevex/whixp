@@ -68,6 +68,8 @@ class Whixp extends WhixpBase {
           matcher: XPathMatcher('<features xmlns="$streamNamespace"/>'),
         ),
       );
+
+    transport.defaultLanguage = language;
   }
 
   void reset() {
