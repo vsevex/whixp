@@ -40,20 +40,22 @@ class StanzaException extends WhixpException {
   final String text;
   final String condition;
   final String errorType;
-  final StanzaBase stanza;
+  final XMLBase stanza;
 
   factory StanzaException.timeout(StanzaBase stanza) => StanzaException(
         'Waiting for response from the server is timed out',
         stanza,
         condition: 'remote-server-timeout',
       );
-  factory StanzaException.iq(StanzaBase stanza) => StanzaException(
-        'IQ error is occured',
-        stanza,
-        text: (stanza['error'] as XMLBase)['text'] as String,
-        condition: (stanza['error'] as XMLBase)['condition'] as String,
-        errorType: (stanza['error'] as XMLBase)['type'] as String,
-      );
+  factory StanzaException.iq(XMLBase stanza) {
+    return StanzaException(
+      'IQ error is occured',
+      stanza,
+      text: stanza['text'] as String,
+      condition: stanza['condition'] as String,
+      errorType: stanza['type'] as String,
+    );
+  }
 }
 
 class StringPreparationException extends WhixpException {
