@@ -6,6 +6,7 @@ import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/jid/jid.dart';
 import 'package:echox/src/plugins/base.dart';
 import 'package:echox/src/stanza/iq.dart';
+import 'package:echox/src/stanza/presence.dart';
 import 'package:echox/src/stream/base.dart';
 import 'package:echox/src/transport/transport.dart';
 import 'package:meta/meta.dart';
@@ -120,6 +121,55 @@ abstract class WhixpBase {
     streamFeatureHandlers[name] = Tuple2(handler, restart);
     streamFeatureOrder.add(Tuple2(order, name));
     streamFeatureOrder.sort((a, b) => a.value1.compareTo(b.value1));
+  }
+
+  void sendPresence() {
+    final presence = Presence();
+    print('sending presence: $presence');
+    return presence.send();
+  }
+
+  Presence makePresence({
+    String? presenceShow,
+    String? presenceStatus,
+    String? presencePriority,
+    String? presenceType,
+    String? presenceFrom,
+    String? stanzaType,
+    String? stanzaTo,
+    String? stanzaFrom,
+    String? presenceNick,
+  }) {
+    final presence = _presence(
+      stanzaType: stanzaType,
+      stanzaTo: stanzaTo,
+      stanzaFrom: stanzaFrom,
+    );
+    if (presenceShow != null) {
+      presence['type'] = presenceShow;
+    }
+    if (presenceFrom != null && transport.isComponent) {
+      presence['from'] = transport.boundJID.full;
+    }
+    presence['priority'] = presencePriority;
+    presence['status'] = presenceStatus;
+    presence['nick'] = presenceNick;
+    return presence;
+  }
+
+  Presence _presence({
+    String? stanzaType,
+    String? stanzaTo,
+    String? stanzaFrom,
+  }) {
+    final presence = Presence(
+      transport: transport,
+      stanzaType: stanzaType,
+      stanzaTo: stanzaTo,
+      stanzaFrom: stanzaFrom,
+    );
+    presence['lang'] = transport.defaultLanguage;
+    return presence;
   }
 
   void registerPlugin(String name, PluginBase plugin) {
