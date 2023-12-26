@@ -124,8 +124,7 @@ abstract class WhixpBase {
   }
 
   void sendPresence() {
-    final presence = Presence();
-    print('sending presence: $presence');
+    final presence = makePresence();
     return presence.send();
   }
 

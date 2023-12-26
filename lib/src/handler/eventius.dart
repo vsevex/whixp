@@ -3,16 +3,16 @@ import 'dart:async';
 typedef RemoveListener = void Function();
 
 abstract class _Eventius {
-  late final _events = <String, List<FutureOr<Function>>>{};
+  late final _events = <String, List<FutureOr<void> Function<B>([B?])>>{};
 
-  RemoveListener on<A, B>(
+  RemoveListener on(
     String event,
-    FutureOr<A> Function([B? data]) handler,
+    FutureOr<void> Function<B>([B? data]) handler,
   );
 
-  void once<A, B>(String event, FutureOr<A> Function([B? data]) handler);
+  void once(String event, FutureOr<void> Function<B>([B? data]) handler);
 
-  void emit<B>(String event, [B? data]);
+  FutureOr<void> emit<B>(String event);
 
   void off(String event);
 
@@ -21,13 +21,13 @@ abstract class _Eventius {
 
 class Eventius extends _Eventius {
   @override
-  RemoveListener on<A, B>(
+  RemoveListener on(
     String event,
-    FutureOr<A> Function([B? data]) handler,
+    FutureOr<void> Function<B>([B? data]) handler,
   ) {
     final eventContainer = _events.putIfAbsent(
       event,
-      () => List<FutureOr<A> Function([B])>.empty(),
+      () => <FutureOr<void> Function<B>([B?])>[],
     );
 
     void offThislistener() => eventContainer.remove(handler);
@@ -38,19 +38,22 @@ class Eventius extends _Eventius {
   }
 
   @override
-  void once<A, B>(String event, FutureOr<A> Function([B? data]) handler) {
-    final eventContainer = _events.putIfAbsent(
-      event,
-      () => List<FutureOr<A> Function([B])>.empty(),
-    );
-    eventContainer.add((B? data) {
-      handler(data);
+  void once(String event, FutureOr<void> Function<B>([B? data]) handler) {
+    final eventContainer =
+        _events.putIfAbsent(event, () => <FutureOr<void> Function<B>([B?])>[]);
+    eventContainer.add(<B>([B? data]) async {
+      await handler(data);
       off(event);
     });
   }
 
   @override
-  void emit<B>(String event, [B? data]) {}
+  FutureOr<void> emit<B>(String event, [B? data]) async {
+    final eventContainer = _events[event] ?? [];
+    for (final event in eventContainer) {
+      await event(data);
+    }
+  }
 
   @override
   void off(String event) => _events.remove(event);
@@ -58,5 +61,5 @@ class Eventius extends _Eventius {
   @override
   void clear() => _events.clear();
 
-  Map<String, List<FutureOr<Function>>> get events => _events;
+  Map<String, List<FutureOr>> get events => _events;
 }

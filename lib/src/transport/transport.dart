@@ -8,11 +8,9 @@ import 'package:dartz/dartz.dart';
 import 'package:dnsolve/dnsolve.dart';
 
 import 'package:echox/src/echotils/src/echotils.dart';
-import 'package:echox/src/handler/callback.dart';
 import 'package:echox/src/handler/eventius.dart';
 import 'package:echox/src/handler/handler.dart';
 import 'package:echox/src/jid/jid.dart';
-import 'package:echox/src/plugins/bind/stanza.dart';
 import 'package:echox/src/stanza/handshake.dart';
 import 'package:echox/src/stanza/root.dart';
 import 'package:echox/src/stream/base.dart';
@@ -60,6 +58,8 @@ class Transport {
     _caCerts = caCerts ?? [];
 
     _startStreamHandlerOverrider = startStreamHandler;
+
+    addEventHandler('sessionStart', <_>([_]) => _setSessionStart());
   }
 
   final String _host;
@@ -132,12 +132,7 @@ class Transport {
   void _setup() {
     _reset();
 
-    final setDisconnectedListener =
-        _eventius.createListener<dynamic>('disconnected', (_) {
-      _setDisconnected();
-    });
-
-    _eventius.addEvent(setDisconnectedListener);
+    _eventius.on('disconnected', <String>([_]) => _setDisconnected());
   }
 
   void _reset() {
@@ -514,14 +509,12 @@ class Transport {
 
   void reconnect() {
     print('reconnecting..');
-    Future<void> handler(String? event) async {
+    Future<void> handler<String>([data]) async {
       await Future.delayed(Duration.zero);
       connect();
     }
 
-    final listener =
-        _eventius.createListener('disconnected', handler, disposable: true);
-    _eventius.addEvent(listener);
+    _eventius.once('disconnected', handler);
   }
 
   void registerStanza(StanzaBase stanza) {
@@ -540,11 +533,11 @@ class Transport {
   /// Triggers a custom [event] manually.
   void emit<T>(String event, {T? data}) => _eventius.emit<T>(event, data);
 
-  void addEventHandler<T>(
+  void addEventHandler(
     String event,
-    FutureOr<dynamic> Function(T? data) listener,
+    FutureOr<void> Function<T>([T? data]) listener,
   ) =>
-      _eventius.createListener(event, listener);
+      _eventius.on(event, listener);
 
   void _cancelConnectionAttempt() {
     _currentConnectionAttempt = null;
@@ -689,12 +682,12 @@ class Transport {
   }
 
   /// On session start, queue all pending stanzas to be sent.
-  // void _setSessionStart() {
-  //   sessionStarted = true;
-  //   for (final stanza in _queuedStanzas.activeItems) {
-  //     _waitingQueue.add(() => stanza);
-  //   }
-  // }
+  void _setSessionStart() {
+    sessionStarted = true;
+    // for (final stanza in _que.activeItems) {
+    //   _waitingQueue.add(() => stanza);
+    // }
+  }
 
   void _setDisconnected() => sessionStarted = false;
 
