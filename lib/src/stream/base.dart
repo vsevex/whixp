@@ -808,7 +808,7 @@ class XMLBase {
   ///
   /// In case the attribute has not been set, a [def] value can be returned
   /// instead. An empty string is returned if not other default is supplied.
-  String? _getAttribute(String name, [String def = '']) {
+  String? getAttribute(String name, [String def = '']) {
     if (element == null) return def;
     return element!.getAttribute(name == 'lang' ? 'xml:lang' : name) ?? def;
   }
@@ -897,7 +897,7 @@ class XMLBase {
         } else if (_boolInterfaces.contains(attribute)) {
           return element!.getElement(attribute, namespace: namespace) != null;
         } else {
-          return _getAttribute(attribute);
+          return getAttribute(attribute);
         }
       }
     } else if (_pluginAttributeMapping.containsKey(attribute)) {
