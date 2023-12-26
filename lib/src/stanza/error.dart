@@ -1,12 +1,49 @@
 import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/stream/base.dart';
 
-class StanzaError extends StanzaBase implements Exception {
-  StanzaError()
+class StanzaError extends XMLBase implements Exception {
+  StanzaError({String? conditionNamespace})
       : super(
-          namespace: Echotils.getNamespace('JABBER_STREAM'),
-          interfaces: {'condition', 'text', 'see_other_host'},
-        );
+          name: 'error',
+          namespace: Echotils.getNamespace('CLIENT'),
+          pluginAttribute: 'error',
+          interfaces: {
+            'code',
+            'condition',
+            'text',
+            'type',
+            'gone',
+            'redirect',
+            'by',
+          },
+          subInterfaces: {'text'},
+        ) {
+    _conditionNamespace =
+        conditionNamespace ?? Echotils.getNamespace('STANZAS');
+
+    if (parent != null) {
+      parent!['type'] = 'error';
+    }
+
+    this['type'] = 'cancel';
+    this['condition'] = 'feature-not-implemented';
+
+    addGetters(
+      <Symbol, dynamic Function(dynamic args, XMLBase base)>{
+        const Symbol('condition'): (args, base) {
+          for (final child in base.element!.childElements) {
+            if (child.getAttribute('xmlns') == _conditionNamespace) {
+              final condition = child.localName;
+              return condition;
+            }
+          }
+          return '';
+        },
+        const Symbol('text'): (args, base) => base.getSubText('text'),
+        const Symbol('gone'): (args, base) => base.getSubText('gone'),
+      },
+    );
+  }
 
   final conditions = {
     'bad-format',
@@ -36,7 +73,5 @@ class StanzaError extends StanzaBase implements Exception {
     'unsupported-version',
   };
 
-  final conditionNamespace = Echotils.getNamespace('STREAM');
-
-  
+  late final String _conditionNamespace;
 }
