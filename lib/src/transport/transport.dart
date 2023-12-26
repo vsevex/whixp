@@ -112,6 +112,7 @@ class Transport {
   late String defaultNamespace;
 
   late bool _isConnectionSecured;
+  String? defaultLanguage;
   String? peerDefaultLanguage;
 
   late final List<Handler> _handlers;
@@ -161,6 +162,7 @@ class Transport {
 
     _handlers = <Handler>[];
     _rootStanza.clear();
+    defaultLanguage = null;
 
     sessionBind = false;
 
@@ -536,11 +538,13 @@ class Transport {
   }
 
   /// Triggers a custom [event] manually.
-  void emit<T>(String event, {T? data}) {
-    print('event triggered: $event');
+  void emit<T>(String event, {T? data}) => _eventius.emit<T>(event, data);
 
-    _eventius.emit<T>(event, data);
-  }
+  void addEventHandler<T>(
+    String event,
+    FutureOr<dynamic> Function(T? data) listener,
+  ) =>
+      _eventius.createListener(event, listener);
 
   void _cancelConnectionAttempt() {
     _currentConnectionAttempt = null;
