@@ -1,32 +1,62 @@
 import 'dart:async';
 
-import 'package:events_emitter/events_emitter.dart';
+typedef RemoveListener = void Function();
 
-class Eventius {
-  Eventius([EventEmitter? emitter]) {
-    _emitter = emitter ?? EventEmitter();
-  }
+abstract class _Eventius {
+  late final _events = <String, List<FutureOr<Function>>>{};
 
-  late final EventEmitter _emitter;
-
-  EventListener<T?> createListener<T>(
+  RemoveListener on<A, B>(
     String event,
-    FutureOr<dynamic> Function(T? data) callback, {
-    bool disposable = false,
-  }) =>
-      EventListener<T?>(event, callback, once: disposable);
+    FutureOr<A> Function([B? data]) handler,
+  );
 
-  void addEvent<E>(EventListener<E?> listener) =>
-      _emitter.addEventListener<E?>(listener);
+  void once<A, B>(String event, FutureOr<A> Function([B? data]) handler);
 
-  void removeEventHandler<T>({String? event, EventListener<T?>? listener}) {
-    if (event != null) {
-      _emitter.off<T?>(type: event);
-      return;
-    } else if (listener != null) {
-      _emitter.removeEventListener<T?>(listener);
-    }
+  void emit<B>(String event, [B? data]);
+
+  void off(String event);
+
+  void clear();
+}
+
+class Eventius extends _Eventius {
+  @override
+  RemoveListener on<A, B>(
+    String event,
+    FutureOr<A> Function([B? data]) handler,
+  ) {
+    final eventContainer = _events.putIfAbsent(
+      event,
+      () => List<FutureOr<A> Function([B])>.empty(),
+    );
+
+    void offThislistener() => eventContainer.remove(handler);
+
+    eventContainer.add(handler);
+
+    return () => offThislistener();
   }
 
-  void emit<T>(String event, [T? data]) => _emitter.emit<T?>(event, data);
+  @override
+  void once<A, B>(String event, FutureOr<A> Function([B? data]) handler) {
+    final eventContainer = _events.putIfAbsent(
+      event,
+      () => List<FutureOr<A> Function([B])>.empty(),
+    );
+    eventContainer.add((B? data) {
+      handler(data);
+      off(event);
+    });
+  }
+
+  @override
+  void emit<B>(String event, [B? data]) {}
+
+  @override
+  void off(String event) => _events.remove(event);
+
+  @override
+  void clear() => _events.clear();
+
+  Map<String, List<FutureOr<Function>>> get events => _events;
 }

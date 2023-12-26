@@ -68,14 +68,14 @@ class StanzaBase extends XMLBase {
   }
 
   /// Returns the value of stanza's `to` attribute.
-  JabberIDTemp get to => JabberIDTemp(_getAttribute('to'));
+  JabberIDTemp get to => JabberIDTemp(getAttribute('to'));
 
   /// Set the default `to` attribute of the stanza according to the passed [to]
   /// value.
   void setTo(String to) => setAttribute('to', to);
 
   /// Returns the value of stanza's `from` attribute.
-  JabberIDTemp get from => JabberIDTemp(_getAttribute('from'));
+  JabberIDTemp get from => JabberIDTemp(getAttribute('from'));
 
   /// Set the default `to` attribute of the stanza according to the passed
   /// [frpm] value.

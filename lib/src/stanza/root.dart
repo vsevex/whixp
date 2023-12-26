@@ -6,13 +6,20 @@ import 'package:echox/src/stream/base.dart';
 /// generic [StanzaBase] class.
 abstract class RootStanza extends StanzaBase {
   RootStanza({
+    super.stanzaType,
+    super.stanzaTo,
+    super.stanzaFrom,
+    super.stanzaID,
     super.name,
     super.namespace,
     super.interfaces,
+    super.subInterfaces,
+    super.languageInterfaces,
     super.types,
     super.pluginAttribute,
     super.transport,
     super.setupOverride,
+    super.receive,
   });
 
   /// Creates and sends an error reply.
