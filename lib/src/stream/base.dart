@@ -2,7 +2,7 @@ import 'package:dartz/dartz.dart';
 
 import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/jid/jid.dart';
-import 'package:echox/src/transport/transport.dart';
+import 'package:echox/src/transport.dart';
 import 'package:meta/meta.dart';
 
 import 'package:xml/xml.dart' as xml;
@@ -72,8 +72,8 @@ void registerStanzaPlugin(
 }) {
   final tag = '<${plugin.name} xmlns="${plugin.namespace}"/>';
 
-  stanza._pluginAttributeMapping[plugin._pluginAttribute] = plugin;
-  stanza._pluginTagMapping[tag] = plugin;
+  stanza._pluginAttributeMapping[plugin.pluginAttribute] = plugin;
+  stanza.pluginTagMapping[tag] = plugin;
 
   if (iterable) {
     stanza._pluginIterables.add(plugin);
@@ -85,7 +85,7 @@ void registerStanzaPlugin(
   }
   if (overrides) {
     for (final interface in plugin._overrides) {
-      stanza._pluginOverrides[interface] = plugin._pluginAttribute;
+      stanza._pluginOverrides[interface] = plugin.pluginAttribute;
     }
   }
 }
@@ -143,7 +143,7 @@ class _Multi extends XMLBase {
 
   void setMulti(XMLBase base, List<dynamic> value, [String? language]) {
     final parent = failWithoutParent(base);
-    _deleters[Symbol(_pluginAttribute)]?.call(language, base);
+    _deleters[Symbol(pluginAttribute)]?.call(language, base);
     for (final sub in value) {
       parent.add(Tuple2(null, sub as XMLBase));
     }
@@ -169,8 +169,8 @@ class _Multi extends XMLBase {
         : iterable.where(pluginLanguageFilter(language)).toList();
 
     if (result.isEmpty) {
-      parent._plugins.remove(Tuple2(_pluginAttribute, ''));
-      parent._loadedPlugins.remove(_pluginAttribute);
+      parent._plugins.remove(Tuple2(pluginAttribute, ''));
+      parent._loadedPlugins.remove(pluginAttribute);
 
       parent.element!.children.remove(element);
     } else {
@@ -253,10 +253,10 @@ class XMLBase {
     /// Equal `namespace` to `CLIENT` by default.
     this.namespace = namespace ?? Echotils.getNamespace('CLIENT');
 
-    _pluginAttribute = pluginAttribute ?? 'plugin';
+    this.pluginAttribute = pluginAttribute ?? 'plugin';
     _pluginMultiAttribute = pluginMultiAttribute;
-    _pluginTagMapping = pluginTagMapping ?? <String, XMLBase>{};
     _pluginAttributeMapping = pluginAttributeMapping ?? <String, XMLBase>{};
+    this.pluginTagMapping = pluginTagMapping ?? <String, XMLBase>{};
 
     /// Set the `interfaces` predefined ones.
     _interfaces = interfaces ?? {'type', 'to', 'from', 'id', 'payload'};
@@ -304,11 +304,11 @@ class XMLBase {
     for (final child in element!.childElements) {
       final tag =
           '<${child.qualifiedName} xmlns="${child.getAttribute('xmlns')}"/>';
-      if (_pluginTagMapping.containsKey(tag) &&
-          _pluginTagMapping[tag] != null) {
-        final pluginClass = _pluginTagMapping[tag];
+      if (this.pluginTagMapping.containsKey(tag) &&
+          this.pluginTagMapping[tag] != null) {
+        final pluginClass = this.pluginTagMapping[tag];
         _initPlugin(
-          pluginClass!._pluginAttribute,
+          pluginClass!.pluginAttribute,
           existingXML: child,
           reuse: false,
         );
@@ -329,7 +329,7 @@ class XMLBase {
   /// is being used in an XMPP library.
   late String namespace;
 
-  late final String _pluginAttribute;
+  late final String pluginAttribute;
 
   /// [XMLBase] subclasses that are intended to be an iterable group of items,
   /// the `pluginMultiAttribute` value defines an interface for the parent
@@ -350,7 +350,7 @@ class XMLBase {
 
   /// A mapping of root element tag names (in `$namespaceElementName` format)
   /// to the plugin classes responsible for them.
-  late final Map<String, XMLBase> _pluginTagMapping;
+  late final Map<String, XMLBase> pluginTagMapping;
 
   late final Map<String, XMLBase> _pluginAttributeMapping;
 
@@ -808,7 +808,7 @@ class XMLBase {
   ///
   /// In case the attribute has not been set, a [def] value can be returned
   /// instead. An empty string is returned if not other default is supplied.
-  String? getAttribute(String name, [String def = '']) {
+  String getAttribute(String name, [String def = '']) {
     if (element == null) return def;
     return element!.getAttribute(name == 'lang' ? 'xml:lang' : name) ?? def;
   }
@@ -827,7 +827,7 @@ class XMLBase {
     element!.setAttribute(attribute == 'lang' ? 'xml:lang' : attribute, value);
   }
 
-  void _deleteAttribute(String name) {
+  void deleteAttribute(String name) {
     if (element == null) return;
     if (element!.getAttribute(name) != null) element!.removeAttribute(name);
   }
@@ -966,7 +966,7 @@ class XMLBase {
         } else {
           if (_subInterfaces.contains(attrib)) {
             dynamic subvalue;
-            if (value is JabberIDTemp) {
+            if (value is JabberID) {
               subvalue = value.toString();
             }
             subvalue ??= value;
@@ -990,7 +990,7 @@ class XMLBase {
           } else {
             return setAttribute(
               attrib,
-              (value != null && value is JabberIDTemp)
+              (value != null && value is JabberID)
                   ? value.toString()
                   : value as String?,
             );
@@ -1052,7 +1052,7 @@ class XMLBase {
         } else if (_boolInterfaces.contains(attrib)) {
           return deleteSub(attrib, language: lang);
         } else {
-          return _deleteAttribute(attrib);
+          return deleteAttribute(attrib);
         }
       }
     } else if (_pluginAttributeMapping.containsKey(attrib) &&
@@ -1090,9 +1090,9 @@ class XMLBase {
     if (item.value2 != null) {
       final base = item.value2!;
       element!.children.add(base.element!);
-      if (base == _pluginTagMapping[base._tagName]) {
+      if (base == pluginTagMapping[base._tagName]) {
         _initPlugin(
-          base._pluginAttribute,
+          base.pluginAttribute,
           existingXML: base.element,
           element: base,
           reuse: false,
@@ -1168,7 +1168,7 @@ class XMLBase {
   /// Stanza plugin values may be set using nested [Map]s.
   set _values(Map<String, dynamic> values) {
     final iterableInterfaces = <String>[
-      for (final p in _pluginIterables) p._pluginAttribute,
+      for (final p in _pluginIterables) p.pluginAttribute,
     ];
 
     if (values.containsKey('lang')) {
@@ -1229,8 +1229,8 @@ class XMLBase {
     values['lang'] = this['lang'];
 
     for (final interface in _interfaces) {
-      if (this[interface] is JabberIDTemp) {
-        values[interface] = (this[interface] as JabberIDTemp).jid;
+      if (this[interface] is JabberID) {
+        values[interface] = (this[interface] as JabberID).jid;
       } else {
         values[interface] = this[interface];
       }
@@ -1292,8 +1292,8 @@ class XMLBase {
         name: name,
         namespace: namespace,
         interfaces: _interfaces,
-        pluginAttribute: _pluginAttribute,
-        pluginTagMapping: _pluginTagMapping,
+        pluginAttribute: pluginAttribute,
+        pluginTagMapping: pluginTagMapping,
         pluginAttributeMapping: _pluginAttributeMapping,
         pluginMultiAttribute: _pluginMultiAttribute,
         overrides: _overrides,
