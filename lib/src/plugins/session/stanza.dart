@@ -15,7 +15,7 @@ class Session extends XMLBase {
       <Symbol, dynamic Function(dynamic args, XMLBase base)>{
         const Symbol('optional'): (args, base) {
           if (base.element!.getAttribute('xmlns') == namespace) {
-            return base.element!.getAttribute('optional') != null;
+            return base.element!.getElement('optional') != null;
           }
           return false;
         },

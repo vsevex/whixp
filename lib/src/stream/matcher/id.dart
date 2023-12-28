@@ -45,8 +45,8 @@ class MatchIDSender extends BaseMatcher {
 class CriteriaType {
   const CriteriaType(this.self, this.peer, this.id);
 
-  final JabberIDTemp self;
-  final JabberIDTemp peer;
+  final JabberID self;
+  final JabberID peer;
   final String id;
 
   @override

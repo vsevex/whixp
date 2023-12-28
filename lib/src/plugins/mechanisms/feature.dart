@@ -181,8 +181,10 @@ class FeatureMechanisms extends PluginBase {
       print(error);
 
       /// TODO: disconnect.
+      return false;
     } on StringPreparationException {
       /// TODO: disconnect.
+      return false;
     }
 
     final response = _Auth(transport: base.transport);

@@ -15,7 +15,7 @@ class FeatureSession extends PluginBase {
     final session = Session();
     _iq = IQ(transport: base.transport);
 
-    base.registerFeature('session', _handleSessionStart);
+    base.registerFeature('session', _handleSessionStart, order: 10001);
 
     registerStanzaPlugin(_iq, session);
     registerStanzaPlugin(_features, session);
@@ -37,5 +37,6 @@ class FeatureSession extends PluginBase {
     base.features.add('session');
 
     base.transport.sessionStarted = true;
+    base.transport.emit('sessionStart');
   }
 }

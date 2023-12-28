@@ -37,7 +37,7 @@ class FeatureBind extends PluginBase {
   }
 
   void _onBindResource(StanzaBase response) {
-    base.transport.boundJID = JabberIDTemp(
+    base.transport.boundJID = JabberID(
       (_iq.copy(response.element)['bind'] as XMLBase)['jid'] as String,
     );
 

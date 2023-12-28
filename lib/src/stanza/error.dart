@@ -2,7 +2,7 @@ import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/stream/base.dart';
 
 class StanzaError extends XMLBase implements Exception {
-  StanzaError({String? conditionNamespace})
+  StanzaError({String? conditionNamespace, super.includeNamespace = false})
       : super(
           name: 'error',
           namespace: Echotils.getNamespace('CLIENT'),

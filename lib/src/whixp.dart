@@ -8,7 +8,8 @@ import 'package:echox/src/plugins/base.dart';
 import 'package:echox/src/stanza/iq.dart';
 import 'package:echox/src/stanza/presence.dart';
 import 'package:echox/src/stream/base.dart';
-import 'package:echox/src/transport/transport.dart';
+import 'package:echox/src/transport.dart';
+
 import 'package:meta/meta.dart';
 
 abstract class WhixpBase {
@@ -25,8 +26,8 @@ abstract class WhixpBase {
   }) {
     streamNamespace = Echotils.getNamespace('JABBER_STREAM');
     this.defaultNamespace = defaultNamespace ?? Echotils.getNamespace('CLIENT');
-    requestedJID = JabberIDTemp(jabberID);
-    final boundJID = JabberIDTemp(jabberID);
+    requestedJID = JabberID(jabberID);
+    final boundJID = JabberID(jabberID);
     pluginManager = PluginManager();
 
     /// Assignee for later.
@@ -90,7 +91,7 @@ abstract class WhixpBase {
   late final String defaultNamespace;
 
   /// The JabberID (JID) requested for this connection.
-  late final JabberIDTemp requestedJID;
+  late final JabberID requestedJID;
 
   /// The maximum number of consecutive `see-other-host` redirections that will
   /// be followed before quitting.

@@ -15,6 +15,7 @@ abstract class RootStanza extends StanzaBase {
     super.interfaces,
     super.subInterfaces,
     super.languageInterfaces,
+    super.includeNamespace = true,
     super.types,
     super.pluginAttribute,
     super.transport,

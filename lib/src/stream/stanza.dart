@@ -6,9 +6,9 @@ class StanzaBase extends XMLBase {
     String? stanzaTo,
     String? stanzaFrom,
     String? stanzaID,
+    this.types = const <String>{},
     super.receive,
     super.transport,
-    Set<String> types = const <String>{},
     super.name,
     super.namespace,
     super.pluginAttribute,
@@ -31,8 +31,6 @@ class StanzaBase extends XMLBase {
     super.element,
     super.parent,
   }) {
-    _types = types;
-
     if (transport != null) {
       namespace = transport!.defaultNamespace;
     }
@@ -41,10 +39,10 @@ class StanzaBase extends XMLBase {
       this['type'] = stanzaType;
     }
     if (stanzaTo != null) {
-      this['to'] = JabberIDTemp(stanzaTo);
+      this['to'] = JabberID(stanzaTo);
     }
     if (stanzaFrom != null) {
-      this['from'] = JabberIDTemp(stanzaFrom);
+      this['from'] = JabberID(stanzaFrom);
     }
     if (stanzaID != null) {
       this['id'] = stanzaID;
@@ -58,24 +56,24 @@ class StanzaBase extends XMLBase {
     addDeleters({const Symbol('payload'): (_, __) => deletePayload()});
   }
 
-  late Set<String> _types;
+  late Set<String> types;
 
   /// Sets the stanza's `type` attribute.
   void setType(String value) {
-    if (_types.contains(value)) {
+    if (types.contains(value)) {
       element!.setAttribute('type', value);
     }
   }
 
   /// Returns the value of stanza's `to` attribute.
-  JabberIDTemp get to => JabberIDTemp(getAttribute('to'));
+  JabberID get to => JabberID(getAttribute('to'));
 
   /// Set the default `to` attribute of the stanza according to the passed [to]
   /// value.
   void setTo(String to) => setAttribute('to', to);
 
   /// Returns the value of stanza's `from` attribute.
-  JabberIDTemp get from => JabberIDTemp(getAttribute('from'));
+  JabberID get from => JabberID(getAttribute('from'));
 
   /// Set the default `to` attribute of the stanza according to the passed
   /// [frpm] value.
@@ -102,8 +100,8 @@ class StanzaBase extends XMLBase {
   /// for the reply content.
   ///
   /// For client streams, the `from` attribute is removed.
-  StanzaBase reply({bool clear = true}) {
-    final newStanza = copy();
+  S reply<S extends StanzaBase>({required S copiedStanza, bool clear = true}) {
+    final newStanza = copiedStanza;
 
     if (transport != null && transport!.isComponent) {
       newStanza['from'] = this['to'];
@@ -159,8 +157,8 @@ class StanzaBase extends XMLBase {
         namespace: namespace,
         interfaces: _interfaces,
         receive: receive,
-        pluginAttribute: _pluginAttribute,
-        pluginTagMapping: _pluginTagMapping,
+        pluginAttribute: pluginAttribute,
+        pluginTagMapping: pluginTagMapping,
         pluginAttributeMapping: _pluginAttributeMapping,
         pluginMultiAttribute: _pluginMultiAttribute,
         overrides: _overrides,

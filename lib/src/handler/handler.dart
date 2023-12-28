@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:echox/src/stream/base.dart';
 import 'package:echox/src/stream/matcher/base.dart';
-import 'package:echox/src/transport/transport.dart';
+import 'package:echox/src/transport.dart';
 
 abstract class Handler {
   Handler(this.name, {required this.matcher, this.transport});
