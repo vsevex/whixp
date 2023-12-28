@@ -5,14 +5,14 @@ import 'package:test/test.dart';
 void main() {
   group('verify that the JabberID class can parse and manipulate JIDs', () {
     test('must properly check jid equality', () {
-      final jid1 = JabberIDTemp('user@domain/resource');
-      final jid2 = JabberIDTemp('user@domain/resource');
+      final jid1 = JabberID('user@domain/resource');
+      final jid2 = JabberID('user@domain/resource');
 
       expect(jid1, equals(jid2));
     });
 
     test('changing Jabber ID using aliases for domain', () {
-      final jid = JabberIDTemp('user@domain/resource');
+      final jid = JabberID('user@domain/resource');
       jid.server = 'anotherserver';
       expect(jid.domain, equals('anotherserver'));
       jid.host = 'anotherone';
@@ -20,7 +20,7 @@ void main() {
     });
 
     test('setting the full Jaber ID with a user portion', () {
-      final jid = JabberIDTemp('user@domain/resource');
+      final jid = JabberID('user@domain/resource');
       jid.full = 'someotheruser@otherdomain/otherresource';
       expect(jid.node, equals('someotheruser'));
       expect(jid.domain, equals('otherdomain'));
@@ -32,7 +32,7 @@ void main() {
     test(
       'setting the full Jabber ID without a user portion and with a resource',
       () {
-        final jid = JabberIDTemp('user@domain/resource');
+        final jid = JabberID('user@domain/resource');
         jid.full = 'otherdomain/resource';
         expect(jid.node, isEmpty);
         expect(jid.domain, equals('otherdomain'));
@@ -44,7 +44,7 @@ void main() {
     test(
       'setting the full Jabber ID without a user portion and without a resource',
       () {
-        final jid = JabberIDTemp('user@domain/resource');
+        final jid = JabberID('user@domain/resource');
         jid.full = 'otherdomain';
         expect(jid.node, isEmpty);
         expect(jid.domain, equals('otherdomain'));
@@ -54,7 +54,7 @@ void main() {
     );
 
     test('setting the bare Jabber ID with a user', () {
-      final jid = JabberIDTemp('user@domain/resource');
+      final jid = JabberID('user@domain/resource');
       jid.bare = 'otheruser@otherdomain';
       expect(jid.node, equals('otheruser'));
       expect(jid.local, equals('otheruser'));
@@ -64,7 +64,7 @@ void main() {
     });
 
     test('setting the bare Jabber ID without a user', () {
-      final jid = JabberIDTemp('user@domain/resource');
+      final jid = JabberID('user@domain/resource');
       jid.bare = 'otherdomain';
       expect(jid.node, isEmpty);
       expect(jid.local, isEmpty);
@@ -74,7 +74,7 @@ void main() {
     });
 
     test('Jabber ID without a resource', () {
-      final jid = JabberIDTemp('user@someserver');
+      final jid = JabberID('user@someserver');
       expect(jid.node, equals('user'));
       expect(jid.local, equals('user'));
       expect(jid.domain, equals('someserver'));
