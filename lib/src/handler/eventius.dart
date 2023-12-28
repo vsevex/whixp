@@ -1,18 +1,17 @@
 import 'dart:async';
 
-typedef RemoveListener = void Function();
+typedef _RemoveListener = void Function();
+
+typedef _Handler<B> = FutureOr<void> Function(B? data);
 
 abstract class _Eventius {
-  late final _events = <String, List<FutureOr<void> Function<B>([B?])>>{};
+  late final _events = <String, List<dynamic>>{};
 
-  RemoveListener on(
-    String event,
-    FutureOr<void> Function<B>([B? data]) handler,
-  );
+  _RemoveListener on<B>(String event, _Handler handler);
 
-  void once(String event, FutureOr<void> Function<B>([B? data]) handler);
+  void once<A>(String event, _Handler handler);
 
-  FutureOr<void> emit<B>(String event);
+  FutureOr<void> emit<B>(String event, [B? data]);
 
   void off(String event);
 
@@ -21,37 +20,42 @@ abstract class _Eventius {
 
 class Eventius extends _Eventius {
   @override
-  RemoveListener on(
-    String event,
-    FutureOr<void> Function<B>([B? data]) handler,
-  ) {
-    final eventContainer = _events.putIfAbsent(
-      event,
-      () => <FutureOr<void> Function<B>([B?])>[],
-    );
+  _RemoveListener on<B>(String event, _Handler<B> handler) {
+    final List<_Handler<B>> handlerContainer =
+        _events.putIfAbsent(event, () => <_Handler<B>>[]) as List<_Handler<B>>;
 
-    void offThislistener() => eventContainer.remove(handler);
+    void offThislistener() => handlerContainer.remove(handler);
 
-    eventContainer.add(handler);
+    handlerContainer.add(handler);
 
     return () => offThislistener();
   }
 
   @override
-  void once(String event, FutureOr<void> Function<B>([B? data]) handler) {
-    final eventContainer =
-        _events.putIfAbsent(event, () => <FutureOr<void> Function<B>([B?])>[]);
-    eventContainer.add(<B>([B? data]) async {
-      await handler(data);
-      off(event);
-    });
+  void once<A>(String event, _Handler<A> handler) {
+    final handlerContainer = _events.putIfAbsent(event, () => <_Handler<A>>[]);
+    handlerContainer.add(
+      (A? data) async {
+        if (handler is Future) {
+          await handler(data);
+        } else {
+          handler(data);
+        }
+        off(event);
+      },
+    );
   }
 
   @override
   FutureOr<void> emit<B>(String event, [B? data]) async {
-    final eventContainer = _events[event] ?? [];
-    for (final event in eventContainer) {
-      await event(data);
+    final List<_Handler<B>> handlerContainer =
+        (_events[event] as List<_Handler<B>>?) ?? [];
+    for (final handler in handlerContainer) {
+      if (handler is Future) {
+        await handler(data);
+      } else {
+        handler(data);
+      }
     }
   }
 
