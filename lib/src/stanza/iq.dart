@@ -10,9 +10,14 @@ import 'package:echox/src/stream/base.dart';
 import 'package:echox/src/stream/matcher/base.dart';
 import 'package:echox/src/stream/matcher/id.dart';
 
+import 'package:xml/xml.dart' as xml;
+
 class IQ extends RootStanza {
-  IQ({super.transport, bool generateID = true})
-      : super(
+  IQ({
+    super.transport,
+    bool generateID = true,
+    super.includeNamespace = false,
+  }) : super(
           name: 'iq',
           namespace: Echotils.getNamespace('CLIENT'),
           interfaces: {'type', 'to', 'from', 'id', 'query'},
@@ -20,7 +25,7 @@ class IQ extends RootStanza {
           pluginAttribute: 'iq',
         ) {
     if (generateID) {
-      if (!receive && this['id'] == '') {
+      if (!receive && (this['id'] == '' || this['id'] == null)) {
         if (transport != null) {
           this['id'] = Echotils.getUniqueId();
         } else {
@@ -28,6 +33,56 @@ class IQ extends RootStanza {
         }
       }
     }
+
+    addSetters(
+      <Symbol, void Function(dynamic value, dynamic args, XMLBase base)>{
+        const Symbol('query'): (value, args, base) {
+          xml.XmlElement? query = base.element!.getElement(value as String);
+          if (query == null && value.isNotEmpty) {
+            final plugin = base
+                .pluginTagMapping['<${base.name} xmlns="${base.namespace}"/>'];
+            if (plugin != null) {
+              base.enable(plugin.pluginAttribute);
+            } else {
+              base.clear();
+              query = Echotils.xmlElement('query', namespace: value);
+              base.element!.children.add(query);
+            }
+          }
+        },
+      },
+    );
+
+    addGetters(
+      <Symbol, String? Function(dynamic args, XMLBase base)>{
+        const Symbol('query'): (args, base) {
+          for (final child in base.element!.childElements) {
+            if (child.qualifiedName.endsWith('query')) {
+              final namespace = child.getAttribute('xmlns');
+              return namespace;
+            }
+          }
+          return '';
+        },
+      },
+    );
+
+    addDeleters(
+      <Symbol, void Function(dynamic args, XMLBase base)>{
+        const Symbol('query'): (args, base) {
+          final elements = <xml.XmlElement>[];
+          for (final child in base.element!.childElements) {
+            if (child.qualifiedName.endsWith('query')) {
+              elements.add(child);
+            }
+          }
+
+          for (final element in elements) {
+            base.element!.children.removeWhere((el) => el == element);
+          }
+        },
+      },
+    );
   }
 
   String? _handlerID;
@@ -55,13 +110,13 @@ class IQ extends RootStanza {
 
     Future<void> successCallback(StanzaBase stanza) async {
       final type = stanza['type'];
-      final error = StanzaError().copy(stanza.element!.getElement('error'));
 
       if (type == 'result') {
         if (!completer.isCompleted) {
           completer.complete(stanza);
         }
       } else if (type == 'error') {
+        final error = StanzaError().copy(stanza.element!.getElement('error'));
         if (!completer.isCompleted) {
           completer.completeError(StanzaException.iq(error));
         }
@@ -99,5 +154,16 @@ class IQ extends RootStanza {
       transport!.registerHandler(handler!);
     }
     send();
+  }
+
+  IQ replyIQ({bool clear = true}) {
+    final iq = super.reply<IQ>(copiedStanza: copy(), clear: clear);
+    iq['type'] = 'result';
+    return iq;
+  }
+
+  @override
+  IQ copy([xml.XmlElement? element, XMLBase? parent, bool receive = false]) {
+    return IQ(transport: transport);
   }
 }
