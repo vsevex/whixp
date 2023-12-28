@@ -49,7 +49,7 @@ void main() {
       stanza.setFrom('lerko@hert.org');
       stanza.setPayload([Echotils.xmlElement('foo', namespace: 'test')]);
 
-      final reply = stanza.reply();
+      final reply = stanza.reply(copiedStanza: stanza);
 
       expect(reply['to'], equals('lerko@hert.org'));
       expect(reply.payload, isEmpty);
