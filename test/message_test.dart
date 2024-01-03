@@ -1,4 +1,4 @@
-import 'package:echox/src/stanza/message.dart';
+import 'package:echox/src/stream/base.dart';
 
 import 'package:test/test.dart';
 

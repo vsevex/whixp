@@ -1,6 +1,5 @@
 import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/stanza/error.dart';
-import 'package:echox/src/stanza/iq.dart';
 import 'package:echox/src/stream/base.dart';
 
 import 'package:test/test.dart';
@@ -52,6 +51,7 @@ void main() {
       final iq = IQ();
       iq['to'] = 'vsevex@localhost';
       iq['type'] = 'get';
+
       final newIQ = iq.replyIQ();
 
       check(newIQ, '<iq id="0" type="result"/>');

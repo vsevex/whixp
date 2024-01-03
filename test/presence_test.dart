@@ -1,4 +1,5 @@
-import 'package:echox/src/stanza/presence.dart';
+import 'package:echox/src/stream/base.dart';
+
 import 'package:test/test.dart';
 
 import 'test_base.dart';

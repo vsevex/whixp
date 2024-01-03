@@ -1,4 +1,3 @@
-import 'package:echox/src/stanza/iq.dart';
 import 'package:echox/src/stanza/roster.dart';
 import 'package:echox/src/stream/base.dart';
 
@@ -36,8 +35,8 @@ void main() {
       };
 
       check(
-        iq,
-        '<iq><query xmlns="jabber:iq:roster"><item jid="vsevex@example.com" name="Vsevolod" subscription="both"><group>cart</group><group>hella</group></item><item jid="alyosha@example.com" name="Alyosha" subscription="both"><group>gup</group></item></query></iq>',
+        iq['roster'] as XMLBase,
+        '<query xmlns="jabber:iq:roster"><item jid="vsevex@example.com" name="Vsevolod" subscription="both"><group>cart</group><group>hella</group></item><item jid="alyosha@example.com" name="Alyosha" subscription="both"><group>gup</group></item></query>',
       );
     });
 
@@ -94,7 +93,11 @@ void main() {
       };
 
       (iq['roster'] as XMLBase).delete('items');
-      check(iq, '<iq><query xmlns="jabber:iq:roster"/></iq>"');
+
+      check(
+        iq['roster'] as XMLBase,
+        '<query xmlns="jabber:iq:roster"/>"',
+      );
     });
   });
 }
