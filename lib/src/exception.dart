@@ -47,6 +47,12 @@ class StanzaException extends WhixpException {
         stanza,
         condition: 'remote-server-timeout',
       );
+  factory StanzaException.serviceUnavailable(StanzaBase stanza) =>
+      StanzaException(
+        'Received service unavailable stanza',
+        stanza,
+        condition: stanza['condition'] as String,
+      );
   factory StanzaException.iq(XMLBase stanza) {
     return StanzaException(
       'IQ error is occured',
@@ -56,6 +62,19 @@ class StanzaException extends WhixpException {
       errorType: stanza['type'] as String,
     );
   }
+
+  String get _format {
+    final text = StringBuffer('$errorType: $condition');
+
+    if (this.text.isNotEmpty) {
+      text.write(': ${this.text}');
+    }
+
+    return text.toString();
+  }
+
+  @override
+  String toString() => _format;
 }
 
 class StringPreparationException extends WhixpException {
