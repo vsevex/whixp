@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'dart:mirrors' as mirrors;
 import 'dart:typed_data';
 
-import 'package:echox/src/echotils/src/status.dart';
 import 'package:echox/src/escaper/escaper.dart';
 
 import 'package:xml/xml.dart' as xml;
@@ -587,35 +586,4 @@ class Echotils {
       throw ArgumentError("Attribute '$attribute' not found");
     }
   }
-}
-
-/// Helps to emit status information.
-///
-/// The [StatusEmitter] class is used to represent and emit status updates. It
-/// contains information about the status itself and an optional description
-/// providing additional context and information.
-///
-/// Status updates are emitted using the [EventEmitter] class, which is often
-/// extended by the main class where status updates are relevant.
-///
-/// ### Example:
-/// ```dart
-/// final status = StatusEmitter(EchoStatus.connected, 'EchoX client connected.');
-/// log(status); /// outputs "Status: Connected (description: Client connected.)";
-/// ```
-class StatusEmitter {
-  /// Creates a [StatusEmitter] instance with the given [status] and optional
-  /// [description].
-  ///
-  /// The [status] parameter represents the status of the emitter, and
-  /// [description] can provide additional information about the status.
-  const StatusEmitter(this.status, [this.description]);
-
-  /// The status information.
-  final EchoStatus status;
-  final String? description;
-
-  @override
-  String toString() =>
-      '''Status: $status${description != null ? ' (description: $description)' : ''}''';
 }

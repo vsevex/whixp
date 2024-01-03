@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:echox/src/client.dart';
+import 'package:echox/src/whixp.dart';
 
 import 'package:synchronized/synchronized.dart';
 
@@ -64,14 +64,12 @@ abstract class PluginBase {
     required this.base,
     this.description = '',
     this.dependencies = const <String>{},
-    this.config = const <String, dynamic>{},
   });
 
   final String name;
   final String description;
   final Set<String> dependencies;
-  final Map<String, dynamic> config;
-  final Whixp base;
+  final WhixpBase base;
 
   void initialize();
 }
