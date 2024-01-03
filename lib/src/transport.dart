@@ -6,25 +6,24 @@ import 'dart:math' as math;
 import 'package:connecta/connecta.dart';
 import 'package:dartz/dartz.dart';
 import 'package:dnsolve/dnsolve.dart';
-import 'package:echox/src/client.dart';
 
 import 'package:echox/src/echotils/src/echotils.dart';
 import 'package:echox/src/handler/eventius.dart';
 import 'package:echox/src/handler/handler.dart';
 import 'package:echox/src/jid/jid.dart';
 import 'package:echox/src/stanza/handshake.dart';
-import 'package:echox/src/stanza/root.dart';
 import 'package:echox/src/stream/base.dart';
+import 'package:echox/src/whixp.dart';
+
 import 'package:meta/meta.dart';
 
 import 'package:xml/xml.dart' as xml;
 import 'package:xml/xml_events.dart' as parser;
 
-typedef SyncFilter = Function(StanzaBase stanza, [StanzaBase? base]);
-typedef AsyncFilter = Future Function(
-  StanzaBase stanza, [
-  Future<StanzaBase>? callback,
-]);
+enum FilterMode { iN, out, outSync }
+
+typedef SyncFilter = StanzaBase Function(StanzaBase stanza);
+typedef AsyncFilter = Future<StanzaBase> Function(StanzaBase stanza);
 
 class Transport {
   Transport(
@@ -36,6 +35,7 @@ class Transport {
     bool debug = true,
     bool useTLS = false,
     bool disableStartTLS = false,
+    this.maxReconnectionAttempt = 3,
     required this.boundJID,
     List<Tuple2<String, String?>>? caCerts,
     this.connectionTimeout,
@@ -63,8 +63,8 @@ class Transport {
     addEventHandler('sessionStart', <_>([_]) => _setSessionStart());
   }
 
-  final String _host;
-  late String _serviceName;
+  late final String _host;
+  late String serviceName;
 
   /// Defaults to 5222;
   late int _port;
@@ -80,25 +80,27 @@ class Transport {
   late bool _useIPv6;
   String? _dnsService;
 
-  final _waitingQueue =
-      StreamController<Tuple2<Tuple2<StanzaBase?, String?>, bool>>.broadcast();
+  late final Stream<Tuple2<StanzaBase, bool>> _waitingQueue;
+  final _waitingQueueController =
+      StreamController<Tuple2<StanzaBase, bool>>.broadcast();
+  final _queuedStanzas = <Tuple2<StanzaBase, bool>>[];
   late async.Completer<dynamic>? _runOutFilters;
   async.Completer<void>? _currentConnectionAttempt;
+  int _currentConnectionAttemptCount = 0;
   late async.Completer<void> _abortCompleter;
-  late bool alwaysSendEverything;
-  String? _disconnectReason;
   late int _xmlDepth;
 
   /// in milliseconds.
-  final int? connectionTimeout;
+  late final int? connectionTimeout;
   Iterator<Tuple3<String, String, int>>? _dnsAnswers;
   late String streamHeader;
+  late String streamFooter;
   void Function(List<parser.XmlEventAttribute> attributes, Transport transport)?
       _startStreamHandlerOverrider;
 
   final _slowTasks = <Task>[];
 
-  bool isComponent;
+  bool isComponent = false;
 
   /// The backoff of the connection attempt (increases exponentially after each
   /// failure). Represented in milliseconds;
@@ -123,20 +125,25 @@ class Transport {
   /// The JabberID (JID) used by this connection, as set after session binding.
   ///
   /// This may even be a different bare JID than what was requested.
-  JabberID boundJID;
+  late JabberID boundJID;
 
   late bool _startStreamHandlerCalled;
+  late int maxReconnectionAttempt;
 
-  final _filters = <String, List<Tuple2<SyncFilter?, AsyncFilter?>>>{};
+  late int _redirectAttempts;
+
+  io.ConnectionTask<io.Socket>? _connectionTask;
+
+  final _filters = <FilterMode, List<Tuple2<SyncFilter?, AsyncFilter?>>>{};
 
   void _setup() {
     _reset();
 
-    _eventius.on('disconnected', <_>(_) => _setDisconnected());
+    _eventius.on('disconnected', (_) => _setDisconnected());
   }
 
   void _reset() {
-    _serviceName = '';
+    serviceName = '';
     _address = Tuple2(_host, _port);
 
     _eventius = Eventius();
@@ -151,7 +158,6 @@ class Transport {
     _xmlDepth = 0;
     _eventWhenConnected = 'connected';
 
-    alwaysSendEverything = false;
     defaultNamespace = '';
     peerDefaultLanguage = null;
 
@@ -164,12 +170,17 @@ class Transport {
     _filters
       ..clear()
       ..addAll({
-        'in': <Tuple2<SyncFilter, AsyncFilter>>[],
-        'out': <Tuple2<SyncFilter, AsyncFilter>>[],
-        'outSync': <Tuple2<SyncFilter, AsyncFilter>>[],
+        FilterMode.iN: <Tuple2<SyncFilter?, AsyncFilter?>>[],
+        FilterMode.out: <Tuple2<SyncFilter?, AsyncFilter?>>[],
+        FilterMode.outSync: <Tuple2<SyncFilter?, AsyncFilter?>>[],
       });
+
     _slowTasks.clear();
     _connecta = null;
+    _connectionTask = null;
+
+    _waitingQueue = _waitingQueueController.stream;
+    _redirectAttempts = 0;
   }
 
   void connect() {
@@ -178,7 +189,6 @@ class Transport {
       _runOutFilters!.complete(runFilters());
     }
 
-    _disconnectReason = null;
     _cancelConnectionAttempt();
     _connectFutureWait = 0;
 
@@ -192,7 +202,6 @@ class Transport {
     _eventWhenConnected = 'connected';
 
     if (_connectFutureWait > 0) {
-      emit<int>('reconnectDelay', data: _connectFutureWait);
       await Future.delayed(Duration(milliseconds: _connectFutureWait));
     }
     final record = await _pickDNSAnswer(_defaultDomain, service: _dnsService);
@@ -203,7 +212,7 @@ class Transport {
       final port = record.value3;
 
       _address = Tuple2(address, port);
-      _serviceName = host;
+      serviceName = host;
     } else {
       _dnsAnswers = null;
     }
@@ -247,7 +256,7 @@ class Transport {
       print(
         'trying to connect to ${_address.value1} on port ${_address.value2}',
       );
-      await _connecta!.connect(
+      _connectionTask = await _connecta!.createTask(
         ConnectaListener(
           onData: _dataReceived,
           onError: (error, trace) => print(error),
@@ -257,11 +266,16 @@ class Transport {
       _connectionMade();
     } on ConnectaException catch (error) {
       emit<Object>('connectionFailed', data: error.message);
-      _rescheduleConnectionAttempt();
+      final result = _rescheduleConnectionAttempt();
+      if (!result) {
+        await disconnect();
+      }
     } on Exception catch (error) {
-      print(error);
       emit<Object>('connectionFailed', data: error);
-      _rescheduleConnectionAttempt();
+      final result = _rescheduleConnectionAttempt();
+      if (!result) {
+        await disconnect();
+      }
     }
 
     _isConnectionSecured = _connecta!.isConnectionSecure;
@@ -327,13 +341,25 @@ class Transport {
       if (event.name == 'stream:stream' && wrapped) return;
       _xmlDepth--;
       if (_xmlDepth == 0) {
+        abort();
+        return;
       } else if (_xmlDepth == 1) {
-        final index = data.lastIndexOf('<${event.name}');
+        int index = data.lastIndexOf('<${event.name}');
+        if (index > event.stop!) {
+          index = data.indexOf('<${event.name}');
+        }
         final substring = data.substring(index, event.stop);
         if (substring.isEmpty) return;
         final element = xml.XmlDocument.parse(substring).rootElement;
         if (element.getAttribute('xmlns') == null) {
-          element.setAttribute('xmlns', Echotils.getNamespace('JABBER_STREAM'));
+          if (element.qualifiedName == 'message') {
+            element.setAttribute('xmlns', Echotils.getNamespace('CLIENT'));
+          } else {
+            element.setAttribute(
+              'xmlns',
+              Echotils.getNamespace('JABBER_STREAM'),
+            );
+          }
         }
         await _spawnEvent(element);
       }
@@ -347,6 +373,18 @@ class Transport {
           onEndElement: onEndElement,
         )
         .listen((events) async {
+      if (events.length == 1) {
+        final event = events.first;
+        if (event is parser.XmlStartElementEvent &&
+            event.name == 'stream:stream') {
+          abort();
+          return;
+        } else if (event is parser.XmlEndElementEvent &&
+            event.name == 'stream:stream') {
+          abort();
+          return;
+        }
+      }
       if (events.length == 1) {
         final element = xml.XmlDocument.parse(data).rootElement;
         await _spawnEvent(element);
@@ -362,10 +400,7 @@ class Transport {
   }
 
   Future<void> _spawnEvent(xml.XmlElement element) async {
-    final stanza = _buildStanza(
-      element,
-      defaultNamespace: Echotils.getNamespace('JABBER_STREAM'),
-    );
+    final stanza = _buildStanza(element);
 
     bool handled = false;
     final handlers = <Handler>[];
@@ -389,22 +424,18 @@ class Transport {
     }
 
     if (!handled) {
-      stanza.unhandled();
+      stanza.unhandled(this);
     }
   }
 
-  StanzaBase _buildStanza(xml.XmlElement element, {String? defaultNamespace}) {
-    final namespace = defaultNamespace ?? this.defaultNamespace;
-
+  StanzaBase _buildStanza(xml.XmlElement element) {
     StanzaBase stanzaClass = StanzaBase(element: element, receive: true);
 
     String tag() =>
         '<${element.localName} xmlns="${element.getAttribute('xmlns')}"/>';
 
     for (final stanza in _rootStanza) {
-      if ((element.localName == stanza.name &&
-              element.getAttribute('xmlns') == namespace) ||
-          tag() == stanza.tag) {
+      if (tag() == stanza.tag) {
         stanzaClass = stanza.copy(element, null, true);
         break;
       }
@@ -427,8 +458,7 @@ class Transport {
     if (data == null && !completer.isCompleted) {
       return;
     }
-    for (final filter
-        in _filters['out'] ?? <Tuple2<SyncFilter?, AsyncFilter?>>[]) {
+    for (final filter in _filters[FilterMode.out]!) {
       if (alreadyUsed.contains(filter)) {
         continue;
       }
@@ -444,47 +474,37 @@ class Transport {
   }
 
   Future<void> runFilters() async {
-    _waitingQueue.stream.listen((data) {
-      if (data.value1.value1 != null) {
-        if (data.value2) {
-          final alreadyRunFilters = <Tuple2<SyncFilter?, AsyncFilter?>>{};
-          for (final filter
-              in _filters['out'] ?? <Tuple2<SyncFilter?, AsyncFilter?>>[]) {
-            alreadyRunFilters.add(filter);
-            if (filter.value2 != null) {
-              final task =
-                  Task(() => filter.value2!.call(data.value1 as StanzaBase));
-              try {
-                // data = await task.timeout(const Duration(seconds: 1)).run();
+    _waitingQueueController.stream.listen((data) async {
+      StanzaBase datum = data.value1;
+      final useFilters = data.value2;
+      if (useFilters) {
+        final alreadyRunFilters = <Tuple2<SyncFilter?, AsyncFilter?>>{};
+        for (final filter in _filters[FilterMode.out]!) {
+          alreadyRunFilters.add(filter);
+          if (filter.value2 != null) {
+            final task = Task(() => filter.value2!.call(data.value1));
+            try {
+              datum = await task.timeout(const Duration(seconds: 1)).run();
+            } on async.TimeoutException {
+              // Handle the case where the timeout occurred
+              print('Timeout occurred and add to slow tasks');
 
-                // Handle the completed value
-              } on async.TimeoutException {
-                // Handle the case where the timeout occurred
-                print('Timeout occurred and add to slow tasks');
-
-                _slowSend(task, alreadyRunFilters);
-              }
-            } else if (data.value1 is StanzaBase) {
-              filter.value1!.call(data.value1 as StanzaBase);
+              _slowSend(task, alreadyRunFilters);
             }
+          } else {
+            datum = filter.value1!.call(datum);
           }
         }
       }
-      if (data.value1.value1 != null) {
-        if (data.value2) {
-          for (final filter in _filters['outSync']!) {
-            filter.value1!.call(data.value1 as StanzaBase);
-          }
+
+      if (useFilters) {
+        for (final filter in _filters[FilterMode.outSync]!) {
+          filter.value1!.call(datum);
         }
-        late String rawData;
-        if (data.value1.value1 != null) {
-          rawData = data.value1.value1.toString();
-        } else {
-          rawData = data.value1.value2!;
-        }
+
+        final rawData = datum.toString();
+
         sendRaw(rawData);
-      } else if (data.value1.value2 != null) {
-        sendRaw(data);
       }
     });
   }
@@ -502,6 +522,7 @@ class Transport {
       _abortCompleter.complete(_connecta!.socket.flush());
       if (_abortCompleter.isCompleted) {
         _cancelConnectionAttempt();
+        _connecta = null;
         emit('killed');
       }
     }
@@ -509,12 +530,54 @@ class Transport {
 
   void reconnect() {
     print('reconnecting..');
-    Future<void> handler<String>([data]) async {
+    Future<void> handler(String? data) async {
       await Future.delayed(Duration.zero);
       connect();
     }
 
-    _eventius.once('disconnected', handler);
+    _eventius.once<String>('disconnected', handler);
+  }
+
+  Future<void> disconnect({String? reason, int timeout = 15000}) async {
+    print('disconnect is called');
+
+    Future<void> endStreamWait() async {
+      try {
+        sendRaw(streamFooter);
+        await _waitUntil('disconnected', timeout: timeout);
+      } on TimeoutException {
+        abort();
+      }
+    }
+
+    Future<void> consumeSend() async {
+      await Future.delayed(Duration(milliseconds: timeout));
+      await endStreamWait();
+    }
+
+    if (_connecta != null) {
+      if (await _waitingQueue.isEmpty) {
+        _cancelConnectionAttempt();
+        return endStreamWait();
+      } else {
+        return consumeSend();
+      }
+    } else {
+      emit<String>('disconnected', data: reason);
+      return;
+    }
+  }
+
+  Future<void> _waitUntil(String event, {int timeout = 15000}) async {
+    final completer = Completer();
+
+    void handler(dynamic data) {
+      completer.complete(data);
+    }
+
+    addEventHandler(event, handler, once: true);
+
+    return completer.future.timeout(Duration(milliseconds: timeout));
   }
 
   void registerStanza(StanzaBase stanza) {
@@ -535,21 +598,35 @@ class Transport {
 
   void addEventHandler<B>(
     String event,
-    FutureOr<void> Function(B? stanza) listener,
-  ) =>
+    FutureOr<void> Function(B? data) listener, {
+    bool once = false,
+  }) {
+    if (once) {
+      _eventius.once<B>(event, listener);
+    } else {
       _eventius.on<B>(event, listener);
+    }
+  }
 
   void _cancelConnectionAttempt() {
     _currentConnectionAttempt = null;
+    if (_connectionTask != null) {
+      _connectionTask!.cancel();
+    }
+    _currentConnectionAttemptCount = 0;
     _connecta = null;
   }
 
-  void _rescheduleConnectionAttempt() {
-    if (_currentConnectionAttempt == null) {
-      return;
+  bool _rescheduleConnectionAttempt() {
+    _currentConnectionAttemptCount++;
+
+    if (_currentConnectionAttempt == null ||
+        (maxReconnectionAttempt < _currentConnectionAttemptCount)) {
+      return false;
     }
     _connectFutureWait = math.min(300, _connectFutureWait * 2 + 100);
     _currentConnectionAttempt = async.Completer()..complete(_connect());
+    return true;
   }
 
   /// Performs any initialization actions, such as handshakes, once the stream
@@ -639,20 +716,65 @@ class Transport {
     return null;
   }
 
+  void handleStreamError(String otherHost, {int maxRedirects = 5}) {
+    if (_redirectAttempts > maxRedirects) {
+      return;
+    }
+
+    String host = otherHost;
+    int port = 5222;
+
+    if (otherHost.contains('[') && otherHost.contains(']')) {
+      host = otherHost.split(']').first.substring(1);
+    } else if (otherHost.contains(':')) {
+      host = otherHost.split(':').first;
+    }
+
+    final portsec = otherHost.split(']').last;
+    if (portsec.contains(':')) {
+      port = int.parse(portsec.split(':')[1]);
+    }
+
+    _address = Tuple2(host, port);
+    _defaultDomain = host;
+    _dnsAnswers = null;
+    reconnect();
+  }
+
+  void addFilter<T>({
+    FilterMode mode = FilterMode.iN,
+    SyncFilter? filter,
+    AsyncFilter? asyncFilter,
+  }) {
+    if (filter != null) {
+      _filters[mode]!.add(Tuple2(filter, null));
+    } else if (asyncFilter != null) {
+      _filters[mode]!.add(Tuple2(null, asyncFilter));
+    }
+  }
+
   /// Wraps basic send method declared in this class privately. Helps to send
   /// stanza objects.
-  void send(Tuple2<StanzaBase?, String?> data, {bool useFilters = true}) {
-    if (!alwaysSendEverything && !sessionStarted) {
+  void send(StanzaBase data, {bool useFilters = true}) {
+    if (!sessionStarted) {
       bool passthrough = false;
-      if (data.value1 != null && data.value1 is Handshake) {
+
+      if (data is RootStanza && !passthrough) {
+        if (data.getPlugin('bind', check: true) != null) {
+          passthrough = true;
+        } else if (data.getPlugin('session', check: true) != null) {
+          passthrough = true;
+        }
+      } else if (data is Handshake) {
         passthrough = true;
       }
 
-      if (data is Tuple2<RootStanza?, String?> && !passthrough) {
-        print('not sent: $data');
+      if (data is RootStanza && !passthrough) {
+        _queuedStanzas.add(Tuple2(data, useFilters));
+        return;
       }
     }
-    _waitingQueue.add(Tuple2(data, useFilters));
+    _waitingQueueController.add(Tuple2(data, useFilters));
   }
 
   void sendRaw(dynamic data) {
@@ -677,9 +799,10 @@ class Transport {
   /// On session start, queue all pending stanzas to be sent.
   void _setSessionStart() {
     sessionStarted = true;
-    // for (final stanza in _que.activeItems) {
-    //   _waitingQueue.add(() => stanza);
-    // }
+    for (final stanza in _queuedStanzas) {
+      _waitingQueueController.add(stanza);
+    }
+    _queuedStanzas.clear();
   }
 
   void _setDisconnected() => sessionStarted = false;
