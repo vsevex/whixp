@@ -1,22 +1,4 @@
-import 'dart:async';
-
-import 'package:dartz/dartz.dart';
-
-import 'package:echox/src/echotils/echotils.dart';
-import 'package:echox/src/handler/callback.dart';
-import 'package:echox/src/plugins/base.dart';
-import 'package:echox/src/plugins/bind/bind.dart';
-import 'package:echox/src/plugins/mechanisms/feature.dart';
-import 'package:echox/src/plugins/preapproval/preapproval.dart';
-import 'package:echox/src/plugins/rosterver/rosterver.dart';
-import 'package:echox/src/plugins/session/session.dart';
-import 'package:echox/src/stanza/features.dart';
-import 'package:echox/src/stream/base.dart';
-import 'package:echox/src/stream/matcher/xpath.dart';
-import 'package:echox/src/whixp.dart';
-
-part 'plugins/starttls/starttls.dart';
-part 'plugins/starttls/stanza.dart';
+part of 'whixp.dart';
 
 class Whixp extends WhixpBase {
   Whixp(
@@ -30,6 +12,7 @@ class Whixp extends WhixpBase {
     super.certs,
     this.language = 'en',
     super.connectionTimeout,
+    super.maxReconnectionAttempt,
   }) : super(jabberID: jabberID) {
     setup();
 
@@ -42,6 +25,7 @@ class Whixp extends WhixpBase {
     /// Set [streamHeader] of declared transport for initial send.
     transport.streamHeader =
         "<stream:stream to='${transport.boundJID.host}' xmlns:stream='$streamNamespace' xmlns='$defaultNamespace' xml:lang='$language' version='1.0'>";
+    transport.streamFooter = "</stream:stream>";
 
     StanzaBase features = StreamFeatures();
 
@@ -67,6 +51,14 @@ class Whixp extends WhixpBase {
           },
           matcher: XPathMatcher('<features xmlns="$streamNamespace"/>'),
         ),
+      )
+      ..addEventHandler<String>(
+        'sessionBind',
+        (data) => _handleSessionBind(data!),
+      )
+      ..addEventHandler<StanzaBase>(
+        'rosterUpdate',
+        (stanza) => _handleRoster(stanza!),
       );
 
     transport.defaultLanguage = language;
@@ -78,8 +70,6 @@ class Whixp extends WhixpBase {
 
   /// Default language to use in stanza communication.
   final String language;
-
-  final saslData = <String, dynamic>{};
 
   Future<bool> _handleStreamFeatures(StanzaBase features) async {
     for (final feature in streamFeatureOrder) {
@@ -101,9 +91,54 @@ class Whixp extends WhixpBase {
     return false;
   }
 
-  void connect() {
-    transport.connect();
+  void _handleSessionBind(String jid) =>
+      _clientRoster = _roster[jid] as roster.RosterNode;
+
+  void _handleRoster(StanzaBase iq) {
+    iq.registerPlugin(Roster());
+    iq.enable('roster');
+    final stanza = iq['roster'] as XMLBase;
+    if (iq['type'] == 'set') {
+      final bare = JabberID(iq['from'] as String).bare;
+      if (bare.isNotEmpty && bare != transport.boundJID.bare) {
+        throw StanzaException.serviceUnavailable(iq);
+      }
+    }
+
+    final roster = _clientRoster;
+    if (stanza['ver'] != null) {
+      roster.version = stanza['ver'] as String;
+    }
+
+    final items = stanza['items'] as Map<String, Map<String, dynamic>>;
+    print('items is $items');
+
+    final validSubs = {'to', 'from', 'both', 'none', 'remove'};
+    for (final item in items.entries) {
+      if (validSubs.contains(item.value['subscription'] as String)) {
+        final value = item.value;
+        (roster[item.key] as Roster)['name'] = value['name'];
+        (roster[item.key] as Roster)['groups'] = value['groups'];
+        (roster[item.key] as Roster)['from'] =
+            {'from', 'both'}.contains(value['subscription']);
+        (roster[item.key] as Roster)['to'] =
+            {'to', 'both'}.contains(value['subscription']);
+        (roster[item.key] as Roster)['pending_out'] =
+            value['ask'] == 'subscribe';
+      }
+    }
+
+    if (iq['type'] == 'set') {
+      final response = IQ(
+        stanzaTo: iq['from'] as String?,
+        stanzaID: iq['id'] as String?,
+        stanzaType: 'result',
+      );
+      response.registerPlugin(Roster());
+      response.enable('roster');
+      response.sendIQ();
+    }
   }
 
-  String get password => credentials['password']!;
+  void connect() => transport.connect();
 }
