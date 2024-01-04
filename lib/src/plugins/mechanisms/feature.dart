@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:echox/echox.dart';
-import 'package:echox/src/client.dart';
 import 'package:echox/src/echotils/src/stringprep.dart';
 import 'package:echox/src/handler/callback.dart';
 import 'package:echox/src/plugins/base.dart';
@@ -10,6 +9,7 @@ import 'package:echox/src/plugins/mechanisms/stanza/stanza.dart';
 import 'package:echox/src/sasl/scram.dart';
 import 'package:echox/src/stream/base.dart';
 import 'package:echox/src/stream/matcher/xpath.dart';
+import 'package:echox/src/whixp.dart';
 
 import 'package:xml/xml.dart' as xml;
 
@@ -103,7 +103,7 @@ class FeatureMechanisms extends PluginBase {
     securityCallback ??= _defaultSecurity;
 
     final mechanisms = Mechanisms();
-    registerStanzaPlugin(_features, mechanisms);
+    _features.registerPlugin(mechanisms);
     _features.enable(mechanisms.name);
   }
 
@@ -123,6 +123,8 @@ class FeatureMechanisms extends PluginBase {
         results[param] = credentials[param] ?? jid;
       } else if (param == 'host') {
         results[param] = base.requestedJID.domain;
+      } else if (param == 'service-name') {
+        results[param] = base.transport.serviceName;
       } else if (param == 'service') {
         results[param] = credentials[param] ?? 'xmpp';
       } else if (credentials.keys.contains(param)) {

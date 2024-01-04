@@ -21,6 +21,6 @@ class FeaturePreApproval extends PluginBase {
       order: 9001,
     );
 
-    registerStanzaPlugin(_features, preapproval);
+    _features.registerPlugin(preapproval);
   }
 }

@@ -1,11 +1,10 @@
-part of '../../client.dart';
+part of '../../whixp.dart';
 
 class FeatureStartTLS extends PluginBase {
   const FeatureStartTLS(this._features, {required super.base})
       : super(
           'starttls',
           description: 'Stream Feature: STARTTLS',
-          dependencies: const {},
         );
 
   final StanzaBase _features;
@@ -27,7 +26,7 @@ class FeatureStartTLS extends PluginBase {
     base.transport.registerStanza(failure);
 
     final startTLS = _StartTLS();
-    registerStanzaPlugin(_features, startTLS);
+    _features.registerPlugin(startTLS);
     _features.enable(startTLS.name);
   }
 
@@ -39,7 +38,7 @@ class FeatureStartTLS extends PluginBase {
     } else if (base.transport.disableStartTLS) {
       return false;
     } else {
-      base.transport.send(Tuple2(stanza, null));
+      base.transport.send(stanza);
       return true;
     }
   }

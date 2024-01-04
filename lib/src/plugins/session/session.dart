@@ -1,6 +1,5 @@
 import 'package:echox/src/plugins/base.dart';
 import 'package:echox/src/plugins/session/stanza.dart';
-import 'package:echox/src/stanza/iq.dart';
 import 'package:echox/src/stream/base.dart';
 
 class FeatureSession extends PluginBase {
@@ -17,8 +16,8 @@ class FeatureSession extends PluginBase {
 
     base.registerFeature('session', _handleSessionStart, order: 10001);
 
-    registerStanzaPlugin(_iq, session);
-    registerStanzaPlugin(_features, session);
+    _iq.registerPlugin(session);
+    _features.registerPlugin(session);
   }
 
   Future<void> _handleSessionStart(StanzaBase features) async {

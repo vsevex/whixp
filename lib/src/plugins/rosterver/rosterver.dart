@@ -21,6 +21,6 @@ class FeatureRosterVersioning extends PluginBase {
       order: 9000,
     );
 
-    registerStanzaPlugin(_features, rosterver);
+    _features.registerPlugin(rosterver);
   }
 }
