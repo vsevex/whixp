@@ -2,7 +2,7 @@ import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/stream/base.dart';
 
 class StreamFeatures extends StanzaBase {
-  StreamFeatures()
+  StreamFeatures({super.element})
       : super(
           name: 'features',
           namespace: Echotils.getNamespace('JABBER_STREAM'),
@@ -10,9 +10,6 @@ class StreamFeatures extends StanzaBase {
           subInterfaces: {'features', 'required', 'optional'},
           pluginAttributeMapping: {},
           pluginTagMapping: {},
-          setters: {
-            const Symbol('features'): (value, args, base) {},
-          },
           getters: {
             const Symbol('features'): (args, base) {
               final features = <String, XMLBase>{};
