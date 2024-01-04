@@ -1,4 +1,4 @@
-part of '../../client.dart';
+part of '../../whixp.dart';
 
 class _StartTLS extends StanzaBase {
   _StartTLS()

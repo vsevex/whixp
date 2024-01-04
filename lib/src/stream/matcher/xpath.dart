@@ -14,6 +14,6 @@ class XPathMatcher extends BaseMatcher {
     String tag() =>
         '<${element!.localName} xmlns="${element.getAttribute('xmlns')}"/>';
 
-    return criteria as String == tag();
+    return criteria == tag();
   }
 }

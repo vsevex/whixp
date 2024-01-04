@@ -1,12 +1,12 @@
 part of '../plugins/mechanisms/feature.dart';
 
 class SASL {
-  SASL(this._client) {
-    _scram = Scram(_client);
+  SASL(this._base) {
+    _scram = Scram(_base);
     _registerMechanisms();
   }
 
-  final Whixp _client;
+  final WhixpBase _base;
   late final Scram _scram;
 
   final _mechanisms = <String, _Mechanism>{};
@@ -20,12 +20,12 @@ class SASL {
   void _registerMechanisms() {
     /// The list of all available authentication mechanisms.
     late final mechanismList = <_Mechanism>[
-      _SASLAnonymous(_client),
-      _SASLPlain(_client),
-      _SASLSHA1(_client, scram: _scram),
-      _SASLSHA256(_client, scram: _scram),
-      _SASLSHA384(_client, scram: _scram),
-      _SASLSHA512(_client, scram: _scram),
+      _SASLAnonymous(_base),
+      _SASLPlain(_base),
+      _SASLSHA1(_base, scram: _scram),
+      _SASLSHA256(_base, scram: _scram),
+      _SASLSHA384(_base, scram: _scram),
+      _SASLSHA512(_base, scram: _scram),
     ];
     mechanismList.map((mechanism) => _registerMechanism(mechanism)).toList();
   }
@@ -152,12 +152,12 @@ class _SASLPlain extends _Mechanism {
 
   @override
   String process([String? challenge]) {
-    final authzid = _client.credentials['authzid']!;
-    final username = _client.credentials['username'];
-    final password = _client.credentials['password'];
+    final authzid = _base.credentials['authzid']!;
+    final username = _base.credentials['username'];
+    final password = _base.credentials['password'];
 
     String auth =
-        (authzid != '$username@${_client.requestedJID.domain}') ? authzid : '';
+        (authzid != '$username@${_base.requestedJID.domain}') ? authzid : '';
     auth = '$auth\u0000';
     auth = '$auth$username';
     auth = '$auth\u0000';

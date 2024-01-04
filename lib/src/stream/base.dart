@@ -1,14 +1,26 @@
+import 'dart:async';
+
 import 'package:dartz/dartz.dart';
 
 import 'package:echox/src/echotils/echotils.dart';
+import 'package:echox/src/exception.dart';
+import 'package:echox/src/handler/callback.dart';
+import 'package:echox/src/handler/handler.dart';
 import 'package:echox/src/jid/jid.dart';
+import 'package:echox/src/stanza/error.dart';
+import 'package:echox/src/stream/matcher/base.dart';
+import 'package:echox/src/stream/matcher/id.dart';
 import 'package:echox/src/transport.dart';
-import 'package:meta/meta.dart';
 
+import 'package:meta/meta.dart';
 import 'package:xml/xml.dart' as xml;
 import 'package:xpath_selector_xml_parser/xpath_selector_xml_parser.dart';
 
 part 'stanza.dart';
+part '../stanza/root.dart';
+part '../stanza/iq.dart';
+part '../stanza/message.dart';
+part '../stanza/presence.dart';
 
 typedef _GetterOrDeleter = dynamic Function(dynamic args, XMLBase base);
 
@@ -317,7 +329,6 @@ class XMLBase {
   }
 
   final bool receive;
-  late final Transport? transport;
 
   /// The XML tag name of the element, not including any namespace prefixes.
   final String name;
@@ -425,6 +436,7 @@ class XMLBase {
   late final List<XMLBase> _iterables;
   late final Set<String> _loadedPlugins;
   late final Map<Tuple2<String, String>, XMLBase> _plugins;
+  late Transport? transport;
 
   /// Index to keep for iterables.
   late int _index;
@@ -480,7 +492,7 @@ class XMLBase {
   ///
   /// If [check] is true, then the method returns null instead of creating the
   /// object.
-  XMLBase? _getPlugin(String name, {String? language, bool check = false}) {
+  XMLBase? getPlugin(String name, {String? language, bool check = false}) {
     /// If passed `language` is null, then try to retrieve it through built-in
     /// method.
     final lang = language ?? _getLang;
@@ -880,7 +892,7 @@ class XMLBase {
         final name = _pluginOverrides[getMethod];
 
         if (name != null && name.isNotEmpty) {
-          final plugin = _getPlugin(name, language: language);
+          final plugin = getPlugin(name, language: language);
 
           if (plugin != null) {
             final handler = plugin._getters[Symbol(getMethod)];
@@ -901,7 +913,7 @@ class XMLBase {
         }
       }
     } else if (_pluginAttributeMapping.containsKey(attribute)) {
-      final plugin = _getPlugin(attribute, language: language);
+      final plugin = getPlugin(attribute, language: language);
 
       if (plugin != null && plugin._isExtension) {
         return plugin[fullAttribute];
@@ -946,7 +958,7 @@ class XMLBase {
           final name = _pluginOverrides[setMethod];
 
           if (name != null && name.isNotEmpty) {
-            final plugin = _getPlugin(name, language: lang);
+            final plugin = getPlugin(name, language: lang);
 
             if (plugin != null) {
               final handler = plugin._setters[Symbol(setMethod)];
@@ -999,7 +1011,7 @@ class XMLBase {
       }
     } else if (_pluginAttributeMapping.containsKey(attrib) &&
         _pluginAttributeMapping[attrib] != null) {
-      final plugin = _getPlugin(attrib, language: lang);
+      final plugin = getPlugin(attrib, language: lang);
       if (plugin != null) {
         plugin[fullAttribute] = value;
       }
@@ -1032,7 +1044,7 @@ class XMLBase {
         final name = _pluginOverrides[deleteMethod];
 
         if (name != null && name.isNotEmpty) {
-          final plugin = _getPlugin(attrib, language: lang);
+          final plugin = getPlugin(attrib, language: lang);
 
           if (plugin != null) {
             final handler = plugin._deleters[Symbol(deleteMethod)];
@@ -1057,7 +1069,7 @@ class XMLBase {
       }
     } else if (_pluginAttributeMapping.containsKey(attrib) &&
         _pluginAttributeMapping[attrib] != null) {
-      final plugin = _getPlugin(attrib, language: lang, check: true);
+      final plugin = getPlugin(attrib, language: lang, check: true);
       if (plugin == null) {
         return;
       }
@@ -1212,7 +1224,7 @@ class XMLBase {
         this[fullInterface] = entry.value;
       } else if (_pluginAttributeMapping.containsKey(interface)) {
         if (!iterableInterfaces.contains(interface)) {
-          final plugin = _getPlugin(interface, language: language);
+          final plugin = getPlugin(interface, language: language);
           if (plugin != null) {
             plugin.values = entry.value as Map<String, dynamic>;
           }
@@ -1328,4 +1340,18 @@ class XMLBase {
   /// Returns a string serialization of the underlying XML object.
   @override
   String toString() => Echotils.serialize(element) ?? '';
+}
+
+extension RegisterStanza on XMLBase {
+  void registerPlugin(
+    XMLBase plugin, {
+    bool iterable = false,
+    bool overrides = false,
+  }) =>
+      registerStanzaPlugin(
+        this,
+        plugin,
+        iterable: iterable,
+        overrides: overrides,
+      );
 }
