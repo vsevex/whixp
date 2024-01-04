@@ -3,61 +3,84 @@ import 'package:echox/src/jid/jid.dart';
 import 'package:test/test.dart';
 
 void main() {
-  late JabberID jid;
+  group('verify that the JabberID class can parse and manipulate JIDs', () {
+    test('must properly check jid equality', () {
+      final jid1 = JabberID('user@domain/resource');
+      final jid2 = JabberID('user@domain/resource');
 
-  setUp(() => jid = JabberID('example', domain: 'localhost'));
-
-  group('set methods test', () {
-    test('sets local with escaping when escape is true', () {
-      jid.setLocal('lerko blya');
-      expect(jid.local, equals('lerko\\20blya'));
+      expect(jid1, equals(jid2));
     });
 
-    test('sets local without escaping', () {
-      jid.setLocal('lerkoblya');
-      expect(jid.local, equals('lerkoblya'));
+    test('changing Jabber ID using aliases for domain', () {
+      final jid = JabberID('user@domain/resource');
+      jid.server = 'anotherserver';
+      expect(jid.domain, equals('anotherserver'));
+      jid.host = 'anotherone';
+      expect(jid.domain, equals('anotherone'));
     });
 
-    test('must set all chars of domain lowercase', () {
-      jid.setDomain('LOCALHOST');
-      expect(jid.domain, 'localhost');
-    });
-  });
-
-  test('fromString factory method test', () {
-    final jid = JabberID.fromString('hert@localhost/mobile');
-
-    expect(jid.local, equals('hert'));
-    expect(jid.domain, equals('localhost'));
-    expect(jid.resource, equals('mobile'));
-  });
-
-  group('toString method test', () {
-    test(
-      'must return the basic string representation',
-      () {
-        final jid = JabberID('hert', domain: 'localhost', resource: 'mobile');
-        expect(jid.toString(), equals('hert@localhost/mobile'));
-      },
-    );
-
-    test('must return the string representation with unescaped local', () {
-      final jid = JabberID('hert blya', domain: 'localhost');
-      expect(jid.toString(unescape: true), equals('hert blya@localhost'));
+    test('setting the full Jaber ID with a user portion', () {
+      final jid = JabberID('user@domain/resource');
+      jid.full = 'someotheruser@otherdomain/otherresource';
+      expect(jid.node, equals('someotheruser'));
+      expect(jid.domain, equals('otherdomain'));
+      expect(jid.resource, equals('otherresource'));
+      expect(jid.server, equals('otherdomain'));
+      expect(jid.jid, equals('someotheruser@otherdomain/otherresource'));
     });
 
     test(
-      'must return the string representation with escaped local and resource',
+      'setting the full Jabber ID without a user portion and with a resource',
       () {
-        final jid =
-            JabberID('lerko blya', domain: 'localhost', resource: 'desktop');
-        expect(jid.toString(), equals('lerko\\20blya@localhost/desktop'));
+        final jid = JabberID('user@domain/resource');
+        jid.full = 'otherdomain/resource';
+        expect(jid.node, isEmpty);
+        expect(jid.domain, equals('otherdomain'));
+        expect(jid.resource, equals('resource'));
+        expect(jid.host, equals('otherdomain'));
       },
     );
-  });
 
-  test('bare getter test', () {
-    final jid = JabberID('hert', domain: 'localhost', resource: 'mobile');
-    expect(jid.bare.toString(), 'hert@localhost');
+    test(
+      'setting the full Jabber ID without a user portion and without a resource',
+      () {
+        final jid = JabberID('user@domain/resource');
+        jid.full = 'otherdomain';
+        expect(jid.node, isEmpty);
+        expect(jid.domain, equals('otherdomain'));
+        expect(jid.host, equals('otherdomain'));
+        expect(jid.resource, isEmpty);
+      },
+    );
+
+    test('setting the bare Jabber ID with a user', () {
+      final jid = JabberID('user@domain/resource');
+      jid.bare = 'otheruser@otherdomain';
+      expect(jid.node, equals('otheruser'));
+      expect(jid.local, equals('otheruser'));
+      expect(jid.domain, equals('otherdomain'));
+      expect(jid.host, equals('otherdomain'));
+      expect(jid.full, equals('otheruser@otherdomain/resource'));
+    });
+
+    test('setting the bare Jabber ID without a user', () {
+      final jid = JabberID('user@domain/resource');
+      jid.bare = 'otherdomain';
+      expect(jid.node, isEmpty);
+      expect(jid.local, isEmpty);
+      expect(jid.domain, 'otherdomain');
+      expect(jid.host, equals('otherdomain'));
+      expect(jid.resource, 'resource');
+    });
+
+    test('Jabber ID without a resource', () {
+      final jid = JabberID('user@someserver');
+      expect(jid.node, equals('user'));
+      expect(jid.local, equals('user'));
+      expect(jid.domain, equals('someserver'));
+      expect(jid.host, equals('someserver'));
+      expect(jid.bare, equals('user@someserver'));
+      expect(jid.resource, isEmpty);
+    });
   });
 }

@@ -1,19 +1,26 @@
 name: echox
 description: Streamline Your XMPP Messaging with Lightweight Dart-Based XMPP Client
-version: 0.1.0+2
+version: 0.1.0+3
 repository: https://github.com/vsevex/echox
 issue_tracker: https://github.com/vsevex/echox/issues
 topics: [xmpp, im, network, websocket]
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: "3.2.3"
 
 dependencies:
+  connecta: ^1.0.0
   crypto: ^3.0.3
-  events_emitter: ^0.5.2
+  dartz: ^0.10.1
+  dnsolve: ^1.0.0
   logger: ^2.0.2
+  memoize: ^3.0.0
+  meta: ^1.11.0
+  synchronized: ^3.1.0
+  unorm_dart: ^0.3.0
   web_socket_client: ^0.1.0
-  xml: ^6.3.0
+  xml: ^6.5.0
+  xpath_selector_xml_parser: ^3.0.1
 
 dev_dependencies:
   convert: ^3.1.1

@@ -5,6 +5,8 @@ import 'package:echox/src/echotils/echotils.dart';
 import 'package:test/test.dart';
 import 'package:xml/xml.dart' as xml;
 
+import 'class/property.dart';
+
 void main() {
   group('isTagEqual method tests', () {
     test('must return true if tags are equal', () {
@@ -253,5 +255,97 @@ void main() {
           'TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVyIGFkaXBpc2NpbmcgZWxpdC4gRG9uZWMgYSBkaWFtIGxlY3R1cy4gU2VkIHNpdCBhbWV0IGlwc3VtIG1hdXJpcy4gTWFlY2VuYXMgY29uZ3VlIGxpZ3VsYSBhYyBxdWFtIHZpdmVycmEgbmVjIGNvbnNlY3RldHVyIGFudGUgaGVuZHJlcml0Lg==';
       expect(result, expected);
     });
+  });
+
+  group('hasAttr method test cases', () {
+    final testClass = PropertyTestClass();
+
+    test(
+      'object must have the specified property',
+      () => expect(Echotils.hasAttr(testClass, 'firstProperty'), isTrue),
+    );
+
+    test(
+      'object must not have the specified property',
+      () => expect(
+        Echotils.hasAttr(testClass, 'nonexistingproperty'),
+        isFalse,
+      ),
+    );
+
+    test('object is null', () {
+      const Object? object = null;
+      expect(Echotils.hasAttr(object, 'someProperty'), isFalse);
+    });
+
+    test(
+      'property name is an empty string',
+      () => expect(Echotils.hasAttr(testClass, ''), isFalse),
+    );
+
+    test(
+      'must return true when object has nullable property',
+      () => expect(Echotils.hasAttr(testClass, 'nullProperty'), isTrue),
+    );
+
+    test(
+      'must return true when class contains specified method',
+      () => expect(Echotils.hasAttr(testClass, 'intMethod'), isTrue),
+    );
+  });
+
+  group('getAttr method test cases', () {
+    final testClass = PropertyTestClass();
+
+    test('must get property value', () {
+      final property = Echotils.getAttr(testClass, 'firstProperty');
+      expect(property, equals(42));
+    });
+
+    test('must get method result', () {
+      final method = Echotils.getAttr(testClass, 'intMethod');
+      expect(method, isA<Function>());
+
+      final result = (method as Function()).call();
+      expect(result, equals(0));
+    });
+
+    test(
+      'attribute does not exist',
+      () => expect(Echotils.getAttr(testClass, 'nonexistentproperty'), isNull),
+    );
+
+    test(
+      'object is null',
+      () => expect(Echotils.getAttr(null, 'nonexistentproperty'), isNull),
+    );
+  });
+
+  group('setAttr method test cases', () {
+    final testClass = PropertyTestClass();
+
+    test('sets property value', () {
+      expect(Echotils.getAttr(testClass, 'firstProperty'), equals(42));
+
+      Echotils.setAttr(testClass, 'firstProperty', 50);
+
+      expect(Echotils.getAttr(testClass, 'firstProperty'), equals(50));
+    });
+
+    test(
+      'throws error for non-existent property',
+      () => expect(
+        () => Echotils.setAttr(testClass, 'nonExistent', 'value'),
+        throwsArgumentError,
+      ),
+    );
+
+    test(
+      'throws error for null object',
+      () => expect(
+        () => Echotils.setAttr(null, 'firstProperty', 40),
+        throwsArgumentError,
+      ),
+    );
   });
 }

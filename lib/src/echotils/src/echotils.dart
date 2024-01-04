@@ -1,7 +1,8 @@
 import 'dart:convert';
+import 'dart:math' as math;
+import 'dart:mirrors' as mirrors;
 import 'dart:typed_data';
 
-import 'package:echox/src/echotils/src/status.dart';
 import 'package:echox/src/escaper/escaper.dart';
 
 import 'package:xml/xml.dart' as xml;
@@ -65,6 +66,7 @@ class Echotils {
   static xml.XmlElement xmlElement(
     String name, {
     dynamic attributes /** List<Map<String, String>> || Map<String, String> */,
+    String? namespace,
     String? text,
   }) {
     /// Return if the passed `name` is empty.
@@ -108,7 +110,21 @@ class Echotils {
     /// empty or contains only whitespace, or if the `attributes` argument is
     /// not a valid type, the method returns `null`.
     final builder = _makeGenerator();
-    builder.element(name, attributes: attrs, nest: text);
+    builder.element(
+      name,
+      nest: () {
+        if (namespace != null) {
+          builder.namespace(namespace);
+        }
+        for (final entry in attrs.entries) {
+          builder.attribute(entry.key, entry.value, namespace: namespace);
+        }
+        if (text != null) {
+          builder.text(text);
+        }
+      },
+      namespace: namespace,
+    );
     return builder.buildDocument().rootElement.copy();
   }
 
@@ -325,6 +341,35 @@ class Echotils {
     return out;
   }
 
+  /// Generates a unique ID for use in <iq /> stanzas.
+  ///
+  /// All <iq /> stanzas are required to have unique id attributes. This
+  /// function makes creating this ease. Each connection instance has a counter
+  /// which starts from zero, and the value of this counter plus a colon
+  /// followed by the `suffix` becomes the unique id. If no suffix is supplied,
+  /// the counter is used as the unique id.
+  ///
+  /// Returns the generated ID.
+  static String getUniqueId([dynamic suffix]) {
+    /// It follows the format specified by the UUID version 4 standart.
+    final uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+        .replaceAllMapped(RegExp('[xy]'), (match) {
+      final r = math.Random.secure().nextInt(16);
+      final v = match.group(0) == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toRadixString(16);
+    });
+
+    if (suffix != null) {
+      /// Check whether the provided suffix is [String] or [int], so if type is
+      /// one of them, proceed to concatting.
+      if (suffix is String || suffix is num) {
+        return '$uuid:$suffix';
+      }
+    }
+
+    return uuid;
+  }
+
   /// Performs an XOR operation on two [String]s of the same length and
   /// returns the result as a new [String].
   ///
@@ -434,6 +479,18 @@ class Echotils {
     return base64.encode(buffer);
   }
 
+  /// Converts a byte sequence or string to Unicode string.
+  ///
+  /// If the input [text] is a byte sequence (bytes), it is decoded using the
+  /// UTF-8 encoding. If the input is already a string, it is returned as is.
+  static String unicode(dynamic data /** List<int> || String */) {
+    if (data is! String) {
+      return utf8.decode(data as List<int>);
+    }
+
+    return data;
+  }
+
   /// Retrieves namespace [String] from namespace [Map] according to the passed
   /// retriever.
   ///
@@ -441,7 +498,7 @@ class Echotils {
   /// ```dart
   /// final streamNamespace = Echotils.getNamespace('STREAM');
   /// ```
-  static String getNamespace(String ns) => _namespace[ns]!;
+  static String getNamespace(String ns) => _namespace[ns.toUpperCase()]!;
 
   /// Adds a namespace to the current list of namespaces for a server
   /// configuration.
@@ -453,35 +510,80 @@ class Echotils {
   /// Echotils.addNamespace('CLIENT', 'jabber:client');
   /// ```
   static void addNamespace(String name, String key) => _namespace[name] = key;
-}
 
-/// Helps to emit status information.
-///
-/// The [StatusEmitter] class is used to represent and emit status updates. It
-/// contains information about the status itself and an optional description
-/// providing additional context and information.
-///
-/// Status updates are emitted using the [EventEmitter] class, which is often
-/// extended by the main class where status updates are relevant.
-///
-/// ### Example:
-/// ```dart
-/// final status = StatusEmitter(EchoStatus.connected, 'EchoX client connected.');
-/// log(status); /// outputs "Status: Connected (description: Client connected.)";
-/// ```
-class StatusEmitter {
-  /// Creates a [StatusEmitter] instance with the given [status] and optional
-  /// [description].
+  /// Checks if an object has a specified property using reflection.
   ///
-  /// The [status] parameter represents the status of the emitter, and
-  /// [description] can provide additional information about the status.
-  const StatusEmitter(this.status, [this.description]);
+  /// Uses Dart's reflection capabilities to inspect the structure of an
+  /// [object] at runtime and determine whether it has a property with the given
+  /// [property].
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final object = SomeClass();
+  /// if (Echotils.hasAttr(object, 'property')) {
+  ///   log('property exists!');
+  /// } else {
+  ///   /// ...otherwise do something
+  /// }
+  /// ```
+  /// **Warning:**
+  /// * Reflection can be affected by certain build configurations, and the
+  /// effectiveness of this function may vary in those cases.
+  static bool hasAttr(Object? object, String property) {
+    final instanceMirror = mirrors.reflect(object);
+    return instanceMirror.type.instanceMembers.containsKey(Symbol(property));
+  }
 
-  /// The status information.
-  final EchoStatus status;
-  final String? description;
+  /// Gets the value of an attribute from an object using reflection.
+  ///
+  /// This function uses Dart's reflection capabilities to inspect the structure
+  /// of an object at runtime and retrieves the value of an attribute with the
+  /// specified name.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final exampleObject = Example();
+  /// final name = Echotils.getAttr(exampleObject, 'name');
+  /// log(name); /// outputs name
+  /// ```
+  ///
+  /// **Warning:**
+  /// * Reflection can be affected by certain build configurations, and the
+  /// effectiveness of this function may vary in those cases.
+  static dynamic getAttr(Object? object, String attribute) {
+    final instanceMirror = mirrors.reflect(object);
 
-  @override
-  String toString() =>
-      '''Status: $status${description != null ? ' (description: $description)' : ''}''';
+    try {
+      final value = instanceMirror.getField(Symbol(attribute)).reflectee;
+      return value;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /// Sets the value of an attribute on an object using reflection.
+  ///
+  /// Uses Dart's reflection capabilities to inspect the structure of an object
+  /// at runtime and sets the value of an attribute with the specified name.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final exampleObject = Example();
+  /// final name = Echotils.setAttr(exampleObject, 'name', 'hert');
+  /// ```
+  /// **Warning:**
+  /// * Reflection can be affected by certain build configurations, and the
+  /// effectiveness of this function may vary in those cases.
+  static void setAttr(Object? object, String attribute, dynamic value) {
+    if (value is Function) {
+      throw ArgumentError("Setting methods dynamically is not supported.");
+    }
+    final instanceMirror = mirrors.reflect(object);
+    try {
+      instanceMirror.setField(Symbol(attribute), value);
+    } catch (error) {
+      /// Handle cases where the attribute does not exist
+      throw ArgumentError("Attribute '$attribute' not found");
+    }
+  }
 }
