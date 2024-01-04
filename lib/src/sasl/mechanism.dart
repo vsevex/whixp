@@ -2,7 +2,7 @@ part of '../plugins/mechanisms/feature.dart';
 
 abstract class _Mechanism {
   _Mechanism(
-    this._client, {
+    this._base, {
     required this.name,
     int? priority,
     Set<String>? requiredCredentials,
@@ -20,7 +20,7 @@ abstract class _Mechanism {
     _securityOptions = securityOptions ?? <String>{};
   }
 
-  final Whixp _client;
+  final WhixpBase _base;
 
   /// A [String] representing the name of the SASL mechanism.
   final String name;
@@ -36,7 +36,7 @@ abstract class _Mechanism {
     if (securityOptions != null) {
       _securityOptions.addAll(securityOptions);
     }
-    _client.credentials = credentials;
+    _base.credentials = credentials;
   }
 
   String process();
