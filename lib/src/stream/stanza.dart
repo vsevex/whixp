@@ -7,10 +7,10 @@ class StanzaBase extends XMLBase {
     String? stanzaFrom,
     String? stanzaID,
     this.types = const <String>{},
-    super.receive,
-    super.transport,
     super.name,
     super.namespace,
+    super.transport,
+    super.receive,
     super.pluginAttribute,
     super.pluginMultiAttribute,
     super.overrides,
@@ -126,7 +126,7 @@ class StanzaBase extends XMLBase {
   /// Called if no handlers have been registered to process this stanza.
   ///
   /// Mean to be overridden.
-  void unhandled() {
+  void unhandled([Transport? transport]) {
     return;
   }
 
@@ -140,7 +140,7 @@ class StanzaBase extends XMLBase {
 
   void send() {
     if (transport != null) {
-      transport!.send(Tuple2(this, null));
+      transport!.send(this);
     } else {
       print('tried to send stanza without a stanza: $this');
     }
@@ -155,8 +155,9 @@ class StanzaBase extends XMLBase {
       StanzaBase(
         name: name,
         namespace: namespace,
-        interfaces: _interfaces,
+        transport: transport,
         receive: receive,
+        interfaces: _interfaces,
         pluginAttribute: pluginAttribute,
         pluginTagMapping: pluginTagMapping,
         pluginAttributeMapping: _pluginAttributeMapping,
@@ -172,7 +173,6 @@ class StanzaBase extends XMLBase {
         isExtension: _isExtension,
         includeNamespace: _includeNamespace,
         setupOverride: setupOverride,
-        transport: transport,
         element: element,
         parent: parent,
       );

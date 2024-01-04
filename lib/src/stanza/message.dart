@@ -1,11 +1,24 @@
-import 'package:echox/src/echotils/echotils.dart';
-import 'package:echox/src/jid/jid.dart';
-import 'package:echox/src/stanza/root.dart';
-import 'package:echox/src/stream/base.dart';
+part of '../stream/base.dart';
 
 class Message extends RootStanza {
-  Message({super.transport, super.includeNamespace = false})
-      : super(
+  Message({
+    super.transport,
+    super.includeNamespace = false,
+    super.getters,
+    super.setters,
+    super.deleters,
+    super.pluginTagMapping,
+    super.pluginAttributeMapping,
+    super.pluginMultiAttribute,
+    super.pluginIterables,
+    super.overrides,
+    super.isExtension,
+    super.setupOverride,
+    super.boolInterfaces,
+    super.receive,
+    super.element,
+    super.parent,
+  }) : super(
           name: 'message',
           namespace: Echotils.getNamespace('CLIENT'),
           pluginAttribute: 'message',
@@ -25,7 +38,7 @@ class Message extends RootStanza {
           languageInterfaces: {'body', 'subject', 'thread'},
           types: {'normal', 'chat', 'headline', 'error', 'groupchat'},
         ) {
-    if (!receive && this['id'] == '') {
+    if (!this.receive && this['id'] == '') {
       if (transport != null) {
         this['id'] = Echotils.getUniqueId();
       }
@@ -150,8 +163,28 @@ class Message extends RootStanza {
   }
 
   @override
-  Message copy([dynamic element, XMLBase? parent, bool receive = false]) =>
-      Message(transport: transport);
+  Message copy([
+    xml.XmlElement? element,
+    XMLBase? parent,
+    bool receive = false,
+  ]) =>
+      Message(
+        getters: _getters,
+        setters: _setters,
+        deleters: _deleters,
+        pluginTagMapping: pluginTagMapping,
+        pluginAttributeMapping: _pluginAttributeMapping,
+        pluginMultiAttribute: _pluginMultiAttribute,
+        pluginIterables: _pluginIterables,
+        overrides: _overrides,
+        isExtension: _isExtension,
+        setupOverride: setupOverride,
+        boolInterfaces: _boolInterfaces,
+        includeNamespace: _includeNamespace,
+        receive: receive,
+        element: element,
+        parent: parent,
+      );
 
   void _setIDs(dynamic value, XMLBase base) {
     if (value == null || value == '') {

@@ -1,22 +1,30 @@
-import 'dart:async';
-
-import 'package:echox/src/echotils/echotils.dart';
-import 'package:echox/src/exception.dart';
-import 'package:echox/src/handler/callback.dart';
-import 'package:echox/src/handler/handler.dart';
-import 'package:echox/src/stanza/error.dart';
-import 'package:echox/src/stanza/root.dart';
-import 'package:echox/src/stream/base.dart';
-import 'package:echox/src/stream/matcher/base.dart';
-import 'package:echox/src/stream/matcher/id.dart';
-
-import 'package:xml/xml.dart' as xml;
+part of '../stream/base.dart';
 
 class IQ extends RootStanza {
   IQ({
+    super.stanzaType,
+    super.stanzaTo,
+    super.stanzaFrom,
+    super.stanzaID,
     super.transport,
     bool generateID = true,
+    super.subInterfaces,
+    super.languageInterfaces,
     super.includeNamespace = false,
+    super.getters,
+    super.setters,
+    super.deleters,
+    super.pluginTagMapping,
+    super.pluginAttributeMapping,
+    super.pluginMultiAttribute,
+    super.pluginIterables,
+    super.overrides,
+    super.isExtension,
+    super.setupOverride,
+    super.boolInterfaces,
+    super.receive,
+    super.element,
+    super.parent,
   }) : super(
           name: 'iq',
           namespace: Echotils.getNamespace('CLIENT'),
@@ -25,7 +33,7 @@ class IQ extends RootStanza {
           pluginAttribute: 'iq',
         ) {
     if (generateID) {
-      if (!receive && (this['id'] == '' || this['id'] == null)) {
+      if (!this.receive && (this['id'] == '' || this['id'] == null)) {
         if (transport != null) {
           this['id'] = Echotils.getUniqueId();
         } else {
@@ -87,7 +95,7 @@ class IQ extends RootStanza {
 
   String? _handlerID;
 
-  Future<void> sendIQ<T>({
+  FutureOr<void> sendIQ<T>({
     FutureOr<T> Function(StanzaBase stanza)? callback,
     FutureOr<void> Function()? timeoutCallback,
     int timeout = 2000,
@@ -116,9 +124,10 @@ class IQ extends RootStanza {
           completer.complete(stanza);
         }
       } else if (type == 'error') {
-        final error = StanzaError().copy(stanza.element!.getElement('error'));
+        stanza.registerPlugin(StanzaError());
+        stanza.enable('error');
         if (!completer.isCompleted) {
-          completer.completeError(StanzaException.iq(error));
+          completer.completeError(StanzaException.iq(stanza));
         }
       } else {
         if (callback is Future) {
@@ -156,6 +165,23 @@ class IQ extends RootStanza {
     send();
   }
 
+  @override
+  void unhandled([Transport? transport]) {
+    if ({'get', 'set'}.contains(this['type'])) {
+      if (this.transport == null) {
+        this.transport = transport;
+      }
+      final iq = replyIQ();
+      iq
+        ..registerPlugin(StanzaError())
+        ..enable('error');
+      final error = iq['error'] as XMLBase;
+      error['condition'] = 'feature-not-implemented';
+      error['text'] = 'No handlers registered';
+      iq.send();
+    }
+  }
+
   IQ replyIQ({bool clear = true}) {
     final iq = super.reply<IQ>(copiedStanza: copy(), clear: clear);
     iq['type'] = 'result';
@@ -163,7 +189,24 @@ class IQ extends RootStanza {
   }
 
   @override
-  IQ copy([xml.XmlElement? element, XMLBase? parent, bool receive = false]) {
-    return IQ(transport: transport);
-  }
+  IQ copy([xml.XmlElement? element, XMLBase? parent, bool receive = false]) =>
+      IQ(
+        subInterfaces: _subInterfaces,
+        languageInterfaces: _languageInterfaces,
+        getters: _getters,
+        setters: _setters,
+        deleters: _deleters,
+        pluginTagMapping: pluginTagMapping,
+        pluginAttributeMapping: _pluginAttributeMapping,
+        pluginMultiAttribute: _pluginMultiAttribute,
+        pluginIterables: _pluginIterables,
+        overrides: _overrides,
+        isExtension: _isExtension,
+        setupOverride: setupOverride,
+        boolInterfaces: _boolInterfaces,
+        includeNamespace: _includeNamespace,
+        receive: receive,
+        element: element,
+        parent: parent,
+      );
 }

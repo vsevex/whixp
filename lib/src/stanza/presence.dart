@@ -1,16 +1,26 @@
-import 'package:echox/src/echotils/echotils.dart';
-import 'package:echox/src/stanza/root.dart';
-import 'package:echox/src/stream/base.dart';
+part of '../stream/base.dart';
 
 class Presence extends RootStanza {
   Presence({
+    super.transport,
     Set<String>? showTypes,
     super.stanzaType,
     super.stanzaTo,
     super.stanzaFrom,
-    super.transport,
     super.receive = false,
     super.includeNamespace = false,
+    super.getters,
+    super.setters,
+    super.deleters,
+    super.pluginTagMapping,
+    super.pluginAttributeMapping,
+    super.pluginMultiAttribute,
+    super.pluginIterables,
+    super.overrides,
+    super.isExtension,
+    super.setupOverride,
+    super.boolInterfaces,
+    super.element,
   }) : super(
           name: 'presence',
           namespace: Echotils.getNamespace('CLIENT'),
@@ -37,13 +47,14 @@ class Presence extends RootStanza {
             'unsubscribed',
           },
         ) {
-    _showtypes = showTypes ?? const {'dnd', 'chat', 'xa', 'away'};
+    showtypes = showTypes ?? const {'dnd', 'chat', 'xa', 'away'};
 
-    if (!receive && this['id'] == '') {
+    if (!this.receive && this['id'] == '') {
       if (transport != null) {
         this['id'] = Echotils.getUniqueId();
       }
     }
+
     addSetters(
       <Symbol, void Function(dynamic value, dynamic args, XMLBase base)>{
         const Symbol('type'): (value, args, base) {
@@ -53,7 +64,7 @@ class Presence extends RootStanza {
               value = '';
             }
             base.setAttribute('type', value as String);
-          } else if (_showtypes.contains(value)) {
+          } else if (showtypes.contains(value)) {
             base['show'] = value;
           }
         },
@@ -63,7 +74,7 @@ class Presence extends RootStanza {
     addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
       const Symbol('type'): (args, base) {
         String out = base.getAttribute('type');
-        if (out.isEmpty && _showtypes.contains(base['show'])) {
+        if (out.isEmpty && showtypes.contains(base['show'])) {
           out = this['show'] as String;
         }
         if (out.isEmpty) {
@@ -90,5 +101,5 @@ class Presence extends RootStanza {
     );
   }
 
-  late final Set<String> _showtypes;
+  late final Set<String> showtypes;
 }

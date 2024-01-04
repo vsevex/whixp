@@ -1,4 +1,4 @@
-import 'package:echox/src/stream/base.dart';
+part of '../stream/base.dart';
 
 /// Top-level stanza in a Transport.
 ///
@@ -12,15 +12,27 @@ abstract class RootStanza extends StanzaBase {
     super.stanzaID,
     super.name,
     super.namespace,
+    super.transport,
+    super.receive,
     super.interfaces,
     super.subInterfaces,
     super.languageInterfaces,
     super.includeNamespace = true,
     super.types,
+    super.getters,
+    super.setters,
+    super.deleters,
     super.pluginAttribute,
-    super.transport,
+    super.pluginTagMapping,
+    super.pluginAttributeMapping,
+    super.pluginMultiAttribute,
+    super.pluginIterables,
+    super.overrides,
+    super.isExtension,
     super.setupOverride,
-    super.receive,
+    super.boolInterfaces,
+    super.element,
+    super.parent,
   });
 
   /// Creates and sends an error reply.
