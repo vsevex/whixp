@@ -3,16 +3,16 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
 
-import 'package:echox/src/client.dart';
 import 'package:echox/src/echotils/echotils.dart';
 import 'package:echox/src/exception.dart';
+import 'package:echox/src/whixp.dart';
 
 /// [Scram] is a class used for the SCRAM (Saited Challenge Response
 /// Authentication Mechanism) authentication in the XMPP protocol.
 class Scram {
-  Scram(this.client);
+  Scram(this.whixp);
 
-  final Whixp client;
+  final WhixpBase whixp;
 
   /// This method is used to generate the proof of the client's identity to the
   /// server, which is required for the SCRAM authentication mechanism. Without
@@ -281,9 +281,9 @@ class Scram {
     final cnonce = generateCNonce;
 
     final clientFirstMessageBare =
-        'n=${client.credentials['username']},r=$cnonce';
-    client.saslData['cnonce'] = cnonce;
-    client.saslData['clientFirstMessageBare'] = clientFirstMessageBare;
+        'n=${whixp.credentials['username']},r=$cnonce';
+    whixp.saslData['cnonce'] = cnonce;
+    whixp.saslData['clientFirstMessageBare'] = clientFirstMessageBare;
 
     /// The method returns a string value containing the client first message in
     /// the following format: "n,,n=<authentication identity>,r=<nonce>".
@@ -337,7 +337,7 @@ class Scram {
   ) {
     /// Check if the `cnonce` key is present in `saslData` object of
     /// `connection`.
-    final cnonce = client.saslData['cnonce'] as String;
+    final cnonce = whixp.saslData['cnonce'] as String;
 
     /// Parse the received challenge string.
     final challengeData = parseChallenge(challenge);
@@ -348,14 +348,14 @@ class Scram {
     /// as an initial substring.
     if ((challengeData['nonce'] as String).substring(0, cnonce.length) !=
         cnonce) {
-      client.saslData.clear();
+      whixp.saslData.clear();
       throw SASLException.cnonce();
     }
 
     String? clientKey;
     String? serverKey;
 
-    final password = client.password;
+    final password = whixp.password;
 
     final keys = deriveKeys(
       password: password,
@@ -366,7 +366,7 @@ class Scram {
     clientKey = keys['ck'];
     serverKey = keys['sk'];
 
-    final clientFirstMessageBare = client.saslData['clientFirstMessageBare'];
+    final clientFirstMessageBare = whixp.saslData['clientFirstMessageBare'];
     final serverFirstMessage = challenge;
     final clientFinalMessageBare = 'c=biws,r=${challengeData['nonce']}';
 
@@ -376,8 +376,8 @@ class Scram {
     final proof = clientProof(message, clientKey!, hashName);
     final serverSignature = serverSign(message, serverKey!, hashName);
 
-    client.saslData['server-signature'] = Echotils.btoa(serverSignature);
-    client.saslData['keys'] = {
+    whixp.saslData['server-signature'] = Echotils.btoa(serverSignature);
+    whixp.saslData['keys'] = {
       'name': hashName,
       'iter': challengeData['iter'],
       'salt': Echotils.arrayBufferToBase64(
