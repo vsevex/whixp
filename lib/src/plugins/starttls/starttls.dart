@@ -1,4 +1,12 @@
-part of '../../whixp.dart';
+import 'package:meta/meta.dart';
+
+import 'package:whixp/src/handler/handler.dart';
+import 'package:whixp/src/plugins/base.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/stream/matcher/matcher.dart';
+import 'package:whixp/src/utils/utils.dart';
+
+part 'stanza.dart';
 
 class FeatureStartTLS extends PluginBase {
   const FeatureStartTLS(this._features, {required super.base})
@@ -11,8 +19,8 @@ class FeatureStartTLS extends PluginBase {
 
   @override
   void initialize() {
-    final proceed = _Proceed();
-    final failure = _Failure();
+    final proceed = Proceed();
+    final failure = Failure();
 
     base.transport.registerHandler(
       FutureCallbackHandler(
@@ -25,13 +33,14 @@ class FeatureStartTLS extends PluginBase {
     base.transport.registerStanza(proceed);
     base.transport.registerStanza(failure);
 
-    final startTLS = _StartTLS();
+    final startTLS = StartTLS();
     _features.registerPlugin(startTLS);
     _features.enable(startTLS.name);
   }
 
+  /// Handle notification that the server supports TLS.
   bool _handleStartTLS(StanzaBase features) {
-    final stanza = _StartTLS();
+    final stanza = StartTLS();
 
     if (base.features.contains('starttls')) {
       return false;
@@ -43,7 +52,9 @@ class FeatureStartTLS extends PluginBase {
     }
   }
 
+  /// Restart the XML stream when TLS is accepted.
   Future<void> _handleStartTLSProceed() async {
+    
     if (await base.transport.startTLS()) {
       base.features.add('starttls');
     }

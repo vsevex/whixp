@@ -1,6 +1,6 @@
-import 'package:echox/src/jid/jid.dart';
-import 'package:echox/src/stream/base.dart';
-import 'package:echox/src/stream/matcher/base.dart';
+import 'package:whixp/src/jid/jid.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/stream/matcher/base.dart';
 
 /// Selects stanzas that have the same stanza 'id' interface value as the
 /// desired ID.
@@ -15,14 +15,15 @@ class MatcherID extends BaseMatcher {
 /// interface value as the desired ID, and that the 'from' value is one of a
 /// set of approved entities that can respond to a request.
 class MatchIDSender extends BaseMatcher {
-  MatchIDSender(super.criteria) : assert(criteria.runtimeType is CriteriaType);
+  MatchIDSender(super.criteria)
+      : assert(criteria.runtimeType is IDMatcherCriteria);
 
   /// Compare the given stanza's `id` attribute to the stored `id` value, and
   /// verify the sender's JID.
   @override
   bool match(XMLBase base) {
-    final selfJID = (criteria as CriteriaType).self;
-    final peerJID = (criteria as CriteriaType).peer;
+    final selfJID = (criteria as IDMatcherCriteria).self;
+    final peerJID = (criteria as IDMatcherCriteria).peer;
 
     late final allowed = <String, bool>{};
     allowed[''] = true;
@@ -35,24 +36,34 @@ class MatchIDSender extends BaseMatcher {
     final from = base['from'];
 
     try {
-      return base['id'] == (criteria as CriteriaType).id && allowed[from]!;
+      return base['id'] == (criteria as IDMatcherCriteria).id && allowed[from]!;
     } catch (_) {
       return false;
     }
   }
 }
 
-class CriteriaType {
-  const CriteriaType(this.self, this.peer, this.id);
+/// Represents the criteria for matching stanzas.
+///
+/// Instances of this class store information necessary for matching stanzas
+/// based on their [id] attribute and sender's/peer's Jabber IDs.
+class IDMatcherCriteria {
+  /// Creates a new instance with the give parameters.
+  const IDMatcherCriteria(this.self, this.peer, this.id);
 
+  /// The Jabber ID of the sender.
   final JabberID self;
+
+  /// The Jabber ID of the peer.
   final JabberID peer;
+
+  /// The unique identifier used for matching stanzas.
   final String id;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is CriteriaType &&
+      other is IDMatcherCriteria &&
           runtimeType == other.runtimeType &&
           self == other.self &&
           peer == other.peer &&

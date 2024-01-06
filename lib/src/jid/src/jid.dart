@@ -2,21 +2,22 @@ import 'dart:io';
 
 import 'package:dartz/dartz.dart';
 
-import 'package:echox/src/echotils/src/stringprep.dart';
-import 'package:echox/src/escaper/escaper.dart';
-import 'package:echox/src/jid/src/exception.dart';
-
 import 'package:memoize/memoize.dart';
 
-part '_escape.dart';
+import 'package:whixp/src/escaper/escaper.dart';
+import 'package:whixp/src/jid/src/exception.dart';
+import 'package:whixp/src/utils/src/stringprep.dart';
 
+/// A private utility class for parsing, formatting, and validating Jabber IDs.
 class _Jabbered {
   const _Jabbered();
 
+  /// Regular expression pattern for parsing Jabber IDs.
   static final pattern = RegExp(
     r"""^(?:([^\"&'/:<>@]{1,1023})@)?([^/@]{1,1023})(?:/(.{1,1023}))?$""",
   );
 
+  /// Parses a Jabber ID string into its components (node, domain, resource).
   static Tuple3<String, String, String> _parse(String jid) {
     final match = memo0<RegExpMatch?>(() => pattern.firstMatch(jid)).call();
 
@@ -31,6 +32,8 @@ class _Jabbered {
     return Tuple3(node, domain, resource);
   }
 
+  /// Formats a Jabber ID using the provided components (node, domain,
+  /// resource).
   static String _format({String? node, String? domain, String? resource}) {
     late String result;
     if (domain == null) {
@@ -50,6 +53,7 @@ class _Jabbered {
     return result;
   }
 
+  /// Validate the local, or username, portion of a JID.
   static String _validateNode(String? regex) {
     if (regex == null) {
       return '';
@@ -73,6 +77,10 @@ class _Jabbered {
     return node;
   }
 
+  /// Validate the domain portion of a JabberID. If the given domain is
+  /// actually a punycoded version of a domain name, it is converted back into
+  /// its original Unicode form. Domains must also not start or end with a
+  /// dash.
   static String _validateDomain(String? regex) {
     bool ipAddress = false;
 
@@ -139,6 +147,7 @@ class _Jabbered {
     return domain;
   }
 
+  /// Validate the resource portion of a JID.
   static String _validateResource(String? regex) {
     if (regex == null) {
       return '';
@@ -164,7 +173,15 @@ class _Jabbered {
   }
 }
 
+/// A representation of a Jabber ID, or JID.
+///
+/// Each JID may have three components: a node, a domain, and an optional
+/// resource. For example: vsevex@example.com/resource
+///
+/// When a resource is not used, the JID is called a bare JID. The JID is a
+/// full JID otherwise.
 class JabberID {
+  /// Constructs a JabberID instance from a JID String.
   JabberID([String? jid]) {
     if (jid == null) return;
     final jabberID = _Jabbered._parse(jid);
@@ -183,6 +200,7 @@ class JabberID {
   late String _bare;
   late String _full;
 
+  /// Updates the bare and full JID strings based on the current components.
   void _updateBareFull() {
     _bare = _node.isNotEmpty ? '$_node@$_domain' : _domain;
     _full = _resource.isNotEmpty ? '$_bare/$_resource' : _bare;
@@ -241,8 +259,10 @@ class JabberID {
     _updateBareFull();
   }
 
+  /// Unescapes the full JID string using the [Escaper] utility.
   String get unescaped => Escaper().unescape(full);
 
+  /// Formats the Jabber ID into a string.
   String get formatted => _Jabbered._format();
 
   @override
@@ -264,6 +284,7 @@ class JabberID {
       _bare.hashCode ^
       _full.hashCode;
 
+  /// Use the full JID as  the string value.
   @override
   String toString() => _full;
 }

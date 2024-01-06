@@ -1,6 +1,6 @@
-import 'package:echox/src/stringprep/stringprep.dart';
-
 import 'package:test/test.dart';
+
+import 'package:whixp/src/stringprep/stringprep.dart';
 
 void main() {
   group('string preparation table check methods test', () {

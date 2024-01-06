@@ -1,6 +1,5 @@
-import 'package:echox/src/jid/jid.dart';
-
 import 'package:test/test.dart';
+import 'package:whixp/src/jid/jid.dart';
 
 void main() {
   group('verify that the JabberID class can parse and manipulate JIDs', () {

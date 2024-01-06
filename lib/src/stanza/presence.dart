@@ -1,9 +1,38 @@
-part of '../stream/base.dart';
+import 'package:whixp/src/stanza/root.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/utils/utils.dart';
 
+import 'package:xml/xml.dart' as xml;
+
+/// XMPP's <presence> stanza allows entities to konw the status of other clients
+/// and components. Since it is currently the only multi-cast stanza in XMPP,
+/// many extensions and more information to [Presence] stanzas to broadcast
+/// to every entry in the roster, such as capabilities, music choices, or
+/// locations.
+///
+/// Since [Presence] stanzas are broadcast when an XMPP entity changes its
+/// status, the bulk of the traffic in an XMP network will be from <presence>
+/// stanazas. Therefore, do not include more information than necessary in a
+/// status message or within a [Presence] stanza in order to help keep the
+/// network running smoothly.
+///
+/// ### Example:
+/// ```xml
+/// <presence from="vsevex@example.com">
+/// <show>away</show>
+///   <status>old, but platin</status>
+///   <priority>1</priority>
+/// </presence>
+/// ```
 class Presence extends RootStanza {
+  /// [showtypes] may be one of: dnd, chat, xa, away.
+  /// [types] may be one of: available, unavailable, error or probe.
+  ///
+  /// All parameters are extended from [RootStanza]. For more information please
+  /// take a look at [RootStanza].
   Presence({
+    this.showtypes = const {'dnd', 'chat', 'xa', 'away'},
     super.transport,
-    Set<String>? showTypes,
     super.stanzaType,
     super.stanzaTo,
     super.stanzaFrom,
@@ -21,9 +50,10 @@ class Presence extends RootStanza {
     super.setupOverride,
     super.boolInterfaces,
     super.element,
+    super.parent,
   }) : super(
           name: 'presence',
-          namespace: Echotils.getNamespace('CLIENT'),
+          namespace: WhixpUtils.getNamespace('CLIENT'),
           pluginAttribute: 'presence',
           interfaces: <String>{
             'type',
@@ -47,11 +77,9 @@ class Presence extends RootStanza {
             'unsubscribed',
           },
         ) {
-    showtypes = showTypes ?? const {'dnd', 'chat', 'xa', 'away'};
-
-    if (!this.receive && this['id'] == '') {
+    if (!receive && this['id'] == '') {
       if (transport != null) {
-        this['id'] = Echotils.getUniqueId();
+        this['id'] = WhixpUtils.getUniqueId();
       }
     }
 
@@ -101,5 +129,45 @@ class Presence extends RootStanza {
     );
   }
 
-  late final Set<String> showtypes;
+  /// Overrides [reply].
+  ///
+  /// Creates a new reply [Presence] from [this].
+  Presence replyPresence({bool clear = true}) {
+    final presence = super.reply<Presence>(copiedStanza: copy(), clear: clear);
+
+    if (this['type'] == 'unsubscribe') {
+      presence['type'] = 'unsubscribed';
+    } else if (this['type'] == 'subscribe') {
+      presence['type'] = 'subscribed';
+    }
+
+    return presence;
+  }
+
+  @override
+  Presence copy({
+    xml.XmlElement? element,
+    XMLBase? parent,
+    bool receive = false,
+  }) =>
+      Presence(
+        transport: transport,
+        receive: receive,
+        includeNamespace: includeNamespace,
+        getters: getters,
+        setters: setters,
+        deleters: deleters,
+        pluginTagMapping: pluginTagMapping,
+        pluginAttributeMapping: pluginAttributeMapping,
+        pluginMultiAttribute: pluginMultiAttribute,
+        pluginIterables: pluginIterables,
+        overrides: overrides,
+        isExtension: isExtension,
+        setupOverride: setupOverride,
+        boolInterfaces: boolInterfaces,
+        element: element,
+        parent: parent,
+      );
+
+  final Set<String> showtypes;
 }

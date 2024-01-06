@@ -1,30 +1,36 @@
-import 'dart:async';
-
 import 'package:dartz/dartz.dart';
 
-import 'package:echox/src/echotils/echotils.dart';
-import 'package:echox/src/exception.dart';
-import 'package:echox/src/handler/callback.dart';
-import 'package:echox/src/handler/handler.dart';
-import 'package:echox/src/jid/jid.dart';
-import 'package:echox/src/stanza/error.dart';
-import 'package:echox/src/stream/matcher/base.dart';
-import 'package:echox/src/stream/matcher/id.dart';
-import 'package:echox/src/transport.dart';
-
 import 'package:meta/meta.dart';
+
+import 'package:whixp/src/jid/jid.dart';
+import 'package:whixp/src/log/log.dart';
+import 'package:whixp/src/transport.dart';
+import 'package:whixp/src/utils/utils.dart';
+
 import 'package:xml/xml.dart' as xml;
 import 'package:xpath_selector_xml_parser/xpath_selector_xml_parser.dart';
 
 part 'stanza.dart';
-part '../stanza/root.dart';
-part '../stanza/iq.dart';
-part '../stanza/message.dart';
-part '../stanza/presence.dart';
 
+/// Gets two parameter; The first one is usually refers to language of the
+/// stanza. The second is for processing over current stanza and keeps [XMLBase]
+/// instance.
 typedef _GetterOrDeleter = dynamic Function(dynamic args, XMLBase base);
 
+/// Gets three params; The first one is usually refers to language of the
+/// current stanza. The second one is the parameter to set. The third one is
+/// [XMLBase] and refers to current stanza instance.
+typedef _Setter = void Function(dynamic args, dynamic value, XMLBase base);
+
 /// Applies the stanza's namespace to elements in an [xPath] expression.
+///
+/// [split] indicates if the fixed XPath should be left as a list of element
+/// names of element names with namespaces. Defaults to `false`.
+///
+/// [propogateNamespace] overrides propagating parent element namespaces to
+/// child elements. Useful if you wish to simply split an XPath that has
+/// non-specified namepsaces, adnd child and parent namespaces are konwn not to
+/// always match. Defaults to `true`.
 Tuple2<String?, List<String>?> fixNamespace(
   String xPath, {
   bool split = false,
@@ -79,29 +85,35 @@ Tuple2<String?, List<String>?> fixNamespace(
 void registerStanzaPlugin(
   XMLBase stanza,
   XMLBase plugin, {
+  /// Indicates if the plugin stanza should be included in the parent stanza's
+  /// iterable [substanzas] interface results.
   bool iterable = false,
+
+  /// Indicates if the plugin should be allowed to override the interface
+  /// handlers for the parent stanza, based on the plugin's [overrides] field.
   bool overrides = false,
 }) {
   final tag = '<${plugin.name} xmlns="${plugin.namespace}"/>';
 
-  stanza._pluginAttributeMapping[plugin.pluginAttribute] = plugin;
+  stanza.pluginAttributeMapping[plugin.pluginAttribute] = plugin;
   stanza.pluginTagMapping[tag] = plugin;
 
   if (iterable) {
-    stanza._pluginIterables.add(plugin);
-    if (plugin._pluginMultiAttribute != null &&
-        plugin._pluginMultiAttribute.isNotEmpty) {
-      final multiplugin = multifactory(plugin, plugin._pluginMultiAttribute);
+    stanza.pluginIterables.add(plugin);
+    if (plugin.pluginMultiAttribute != null &&
+        plugin.pluginMultiAttribute!.isNotEmpty) {
+      final multiplugin = multifactory(plugin, plugin.pluginMultiAttribute!);
       registerStanzaPlugin(stanza, multiplugin);
     }
   }
   if (overrides) {
-    for (final interface in plugin._overrides) {
-      stanza._pluginOverrides[interface] = plugin.pluginAttribute;
+    for (final interface in plugin.overrides) {
+      stanza.pluginOverrides[interface] = plugin.pluginAttribute;
     }
   }
 }
 
+/// Returns a [XMLBase] class for handling reoccuring child stanzas.
 XMLBase multifactory(XMLBase stanza, String pluginAttribute) {
   final multistanza = _Multi(
     stanza.runtimeType,
@@ -132,6 +144,8 @@ XMLBase multifactory(XMLBase stanza, String pluginAttribute) {
 
 typedef _MultiFilter = bool Function(XMLBase);
 
+/// Multifactory class. Responsible to create an stanza with provided
+/// substanzas.
 class _Multi extends XMLBase {
   _Multi(
     this._multistanza, {
@@ -230,86 +244,143 @@ class _XMLBaseIterator implements Iterator<XMLBase> {
   }
 }
 
+/// ## XMLBase
+///
+/// Designed for efficient manipulation of XML elements. Provides a set of
+/// methods and functionalities to create, modify, and interact with XML
+/// structures.
+///
+/// Serves as a base and flexible XML manipulation tool for this package,
+/// designed to simplify the creation, modification, and interaction with
+/// XML. It offers a comprehensive set of features for constructing XML
+/// elements, managing attributes, handling child elements, and incorporating
+/// dynamic plugins to extend functionality.
+///
+/// [XMLBase] is created to accommodate a wide range of XML manipulation tasks.
+/// Whether you are creating simple XML elements or dealing with complex
+/// structures, this class provides a versatile foundation.
+///
+/// The extensibility of [XMLBase] is the key strength. You can integrate and
+/// manage plugins, which may include extensions or custom functionality.
+///
+/// Stanzas are defined by their name, namespace, and interfaces. For example,
+/// a simplistic Message stanza could be defined as:
+/// ```dart
+/// class Message extends XMLBase {
+///   Message()
+///       : super(
+///           name: 'message',
+///           interfaces: {'to', 'from', 'type', 'body'},
+///           subInterfaces: {'body'},
+///         );
+/// }
+/// ```
+///
+/// The resulting Message stanza's content may be accessed as so:
+/// ```dart
+/// message['to'] = 'vsevex@example.com';
+/// message['body'] = 'salam';
+/// log(message['body']); /// outputs 'salam'
+/// message.delete('body');
+/// log(message['body']); /// will output empty string
+/// ```
+///
+/// ### Example:
+/// ```dart
+/// class TestStanza extends XMLBase {
+///   TestStanza({
+///     super.name,
+///     super.namespace,
+///     super.pluginAttribute,
+///     super.pluginMultiAttribute,
+///     super.overrides,
+///     super.interfaces,
+///     super.subInterfaces,
+///   });
+/// }
+///
+/// void main() {
+///   final stanza = TestStanza({name: 'stanza'});
+///   /// ...do whatever manipulation you want
+///   stanza['test'] = 'salam';
+///   /// will add a 'test' child and assign 'salam' text to it
+/// }
+/// ```
+///
+/// Extending stanzas through the use of plugins (simple stanza that has
+/// pluginAttribute value) is like the following:
+/// ```dart
+/// class MessagePlugin extends XMLBase {
+///   MessagePlugin()
+///       : super(
+///           name: 'message',
+///           interfaces: {'cart', 'hert'},
+///           pluginAttribute: 'custom',
+///         );
+/// }
+/// ```
+///
+/// The plugin stanza class myst be associated with its intended container
+/// stanza by using [registerStanzaPlugin] method:
+/// ```dart
+/// final plugin = MessagePlugin();
+/// message.registerPlugin(plugin);
+/// ```
+///
+/// The plugin may then be accessed as if it were built-in to the parent stanza:
+/// ```dart
+/// message['custom']['cart'] = 'test';
+/// ```
 class XMLBase {
+  /// ## XMLBase
+  ///
+  /// Default constructor for creating an empty XML element.
+  ///
+  /// [XMLBase] is designed with customization in mind. Users can extend the
+  /// class and override methods, allowing for the manipulation of custom fields
+  /// and the implementation of specialized behavior when needed.
   XMLBase({
     /// If no `name` is passed, sets the default name of the stanza to `stanza`
     this.name = 'stanza',
 
     /// If `null`, then default stanza namespace will be used
     String? namespace,
-    String? pluginAttribute,
-    String? pluginMultiAttribute,
-    List<String>? overrides,
+    this.transport,
+    this.pluginAttribute = 'plugin',
+    this.pluginMultiAttribute,
+    this.overrides = const <String>[],
     Map<String, XMLBase>? pluginTagMapping,
     Map<String, XMLBase>? pluginAttributeMapping,
 
     /// Defaults to predefined ones
-    Set<String>? interfaces,
-    Set<String>? subInterfaces,
-    Set<String>? boolInterfaces,
-    Set<String>? languageInterfaces,
-    Map<String, String>? pluginOverrides,
-    Set<XMLBase>? pluginIterables,
-    bool isExtension = false,
-    bool includeNamespace = true,
-    Map<Symbol, _GetterOrDeleter>? getters,
-    Map<Symbol, void Function(dynamic value, dynamic args, XMLBase base)>?
-        setters,
-    Map<Symbol, _GetterOrDeleter>? deleters,
+    this.interfaces = const <String>{'type', 'to', 'from', 'id', 'payload'},
+    this.subInterfaces = const <String>{},
+    this.boolInterfaces = const <String>{},
+    this.languageInterfaces = const <String>{},
+    this.pluginOverrides = const <String, String>{},
+    this.pluginIterables = const <XMLBase>{},
     this.receive = false,
-    this.transport,
+    this.isExtension = false,
+    this.includeNamespace = true,
+    Map<Symbol, _GetterOrDeleter>? getters,
+    Map<Symbol, _Setter>? setters,
+    Map<Symbol, _GetterOrDeleter>? deleters,
     this.setupOverride,
     this.element,
-    XMLBase? parent,
+    this.parent,
   }) {
-    /// Equal `namespace` to `CLIENT` by default.
-    this.namespace = namespace ?? Echotils.getNamespace('CLIENT');
-
-    this.pluginAttribute = pluginAttribute ?? 'plugin';
-    _pluginMultiAttribute = pluginMultiAttribute;
-    _pluginAttributeMapping = pluginAttributeMapping ?? <String, XMLBase>{};
     this.pluginTagMapping = pluginTagMapping ?? <String, XMLBase>{};
+    this.pluginAttributeMapping = pluginAttributeMapping ?? <String, XMLBase>{};
 
-    /// Set the `interfaces` predefined ones.
-    _interfaces = interfaces ?? {'type', 'to', 'from', 'id', 'payload'};
+    /// Defaults to `CLIENT`.
+    this.namespace = namespace ?? WhixpUtils.getNamespace('CLIENT');
 
-    /// Set `subInterfaces` to empty by default.
-    _subInterfaces = subInterfaces ?? <String>{};
-
-    /// Set `boolInterfaces` to empty by default.
-    _boolInterfaces = boolInterfaces ?? <String>{};
-
-    /// Default set the `languageInterfaces` [Set] to empty.
-    _languageInterfaces = languageInterfaces ?? <String>{};
-
-    /// Initialize and equal to empty [Map].
-    _pluginOverrides = pluginOverrides ?? <String, String>{};
-
-    /// Equal to empty [Set] in case of anything.
-    _pluginIterables = pluginIterables ?? <XMLBase>{};
-
-    /// By default, [XMLBase] is not extension.
-    _isExtension = isExtension;
-
-    _includeNamespace = includeNamespace;
-
-    _overrides = overrides ?? <String>[];
-
-    _iterables = <XMLBase>[];
-
-    _plugins = <Tuple2<String, String>, XMLBase>{};
-    _loadedPlugins = <String>{};
+    /// Equal tag to the tag name.
+    tag = _tagName;
 
     if (getters != null) addGetters(getters);
     if (setters != null) addSetters(setters);
     if (deleters != null) addDeleters(deleters);
-
-    _index = 0;
-
-    tag = _tagName;
-
-    _parent = null;
-    if (parent != null) _parent = parent;
 
     if (_setup(element)) return;
 
@@ -328,7 +399,8 @@ class XMLBase {
     }
   }
 
-  final bool receive;
+  /// Index to keep for iterables.
+  int _index = 0;
 
   /// The XML tag name of the element, not including any namespace prefixes.
   final String name;
@@ -340,12 +412,13 @@ class XMLBase {
   /// is being used in an XMPP library.
   late String namespace;
 
-  late final String pluginAttribute;
+  /// Unique identifiers of plugins across [XMLBase] classes.
+  final String pluginAttribute;
 
   /// [XMLBase] subclasses that are intended to be an iterable group of items,
   /// the `pluginMultiAttribute` value defines an interface for the parent
   /// stanza which returns the entire group of matching `substanzas`.
-  late final String? _pluginMultiAttribute;
+  final String? pluginMultiAttribute;
 
   /// In some cases you may wish to override the behaviour of one of the
   /// parent stanza's interfaces. The `overrides` list specifies the interface
@@ -357,65 +430,69 @@ class XMLBase {
   /// ```
   ///
   /// Getting and deleting the `condition` interface would not be affected.
-  late final List<String> _overrides;
+  final List<String> overrides;
 
-  /// A mapping of root element tag names (in `$namespaceElementName` format)
-  /// to the plugin classes responsible for them.
+  /// A mapping of root element tag names
+  /// (in `<$name xmlns="$namespace"/>` format) to the plugin classes
+  /// responsible for them.
   late final Map<String, XMLBase> pluginTagMapping;
 
-  late final Map<String, XMLBase> _pluginAttributeMapping;
+  /// When there is a need to indicate initialize plugin or get plugin we will
+  /// use [pluginAttributeMapping] keeper for this.
+  late final Map<String, XMLBase> pluginAttributeMapping;
 
   /// The set of keys that the stanza provides for accessing and manipulating
   /// the underlying XML object. This [Set] may be augmented with the
-  /// `pluginAttribute` value of any registered stanza plugins.
-  late final Set<String> _interfaces;
+  /// [pluginAttribute] value of any registered stanza plugins.
+  final Set<String> interfaces;
 
   /// A subset of `interfaces` which maps interfaces to direct subelements of
   /// the underlaying XML object. Using this [Set], the text of these
   /// subelements may be set, retrieved, or removed without needing to define
   /// custom methods.
-  late final Set<String> _subInterfaces;
+  final Set<String> subInterfaces;
 
-  /// A subset of `interfaces` which maps to the presence of subelements to
+  /// A subset of [interfaces] which maps to the presence of subelements to
   /// boolean values. Using this [Set] allows for quickly checking for the
   /// existence of empty subelements.
-  late final Set<String> _boolInterfaces;
+  final Set<String> boolInterfaces;
 
-  /// A subset of `interfaces` which maps to the presence of subelements to
+  /// A subset of [interfaces] which maps to the presence of subelements to
   /// language values.
-  late final Set<String> _languageInterfaces;
+  final Set<String> languageInterfaces;
 
   /// A [Map] of interface operations to the overriding functions.
   ///
   /// For instance, after overriding the `set` operation for the interface
-  /// `body`, `pluginOverrides` would be:
+  /// `body`, [pluginOverrides] would be:
   ///
   /// ```dart
-  /// log(pluginOverrides); /// outputs {'set_body': Function()}
+  /// log(pluginOverrides); /// outputs {'body': Function()}
   /// ```
-  late final Map<String, String> _pluginOverrides;
+  final Map<String, String> pluginOverrides;
 
   /// The set of stanza classes that can be iterated over using the `substanzas`
   /// interface.
-  late final Set<XMLBase> _pluginIterables;
+  final Set<XMLBase> pluginIterables;
+
+  /// Declares if stanza is incoming or outgoing stanza. Defaults to false.
+  final bool receive;
 
   /// If you need to add a new interface to an existing stanza, you can create
   /// a plugin and set `isExtension = true`. Be sure to set the
-  /// `pluginAttribute` value to the desired interface name, and that it is the
-  /// only interface listed in `interfaces`. Requests for the new interface
+  /// [pluginAttribute] value to the desired interface name, and that it is the
+  /// only interface listed in [interfaces]. Requests for the new interface
   /// from the parent stanza will be passed to the plugin directly.
-  late final bool _isExtension;
+  final bool isExtension;
 
   /// Indicates that this stanza or stanza plugin should include [namespace].
   /// You need to specify this value in order to add namespace to your stanza,
-  /// 'cause Defaults to `false`.
-  late final bool _includeNamespace;
+  /// 'cause defaults to `false`.
+  final bool includeNamespace;
 
   /// The helper [Map] contains all the required `setter` methods when there is
   /// a need to override the current setter method.
-  late final Map<Symbol,
-          void Function(dynamic value, dynamic args, XMLBase base)> _setters =
-      <Symbol, void Function(dynamic value, dynamic args, XMLBase base)>{};
+  late final Map<Symbol, _Setter> _setters = <Symbol, _Setter>{};
 
   /// The helper [Map] contains all the required `getter` methods when there is
   /// a need to override the current getter method.
@@ -427,20 +504,29 @@ class XMLBase {
   late final Map<Symbol, _GetterOrDeleter> _deleters =
       <Symbol, _GetterOrDeleter>{};
 
-  /// Overrider for [setup] for method.
+  final _iterables = <XMLBase>[];
+
+  /// Keeps all initialized plugins across stanza.
+  final _plugins = <Tuple2<String, String>, XMLBase>{};
+
+  /// Keeps all loaded plugins across stanza.
+  final _loadedPlugins = <String>{};
+
+  /// Overrider for [_setup] for method.
   final void Function(XMLBase base, [xml.XmlElement? element])? setupOverride;
 
   /// The underlying [element] for the stanza.
   xml.XmlElement? element;
-  XMLBase? _parent;
-  late final List<XMLBase> _iterables;
-  late final Set<String> _loadedPlugins;
-  late final Map<Tuple2<String, String>, XMLBase> _plugins;
+
+  /// The parent [XMLBase] element for the stanza.
+  final XMLBase? parent;
+
+  /// Underlying [Transport] for this stanza class. Helps to interact with
+  /// socket.
+  @internal
   late Transport? transport;
 
-  /// Index to keep for iterables.
-  late int _index;
-
+  /// Tag name for the stanza in the format of "<$name xmlns="$namespace"/>".
   @internal
   late final String tag;
 
@@ -464,9 +550,9 @@ class XMLBase {
     xml.XmlElement lastXML = xml.XmlElement(xml.XmlName(''));
     int index = 0;
     for (final ename in name.split('/')) {
-      final newElement = index == 0 && _includeNamespace
-          ? Echotils.xmlElement(ename, namespace: namespace)
-          : Echotils.xmlElement(ename);
+      final newElement = index == 0 && includeNamespace
+          ? WhixpUtils.xmlElement(ename, namespace: namespace)
+          : WhixpUtils.xmlElement(ename);
       if (this.element == null) {
         this.element = newElement;
       } else {
@@ -476,8 +562,8 @@ class XMLBase {
       index++;
     }
 
-    if (_parent != null) {
-      _parent!.element!.children.add(this.element!);
+    if (parent != null) {
+      parent!.element!.children.add(this.element!);
     }
 
     return true;
@@ -497,15 +583,15 @@ class XMLBase {
     /// method.
     final lang = language ?? _getLang;
 
-    if (!_pluginAttributeMapping.containsKey(name)) {
+    if (!pluginAttributeMapping.containsKey(name)) {
       return null;
     }
 
-    final plugin = _pluginAttributeMapping[name];
+    final plugin = pluginAttributeMapping[name];
 
     if (plugin == null) return null;
 
-    if (plugin._isExtension) {
+    if (plugin.isExtension) {
       if (_plugins[Tuple2(name, '')] != null) {
         return _plugins[Tuple2(name, '')];
       } else {
@@ -531,9 +617,9 @@ class XMLBase {
     final defaultLanguage = _getLang;
     final lang = language ?? defaultLanguage;
 
-    late final pluginClass = _pluginAttributeMapping[attribute]!;
+    late final pluginClass = pluginAttributeMapping[attribute]!;
 
-    if (pluginClass._isExtension && _plugins[Tuple2(attribute, '')] != null) {
+    if (pluginClass.isExtension && _plugins[Tuple2(attribute, '')] != null) {
       return _plugins[Tuple2(attribute, '')]!;
     }
     if (reuse && _plugins[Tuple2(attribute, lang)] != null) {
@@ -545,14 +631,10 @@ class XMLBase {
     if (element != null) {
       plugin = element;
     } else {
-      // if (existingXML != null) {
-      plugin = pluginClass.copy(existingXML, this);
-      // } else {
-      //   plugin = pluginClass;
-      // }
+      plugin = pluginClass.copy(element: existingXML, parent: this);
     }
 
-    if (plugin._isExtension) {
+    if (plugin.isExtension) {
       _plugins[Tuple2(attribute, '')] = plugin;
     } else {
       if (lang != defaultLanguage) plugin['lang'] = lang;
@@ -560,13 +642,13 @@ class XMLBase {
       _plugins[Tuple2(attribute, lang)] = plugin;
     }
 
-    if (_pluginIterables
+    if (pluginIterables
         .where((element) => element == pluginClass)
         .toList()
         .isNotEmpty) {
       _iterables.add(plugin);
-      if (pluginClass._pluginMultiAttribute != null) {
-        _initPlugin(pluginClass._pluginMultiAttribute);
+      if (pluginClass.pluginMultiAttribute != null) {
+        _initPlugin(pluginClass.pluginMultiAttribute!);
       }
     }
 
@@ -582,12 +664,15 @@ class XMLBase {
   /// In case the element does not exist, or it has not textual content, a [def]
   /// value can be returned instead. An empty string is returned if no other
   /// default is supplied.
+  ///
+  /// [String] or [Map] of String should be returned. If language is not defined
+  /// then all sub texts will be returned.
   dynamic getSubText(
     String name, {
     String def = '',
     String? language,
   }) {
-    final castedName = '/${_fixNs(name).value1!}';
+    final castedName = '/${_fixNamespace(name).value1!}';
     if (language != null && language == '*') {
       return _getAllSubText(name, def: def);
     }
@@ -619,12 +704,13 @@ class XMLBase {
     return def;
   }
 
+  /// Returns all sub text of the element.
   Map<String, String> _getAllSubText(
     String name, {
     String def = '',
     String? language,
   }) {
-    final castedName = _fixNs(name).value1!;
+    final castedName = _fixNamespace(name).value1!;
 
     final defaultLanguage = _getLang;
     final results = <String, String>{};
@@ -672,7 +758,7 @@ class XMLBase {
       return null;
     }
 
-    final path = _fixNs(name, split: true).value2!;
+    final path = _fixNamespace(name, split: true).value2!;
     final castedName = path.last;
 
     late xml.XmlNode? parent = element;
@@ -728,6 +814,7 @@ class XMLBase {
     return tempElement;
   }
 
+  /// Set text to wherever sub element under [name].
   void _setAllSubText(
     String name, {
     required Map<String, String> values,
@@ -748,7 +835,7 @@ class XMLBase {
   /// after deleting the element may also be deleted if requested by setting
   /// [all] to `true`.
   void deleteSub(String name, {bool all = false, String? language}) {
-    final path = _fixNs(name, split: true).value2!;
+    final path = _fixNamespace(name, split: true).value2!;
     final originalTarget = path.last;
 
     final defaultLanguage = _getLang;
@@ -804,7 +891,7 @@ class XMLBase {
     }
   }
 
-  Tuple2<String?, List<String>?> _fixNs(
+  Tuple2<String?, List<String>?> _fixNamespace(
     String xPath, {
     bool split = false,
     bool propogateNamespace = false,
@@ -839,6 +926,8 @@ class XMLBase {
     element!.setAttribute(attribute == 'lang' ? 'xml:lang' : attribute, value);
   }
 
+  /// Deletes attribute under [name] If there is not [element] associated,
+  /// returns from the function.
   void deleteAttribute(String name) {
     if (element == null) return;
     if (element!.getAttribute(name) != null) element!.removeAttribute(name);
@@ -854,18 +943,17 @@ class XMLBase {
   ///
   /// Stanza interfaces are typically mapped directly to the underlying XML
   /// object, but can be overridden by the presence of a `getAttribute` method
-  /// (or `get_foo` where the interface is named `foo`, etc).
+  /// (or `foo` getter where the interface is named `foo`, etc).
   ///
   /// The search order for interface value retrieval for an interface named
   /// `foo` is:
   /// * The list of substanzas (`substanzas`)
   /// * The result of calling the `getFood` override handler
-  /// * The result of calling `get_foo`
-  /// * The result of calling `getFoo`
+  /// * The result of calling `foo` getter
   /// * The contents of the `foo` subelement, if `foo` is listed in
   /// `subInterfaces`
   /// * True or false depending on the existence of a `foo` subelement and `foo`
-  /// is in `_boolInterfaces`
+  /// is in `boolInterfaces`
   /// * The value of the `foo` attribute of the XML object
   /// * The plugin named `foo`
   /// * An empty string
@@ -878,18 +966,18 @@ class XMLBase {
 
     /// Check for if `languageInterfaces` contains both `language` and
     /// `attribute` values, then assign `args` values respective to the check.
-    final Map<String, String?> args = (_languageInterfaces.contains(language) &&
-            _languageInterfaces.contains(attribute))
+    final Map<String, String?> args = (languageInterfaces.contains(language) &&
+            languageInterfaces.contains(attribute))
         ? {'lang': language}
         : {};
 
     if (attribute == 'substanzas') {
       return _iterables;
-    } else if (_interfaces.contains(attribute) || attribute == 'lang') {
+    } else if (interfaces.contains(attribute) || attribute == 'lang') {
       final getMethod = attribute.toLowerCase();
 
-      if (_pluginOverrides.isNotEmpty) {
-        final name = _pluginOverrides[getMethod];
+      if (pluginOverrides.isNotEmpty) {
+        final name = pluginOverrides[getMethod];
 
         if (name != null && name.isNotEmpty) {
           final plugin = getPlugin(name, language: language);
@@ -904,18 +992,18 @@ class XMLBase {
       if (_getters.containsKey(Symbol(getMethod))) {
         return _getters[Symbol(getMethod)]?.call(args['lang'], this);
       } else {
-        if (_subInterfaces.contains(attribute)) {
+        if (subInterfaces.contains(attribute)) {
           return getSubText(attribute, language: language);
-        } else if (_boolInterfaces.contains(attribute)) {
+        } else if (boolInterfaces.contains(attribute)) {
           return element!.getElement(attribute, namespace: namespace) != null;
         } else {
           return getAttribute(attribute);
         }
       }
-    } else if (_pluginAttributeMapping.containsKey(attribute)) {
+    } else if (pluginAttributeMapping.containsKey(attribute)) {
       final plugin = getPlugin(attribute, language: language);
 
-      if (plugin != null && plugin._isExtension) {
+      if (plugin != null && plugin.isExtension) {
         return plugin[fullAttribute];
       }
 
@@ -937,7 +1025,7 @@ class XMLBase {
   ///
   /// Stanza interfaces are typically mapped directly to the underlying XML
   /// object, but can be overridden by the presence of a `setAttribute` method
-  /// (or `set_foo` where the interface is named `foo`, etc.).
+  /// (or `foo` setter where the interface is named `foo`, etc.).
   void operator []=(String attribute, dynamic value) {
     final fullAttribute = attribute;
     final attributeLanguage = '$attribute|'.split('|');
@@ -945,17 +1033,17 @@ class XMLBase {
     final lang = attributeLanguage[1].isEmpty ? null : attributeLanguage[1];
     final args = <String, String?>{};
 
-    if (_languageInterfaces.contains(lang) &&
-        _languageInterfaces.contains(attrib)) {
+    if (languageInterfaces.contains(lang) &&
+        languageInterfaces.contains(attrib)) {
       args['lang'] = lang;
     }
 
-    if (_interfaces.contains(attrib) || attrib == 'lang') {
+    if (interfaces.contains(attrib) || attrib == 'lang') {
       if (value != null) {
         final setMethod = attrib.toLowerCase();
 
-        if (_pluginOverrides.isNotEmpty) {
-          final name = _pluginOverrides[setMethod];
+        if (pluginOverrides.isNotEmpty) {
+          final name = pluginOverrides[setMethod];
 
           if (name != null && name.isNotEmpty) {
             final plugin = getPlugin(name, language: lang);
@@ -976,7 +1064,7 @@ class XMLBase {
         if (_setters.containsKey(Symbol(setMethod))) {
           _setters[Symbol(setMethod)]?.call(value, args['lang'], this);
         } else {
-          if (_subInterfaces.contains(attrib)) {
+          if (subInterfaces.contains(attrib)) {
             dynamic subvalue;
             if (value is JabberID) {
               subvalue = value.toString();
@@ -991,7 +1079,7 @@ class XMLBase {
             }
             setSubText(attrib, text: subvalue as String?, language: lang);
             return;
-          } else if (_boolInterfaces.contains(attrib)) {
+          } else if (boolInterfaces.contains(attrib)) {
             if (value != null && value as bool) {
               setSubText(attrib, text: '', keep: true, language: lang);
               return;
@@ -1009,8 +1097,8 @@ class XMLBase {
           }
         }
       }
-    } else if (_pluginAttributeMapping.containsKey(attrib) &&
-        _pluginAttributeMapping[attrib] != null) {
+    } else if (pluginAttributeMapping.containsKey(attrib) &&
+        pluginAttributeMapping[attrib] != null) {
       final plugin = getPlugin(attrib, language: lang);
       if (plugin != null) {
         plugin[fullAttribute] = value;
@@ -1032,16 +1120,16 @@ class XMLBase {
     final lang = attributeLanguage[1].isNotEmpty ? attributeLanguage[1] : null;
     final args = <String, String?>{};
 
-    if (_languageInterfaces.contains(lang) &&
-        _languageInterfaces.contains(attrib)) {
+    if (languageInterfaces.contains(lang) &&
+        languageInterfaces.contains(attrib)) {
       args['lang'] = lang;
     }
 
-    if (_interfaces.contains(attrib) || attrib == 'lang') {
+    if (interfaces.contains(attrib) || attrib == 'lang') {
       final deleteMethod = attrib.toLowerCase();
 
-      if (_pluginOverrides.isNotEmpty) {
-        final name = _pluginOverrides[deleteMethod];
+      if (pluginOverrides.isNotEmpty) {
+        final name = pluginOverrides[deleteMethod];
 
         if (name != null && name.isNotEmpty) {
           final plugin = getPlugin(attrib, language: lang);
@@ -1059,21 +1147,21 @@ class XMLBase {
       if (_deleters.containsKey(Symbol(deleteMethod))) {
         _deleters[Symbol(deleteMethod)]?.call(args['lang'], this);
       } else {
-        if (_subInterfaces.contains(attrib)) {
+        if (subInterfaces.contains(attrib)) {
           return deleteSub(attrib, language: lang);
-        } else if (_boolInterfaces.contains(attrib)) {
+        } else if (boolInterfaces.contains(attrib)) {
           return deleteSub(attrib, language: lang);
         } else {
           return deleteAttribute(attrib);
         }
       }
-    } else if (_pluginAttributeMapping.containsKey(attrib) &&
-        _pluginAttributeMapping[attrib] != null) {
+    } else if (pluginAttributeMapping.containsKey(attrib) &&
+        pluginAttributeMapping[attrib] != null) {
       final plugin = getPlugin(attrib, language: lang, check: true);
       if (plugin == null) {
         return;
       }
-      if (plugin._isExtension) {
+      if (plugin.isExtension) {
         plugin.delete(fullAttribute);
         _plugins.remove(Tuple2(attrib, ''));
       } else {
@@ -1109,11 +1197,11 @@ class XMLBase {
           element: base,
           reuse: false,
         );
-      } else if (_pluginIterables.contains(base)) {
+      } else if (pluginIterables.contains(base)) {
         _iterables.add(base);
-        if (base._pluginMultiAttribute != null &&
-            base._pluginMultiAttribute.isNotEmpty) {
-          _initPlugin(base._pluginMultiAttribute);
+        if (base.pluginMultiAttribute != null &&
+            base.pluginMultiAttribute!.isNotEmpty) {
+          _initPlugin(base.pluginMultiAttribute!);
         }
       } else {
         _iterables.add(base);
@@ -1123,6 +1211,7 @@ class XMLBase {
     return this;
   }
 
+  /// Adds child element to the underlying XML element.
   XMLBase _addXML(xml.XmlElement element) =>
       this..element!.children.add(element);
 
@@ -1131,10 +1220,11 @@ class XMLBase {
   /// The format for the tag name is: '{namespace}elementName'.
   String get _tagName => '<$name xmlns="$namespace"/>';
 
+  /// Gets current language of the xml element with xPath query.
   String? _lang(xml.XmlNode element) {
     final result = element
         .queryXPath(
-          "//@*[local-name()='xml:lang' and namespace-uri()='${Echotils.getNamespace('XML')}']",
+          "//@*[local-name()='xml:lang' and namespace-uri()='${WhixpUtils.getNamespace('XML')}']",
         )
         .node;
 
@@ -1143,18 +1233,18 @@ class XMLBase {
     return result.node.getAttribute('xml:lang');
   }
 
+  /// Gets language from underlying parent.
   String get _getLang {
     if (element == null) return '';
 
     final result = _lang(element!);
-    if (result == null && _parent != null) {
-      return _parent!['lang'] as String;
+    if (result == null && parent != null) {
+      return parent!['lang'] as String;
     }
     return result ?? '';
   }
 
-  bool get boolean => true;
-
+  /// Getter for stanza plugins list.
   Map<Tuple2<String, String>, XMLBase> get plugins => _plugins;
 
   /// Returns the names of all stanza interfaces provided by the stanza object.
@@ -1162,7 +1252,7 @@ class XMLBase {
   /// Allows stanza objects to be used as [Map].
   List<String> get keys {
     final buffer = <String>[];
-    for (final x in _interfaces) {
+    for (final x in interfaces) {
       buffer.add(x);
     }
     for (final x in _loadedPlugins) {
@@ -1180,7 +1270,7 @@ class XMLBase {
   /// Stanza plugin values may be set using nested [Map]s.
   set _values(Map<String, dynamic> values) {
     final iterableInterfaces = <String>[
-      for (final p in _pluginIterables) p.pluginAttribute,
+      for (final p in pluginIterables) p.pluginAttribute,
     ];
 
     if (values.containsKey('lang')) {
@@ -1198,11 +1288,11 @@ class XMLBase {
       final substanzas = values['substanzas'] as List<Map<String, dynamic>>;
       for (final submap in substanzas) {
         if (submap.containsKey('__childtag__')) {
-          for (final subclass in _pluginIterables) {
+          for (final subclass in pluginIterables) {
             final childtag =
                 '<${subclass.name} xmlns="${subclass.namespace}"/>';
             if (submap['__childtag__'] == childtag) {
-              final sub = subclass.copy(null, this);
+              final sub = subclass.copy(parent: this);
               sub.values = submap;
               _iterables.add(sub);
             }
@@ -1220,9 +1310,9 @@ class XMLBase {
         continue;
       } else if (interface == 'substanzas') {
         continue;
-      } else if (_interfaces.contains(interface)) {
+      } else if (interfaces.contains(interface)) {
         this[fullInterface] = entry.value;
-      } else if (_pluginAttributeMapping.containsKey(interface)) {
+      } else if (pluginAttributeMapping.containsKey(interface)) {
         if (!iterableInterfaces.contains(interface)) {
           final plugin = getPlugin(interface, language: language);
           if (plugin != null) {
@@ -1240,13 +1330,13 @@ class XMLBase {
     final values = <String, dynamic>{};
     values['lang'] = this['lang'];
 
-    for (final interface in _interfaces) {
+    for (final interface in interfaces) {
       if (this[interface] is JabberID) {
         values[interface] = (this[interface] as JabberID).jid;
       } else {
         values[interface] = this[interface];
       }
-      if (_languageInterfaces.contains(interface)) {
+      if (languageInterfaces.contains(interface)) {
         values['$interface|*'] = this['$interface|*'];
       }
     }
@@ -1280,12 +1370,23 @@ class XMLBase {
     }
   }
 
+  /// Returns a JSON/Map version of the XML content exposed through the stanza's
+  /// interfaces.
   Map<String, dynamic> get values => _values;
 
+  /// Set multiple stanza interface [values] using [Map].
+  ///
+  /// Stanza plugin values may be set using nested [Map]s.
   set values(Map<String, dynamic> values) => _values = values;
 
-  /// Getter for an [XMLBase] private in-class variable.
-  XMLBase? get parent => _parent;
+  /// Getter for private [Map] [_getters].
+  Map<Symbol, _GetterOrDeleter> get getters => _getters;
+
+  /// Getter for private [Map] [_setters].
+  Map<Symbol, _Setter> get setters => _setters;
+
+  /// Getter for private [Map] [_deleters].
+  Map<Symbol, _GetterOrDeleter> get deleters => _deleters;
 
   /// You need to override this method in order to create a copy from an
   /// existing object due Dart do not have deep copy support for now.
@@ -1296,53 +1397,93 @@ class XMLBase {
   ///   SimpleStanza({super.element, super.parent});
   ///
   ///   @override
-  ///   XMLBase copy([xml.XmlElement? element, XMLBase? parent]) =>
+  ///   XMLBase copy({xml.XmlElement? element, XMLBase? parent}) =>
   ///     SimpleStanza(element: element, parent: parent);
   /// }
   /// ```
-  XMLBase copy([xml.XmlElement? element, XMLBase? parent]) => XMLBase(
+  XMLBase copy({xml.XmlElement? element, XMLBase? parent}) => XMLBase(
         name: name,
         namespace: namespace,
-        interfaces: _interfaces,
         pluginAttribute: pluginAttribute,
+        pluginMultiAttribute: pluginMultiAttribute,
+        overrides: overrides,
         pluginTagMapping: pluginTagMapping,
-        pluginAttributeMapping: _pluginAttributeMapping,
-        pluginMultiAttribute: _pluginMultiAttribute,
-        overrides: _overrides,
-        subInterfaces: _subInterfaces,
-        boolInterfaces: _boolInterfaces,
-        languageInterfaces: _languageInterfaces,
-        pluginIterables: _pluginIterables,
+        pluginAttributeMapping: pluginAttributeMapping,
+        interfaces: interfaces,
+        subInterfaces: subInterfaces,
+        boolInterfaces: boolInterfaces,
+        languageInterfaces: languageInterfaces,
+        pluginIterables: pluginIterables,
         getters: _getters,
         setters: _setters,
         deleters: _deleters,
-        isExtension: _isExtension,
-        includeNamespace: _includeNamespace,
+        isExtension: isExtension,
+        includeNamespace: includeNamespace,
         setupOverride: setupOverride,
         element: element,
         parent: parent,
       );
 
+  /// Add a custom getter function to the [XMLBase] class, allowing users to
+  /// extend behavior of the class by defining custom getters for specific
+  /// attributes.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final base = XMLBase('someStanza');
+  /// base.addGetters({Symbol('value'): (args, base) {
+  ///   base.element.children!.remove(someChild); /// calling "value" getter will remove child
+  /// }});
+  /// ```
   void addGetters(Map<Symbol, _GetterOrDeleter> getters) =>
       _getters.addAll(getters);
 
-  void addSetters(
-    Map<Symbol, void Function(dynamic value, dynamic args, XMLBase base)>
-        setters,
-  ) =>
-      _setters.addAll(setters);
+  /// Adds custom setter functions to the [XMLBase] class, enabling users to
+  /// extend the class by defining custom setters for specific attributes.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final base = XMLBase('someStanza');
+  /// base.addSetters({Symbol('value'): (args, value, base) {
+  ///   base.element.children!.remove(someChild); /// calling "value" setter will remove child
+  /// }});
+  /// ```
+  void addSetters(Map<Symbol, _Setter> setters) => _setters.addAll(setters);
 
+  /// Adds custom deleter functions to the [XMLBase] class, allowing users to
+  /// extend the class by defining custom deleter functions for specific
+  /// attributes.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final base = XMLBase('someStanza');
+  /// base.addDeleters({Symbol('value'): (args, value, base) {
+  ///   base.element.children!.remove(someChild); /// calling "value" setter will remove child
+  /// }});
+  /// ```
   void addDeleters(Map<Symbol, _GetterOrDeleter> deleters) =>
       _deleters.addAll(deleters);
 
+  /// When iterating over [XMLBase], helps to increment our plugin index.
   void _incrementIndex() => _index++;
 
   /// Returns a string serialization of the underlying XML object.
   @override
-  String toString() => Echotils.serialize(element) ?? '';
+  String toString() => WhixpUtils.serialize(element) ?? '';
 }
 
+/// Extender for [registerStanzaPlugin] method.
 extension RegisterStanza on XMLBase {
+  /// Does what [registerStanzaPlugin] does. But without primary stanza. 'Cause
+  /// it is called as the part of the primary stanza and do not need it to
+  /// passed.
+  ///
+  /// [iterable] flag indicates if the plugin stanza should be included in the
+  /// parent stanza's iterable [substanzas] interface results.
+  ///
+  /// [overrides] flag indicates if the plugin should be allowed to override the
+  /// interface handlers for the parent stanza, based on the plugin's
+  /// [overrides] field.
   void registerPlugin(
     XMLBase plugin, {
     bool iterable = false,

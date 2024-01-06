@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:echox/src/idna/idna.dart';
-
 import 'package:test/test.dart';
+
+import 'package:whixp/src/idna/idna.dart';
 
 void main() {
   group('string preparation IDNA test cases', () {

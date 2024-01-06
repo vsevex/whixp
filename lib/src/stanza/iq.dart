@@ -1,13 +1,50 @@
-part of '../stream/base.dart';
+import 'dart:async';
 
+import 'package:whixp/src/exception.dart';
+import 'package:whixp/src/handler/handler.dart';
+import 'package:whixp/src/stanza/error.dart';
+import 'package:whixp/src/stanza/root.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/stream/matcher/matcher.dart';
+import 'package:whixp/src/transport.dart';
+import 'package:whixp/src/utils/utils.dart';
+
+import 'package:xml/xml.dart' as xml;
+
+/// IQ stanzas, or info/query stanzas, are XMPP's method of requesting and
+/// modifying information, similar to HTTP's GET and POST methods.
+///
+/// Each __<iq>__ stanza must have an 'id' value which associates the stanza
+/// with the response stanza. XMPP entities must always be given a response
+/// IQ stanza with a type of 'result' after sending a stanza 'get' or 'set'.
+///
+/// Must use cases for IQ stanzas will involve adding a <query> element whose
+/// namespace indicates the type of information desired. However, some custom
+/// XMPP applications use IQ stanzas as a carrier stanza for an
+/// application-specific protocol instead.
+///
+/// ### Example:
+/// ```xml
+/// <iq to="vsevex@localhost" type="get" id="412415323632">
+///   <query xmlns="http://jabber.org/protocol/disco#items" />
+/// </iq>
+///
+/// <iq type='set' id='bind_1'>
+///   <bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/>
+/// </iq>
+/// ```
+///
+/// For more information on "id" and "type" please refer to [XML stanzas](https://xmpp.org/rfcs/rfc3920.html#stanzas)
 class IQ extends RootStanza {
+  /// All parameters are extended from [RootStanza]. For more information please
+  /// take a look at [RootStanza].
   IQ({
+    bool generateID = true,
     super.stanzaType,
     super.stanzaTo,
     super.stanzaFrom,
     super.stanzaID,
     super.transport,
-    bool generateID = true,
     super.subInterfaces,
     super.languageInterfaces,
     super.includeNamespace = false,
@@ -27,7 +64,7 @@ class IQ extends RootStanza {
     super.parent,
   }) : super(
           name: 'iq',
-          namespace: Echotils.getNamespace('CLIENT'),
+          namespace: WhixpUtils.getNamespace('CLIENT'),
           interfaces: {'type', 'to', 'from', 'id', 'query'},
           types: {'get', 'result', 'set', 'error'},
           pluginAttribute: 'iq',
@@ -35,7 +72,7 @@ class IQ extends RootStanza {
     if (generateID) {
       if (!this.receive && (this['id'] == '' || this['id'] == null)) {
         if (transport != null) {
-          this['id'] = Echotils.getUniqueId();
+          this['id'] = WhixpUtils.getUniqueId();
         } else {
           this['id'] = '0';
         }
@@ -53,7 +90,7 @@ class IQ extends RootStanza {
               base.enable(plugin.pluginAttribute);
             } else {
               base.clear();
-              query = Echotils.xmlElement('query', namespace: value);
+              query = WhixpUtils.xmlElement('query', namespace: value);
               base.element!.children.add(query);
             }
           }
@@ -93,20 +130,40 @@ class IQ extends RootStanza {
     );
   }
 
+  /// The id of the attached [Handler].
   String? _handlerID;
 
+  /// Sends an IQ stanza over the XML stream.
+  ///
+  /// A callback handler can be provided that will be executed when the IQ
+  /// stanza's result reply is received.
+  ///
+  /// Returns a [FutureOr] which result will be set to the result IQ if it is
+  /// of type 'get' or 'set' (when it is received), or a [Future] with the
+  /// result set to null if it has another type.
+  ///
+  /// You can set the return of the callback return type you have provided or
+  /// just avoid this.
   FutureOr<void> sendIQ<T>({
+    /// Sync or async callback function which accepts the incoming "result"
+    /// stanza.
     FutureOr<T> Function(StanzaBase stanza)? callback,
+
+    /// Whenever there is a timeout, this callback method will be called.
     FutureOr<void> Function()? timeoutCallback,
+
+    /// The length of time (in milliseconds) to wait for a response before the
+    /// [timeoutCallback] is called, instead of the sync callback.
     int timeout = 2000,
   }) async {
-    BaseMatcher? matcher;
     final completer = Completer<StanzaBase>();
+
     Handler? handler;
+    BaseMatcher? matcher;
 
     if (transport!.sessionBind) {
       matcher = MatchIDSender(
-        CriteriaType(
+        IDMatcherCriteria(
           transport!.boundJID,
           to,
           this['id'] as String,
@@ -165,6 +222,8 @@ class IQ extends RootStanza {
     send();
   }
 
+  /// Send a 'feature-not-implemented' error stanza if the stanza is not
+  /// handled.
   @override
   void unhandled([Transport? transport]) {
     if ({'get', 'set'}.contains(this['type'])) {
@@ -178,10 +237,12 @@ class IQ extends RootStanza {
       final error = iq['error'] as XMLBase;
       error['condition'] = 'feature-not-implemented';
       error['text'] = 'No handlers registered';
-      iq.send();
+      iq.sendIQ();
     }
   }
 
+  /// Overrides [reply] method, instead copies [IQ] with the overrided [copy]
+  /// method.
   IQ replyIQ({bool clear = true}) {
     final iq = super.reply<IQ>(copiedStanza: copy(), clear: clear);
     iq['type'] = 'result';
@@ -189,22 +250,22 @@ class IQ extends RootStanza {
   }
 
   @override
-  IQ copy([xml.XmlElement? element, XMLBase? parent, bool receive = false]) =>
+  IQ copy({xml.XmlElement? element, XMLBase? parent, bool receive = false}) =>
       IQ(
-        subInterfaces: _subInterfaces,
-        languageInterfaces: _languageInterfaces,
-        getters: _getters,
-        setters: _setters,
-        deleters: _deleters,
+        pluginMultiAttribute: pluginMultiAttribute,
+        overrides: overrides,
         pluginTagMapping: pluginTagMapping,
-        pluginAttributeMapping: _pluginAttributeMapping,
-        pluginMultiAttribute: _pluginMultiAttribute,
-        pluginIterables: _pluginIterables,
-        overrides: _overrides,
-        isExtension: _isExtension,
+        pluginAttributeMapping: pluginAttributeMapping,
+        subInterfaces: subInterfaces,
+        boolInterfaces: boolInterfaces,
+        languageInterfaces: languageInterfaces,
+        pluginIterables: pluginIterables,
+        isExtension: isExtension,
+        includeNamespace: includeNamespace,
+        getters: getters,
+        setters: setters,
+        deleters: deleters,
         setupOverride: setupOverride,
-        boolInterfaces: _boolInterfaces,
-        includeNamespace: _includeNamespace,
         receive: receive,
         element: element,
         parent: parent,

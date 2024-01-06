@@ -1,16 +1,32 @@
 part of 'base.dart';
 
+/// Provides the foundation for all other stanza objects used by [Whixp], and
+/// defines a basic set of interfaces common to nearly all stanzas.
+///
+/// These interfaces are the `id`, `type`, `to`, and `from` attributes. An
+/// additional interface, `payload` is available to access the XML contents of
+/// the stanza. Most stanza objects will provided more specific interfaces,
+/// however.
 class StanzaBase extends XMLBase {
+  /// All parameters are extended from [XMLBase]. For more information please
+  /// take a look at [XMLBase].
   StanzaBase({
+    /// The type of stanza, typically will be `normal`, `error`, `get` or `set`,
+    /// etc.
     String? stanzaType,
+
+    /// A [String] representing the receipient's JID
     String? stanzaTo,
+
+    /// A [String] representing the sender's JID
     String? stanzaFrom,
+
+    ///An optional unique identifier that can be used to associate stanzas
     String? stanzaID,
     this.types = const <String>{},
     super.name,
     super.namespace,
     super.transport,
-    super.receive,
     super.pluginAttribute,
     super.pluginMultiAttribute,
     super.overrides,
@@ -22,6 +38,7 @@ class StanzaBase extends XMLBase {
     super.languageInterfaces,
     super.pluginOverrides,
     super.pluginIterables,
+    super.receive = false,
     super.isExtension = false,
     super.includeNamespace = true,
     super.getters,
@@ -133,45 +150,45 @@ class StanzaBase extends XMLBase {
   /// Handle exceptions thrown during stanza processing.
   ///
   /// Meant to be overridden.
-  void exception(Exception excp) {
-    /// TODO: replace with proper log
-    print('Exception handled in $tag stanza: $excp');
+  void exception(dynamic excp) {
+    Log.instance.error('Error handling <$name xmlns="$namespace"/> stanza');
   }
 
   void send() {
     if (transport != null) {
       transport!.send(this);
     } else {
-      print('tried to send stanza without a stanza: $this');
+      Log.instance.warning('Tried to send stanza without a transport: $this');
     }
   }
 
   @override
-  StanzaBase copy([
+  StanzaBase copy({
     xml.XmlElement? element,
     XMLBase? parent,
     bool receive = false,
-  ]) =>
+  }) =>
       StanzaBase(
         name: name,
         namespace: namespace,
-        transport: transport,
-        receive: receive,
-        interfaces: _interfaces,
         pluginAttribute: pluginAttribute,
+        pluginMultiAttribute: pluginMultiAttribute,
+        overrides: overrides,
         pluginTagMapping: pluginTagMapping,
-        pluginAttributeMapping: _pluginAttributeMapping,
-        pluginMultiAttribute: _pluginMultiAttribute,
-        overrides: _overrides,
-        subInterfaces: _subInterfaces,
-        boolInterfaces: _boolInterfaces,
-        languageInterfaces: _languageInterfaces,
-        pluginIterables: _pluginIterables,
+        pluginAttributeMapping: pluginAttributeMapping,
+        interfaces: interfaces,
+        subInterfaces: subInterfaces,
+        boolInterfaces: boolInterfaces,
+        languageInterfaces: languageInterfaces,
+        pluginOverrides: pluginOverrides,
+        pluginIterables: pluginIterables,
+        receive: receive,
+        isExtension: isExtension,
+        includeNamespace: includeNamespace,
+        transport: transport,
         getters: _getters,
         setters: _setters,
         deleters: _deleters,
-        isExtension: _isExtension,
-        includeNamespace: _includeNamespace,
         setupOverride: setupOverride,
         element: element,
         parent: parent,

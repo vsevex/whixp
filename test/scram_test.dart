@@ -1,9 +1,11 @@
 import 'package:convert/convert.dart' as convert;
 
-import 'package:echox/echox.dart';
-import 'package:echox/src/sasl/scram.dart';
-
 import 'package:test/test.dart';
+
+import 'package:whixp/src/exception.dart';
+import 'package:whixp/src/sasl/scram.dart';
+import 'package:whixp/src/utils/utils.dart';
+import 'package:whixp/src/whixp.dart';
 
 void main() {
   group('hmacIteration method test', () {
@@ -20,20 +22,21 @@ void main() {
     });
   });
 
-  // group('deriveKeys method test', () {
-  //   test('must return correct client key value in the output', () {
-  //     final result = Scram().deriveKeys(
-  //       password: 'pencil',
-  //       salt: 'QSXCR+Q6sek8bf92',
-  //       hashName: 'SHA-1',
-  //       iterations: 4096,
-  //     );
-  //     expect(
-  //       convert.hex.encode(result['sk']!.codeUnits),
-  //       equals('5cdfcf5896307930d4d49260c9f55a532689471e'),
-  //     );
-  //   });
-  // });
+  group('deriveKeys method test', () {
+    test('must return correct client key value in the output', () {
+      final whixp = Whixp('vsevex@localhost', '');
+      final result = Scram(whixp).deriveKeys(
+        password: 'pencil',
+        salt: 'QSXCR+Q6sek8bf92',
+        hashName: 'SHA-1',
+        iterations: 4096,
+      );
+      expect(
+        convert.hex.encode(result['sk']!.codeUnits),
+        equals('5cdfcf5896307930d4d49260c9f55a532689471e'),
+      );
+    });
+  });
 
   group('clientProof method test', () {
     test('returns correct client proof as a result', () {
@@ -45,7 +48,7 @@ void main() {
         'SHA-1',
       );
       expect(
-        Echotils.btoa(result),
+        WhixpUtils.btoa(result),
         equals('frsVRm77a2tPQ5vy+zZuaKRR17o='),
       );
     });
@@ -59,21 +62,28 @@ void main() {
   });
 
   group('parseChallenge method tests', () {
-    // test('must return null if challenge is null', () {
-    //   final result = Scram.parseChallenge(null);
-    //   expect(result, isNull);
-    // });
+    test('must return null if challenge is null', () {
+      expect(
+        () => Scram.parseChallenge(null),
+        throwsA(const TypeMatcher<SASLException>()),
+      );
+    });
 
-    // test('must return null if challenge is empty', () {
-    //   final result = Scram.parseChallenge('');
-    //   expect(result, isNull);
-    // });
+    test('must return null if challenge is empty', () {
+      expect(
+        () => Scram.parseChallenge(''),
+        throwsA(const TypeMatcher<SASLException>()),
+      );
+    });
 
-    // test('return null if challenge has unknown attribute', () {
-    //   const challenge = 'unknown=value';
-    //   final result = Scram.parseChallenge(challenge);
-    //   expect(result, isNull);
-    // });
+    test('return null if challenge has unknown attribute', () {
+      const challenge = 'unknown=value';
+
+      expect(
+        () => Scram.parseChallenge(challenge),
+        throwsA(const TypeMatcher<SASLException>()),
+      );
+    });
 
     test('must return the challenge correctly', () {
       const challenge =
@@ -83,7 +93,7 @@ void main() {
       expect(result['nonce'], equals('fyko+d2lbbFgONRv9qkxdawL'));
       expect(
         result['salt'],
-        equals(Echotils.base64ToArrayBuffer('W22ZaJ0SNY7soEsUEjb6')),
+        equals(WhixpUtils.base64ToArrayBuffer('W22ZaJ0SNY7soEsUEjb6')),
       );
       expect(result['iter'], equals(4096));
     });

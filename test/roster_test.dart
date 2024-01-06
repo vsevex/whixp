@@ -1,7 +1,8 @@
-import 'package:echox/src/stanza/roster.dart';
-import 'package:echox/src/stream/base.dart';
-
 import 'package:test/test.dart';
+
+import 'package:whixp/src/stanza/iq.dart';
+import 'package:whixp/src/stanza/roster.dart';
+import 'package:whixp/src/stream/base.dart';
 
 import 'test_base.dart';
 

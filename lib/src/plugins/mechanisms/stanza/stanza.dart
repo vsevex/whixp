@@ -1,15 +1,17 @@
 import 'package:dartz/dartz.dart';
+import 'package:meta/meta.dart';
 
-import 'package:echox/src/echotils/echotils.dart';
-import 'package:echox/src/stream/base.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
 
+@internal
 class Mechanisms extends XMLBase {
   Mechanisms()
       : super(
           name: 'mechanisms',
-          namespace: Echotils.getNamespace('SASL'),
+          namespace: WhixpUtils.getNamespace('SASL'),
           interfaces: {'mechanisms', 'required'},
           pluginAttribute: 'mechanisms',
           isExtension: true,

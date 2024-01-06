@@ -1,13 +1,14 @@
-import 'package:echox/src/echotils/echotils.dart';
-import 'package:echox/src/stream/base.dart';
-
 import 'package:test/test.dart';
+
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/utils/utils.dart';
+
 import 'package:xml/xml.dart' as xml;
 
 /// Assigns a namespace to an element and any children that do not have a
 /// namespace.
 xml.XmlElement? fixNamespaces(xml.XmlElement element, {String? namespace}) {
-  final ns = namespace ?? Echotils.getNamespace('CLIENT');
+  final ns = namespace ?? WhixpUtils.getNamespace('CLIENT');
 
   if (element.name.qualified.startsWith('{')) {
     return null;
@@ -54,7 +55,9 @@ xml.XmlElement parseXMLFromString(String xmlToParse) {
   } on xml.XmlParserException catch (error) {
     final message = error.message;
     if (message.contains('Failure')) {
-      final knownPrefixes = {'stream': Echotils.getNamespace('JABBER_STREAM')};
+      final knownPrefixes = {
+        'stream': WhixpUtils.getNamespace('JABBER_STREAM'),
+      };
 
       final prefix = xmlToParse.split('<')[1].split(':')[0];
       String xmlString = xmlToParse;
@@ -96,7 +99,7 @@ void check(
     eksemel = criteria.element!;
   }
 
-  final stanza1 = stanza.copy(eksemel);
+  final stanza1 = stanza.copy(element: eksemel);
 
   if (useValues) {
     final values = Map<String, dynamic>.from(stanza.values);

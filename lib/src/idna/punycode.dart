@@ -11,7 +11,8 @@
 // -- */
 // -- enum { base = 36, tmin = 1, tmax = 26, skew = 38, damp = 700,
 // --        initial_bias = 72, initial_n = 0x80, delimiter = 0x2D };
-import 'package:echox/echox.dart';
+
+import 'package:whixp/src/exception.dart';
 
 const int _base = 36;
 const int _tMin = 1;

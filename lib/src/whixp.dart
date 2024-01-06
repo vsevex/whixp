@@ -1,43 +1,105 @@
 import 'dart:async';
 
 import 'package:dartz/dartz.dart';
-import 'package:echox/echox.dart';
+import 'package:meta/meta.dart';
 
-import 'package:echox/src/handler/callback.dart';
-import 'package:echox/src/plugins/base.dart';
-import 'package:echox/src/plugins/features.dart';
-import 'package:echox/src/roster/manager.dart' as roster;
-import 'package:echox/src/stanza/error.dart';
-import 'package:echox/src/stanza/features.dart';
-import 'package:echox/src/stanza/roster.dart';
-import 'package:echox/src/stream/base.dart';
-import 'package:echox/src/stream/matcher/xpath.dart';
-import 'package:echox/src/transport.dart';
+import 'package:whixp/src/exception.dart';
+import 'package:whixp/src/handler/handler.dart';
+import 'package:whixp/src/jid/jid.dart';
+import 'package:whixp/src/log/log.dart';
+import 'package:whixp/src/plugins/base.dart';
+import 'package:whixp/src/plugins/features.dart';
+import 'package:whixp/src/roster/manager.dart' as roster;
+import 'package:whixp/src/stanza/error.dart';
+import 'package:whixp/src/stanza/features.dart';
+import 'package:whixp/src/stanza/iq.dart';
+import 'package:whixp/src/stanza/message.dart';
+import 'package:whixp/src/stanza/presence.dart';
+import 'package:whixp/src/stanza/roster.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/stream/matcher/matcher.dart';
+import 'package:whixp/src/transport.dart';
+import 'package:whixp/src/utils/utils.dart';
 
-part 'plugins/starttls/starttls.dart';
-part 'plugins/starttls/stanza.dart';
 part 'client.dart';
 
 abstract class WhixpBase {
+  /// Adapts the generic [Transport] class for use with XMPP. It also provides
+  /// a plugin mechanism to easily extend and add support for new XMPP features.
+  ///
+  /// The client and the component classes should extend from this class.
   WhixpBase({
+    /// XMPP server host address. If null, it defaults to the host part of the
+    /// provided Jabber ID
     String? host,
+
+    /// Port number for the XMPP server, defaults to 5222
     int port = 5222,
+
+    /// Jabber ID associated with the XMPP client
     String jabberID = '',
+
+    /// Default XML namespace, defualts to "client"
     String? defaultNamespace,
+
+    /// If set to `true`, attempt to use IPv6
     bool useIPv6 = false,
+
+    /// Use Transport Layer Security (TLS) for secure communication, defaults to
+    /// false. When this flag is true, then the client will try to Direct TLS
     bool useTLS = false,
+
+    /// Defines whether the client will later call StartTLS or not
+    ///
+    /// When connecting to the server, there can be StartTLS handshaking and
+    /// when the client and server try to handshake, we need to upgrade our
+    /// connection. This flag disables that handshaking and forbids establishing
+    /// a TLS connection on the client side. Defaults to `false`
     bool disableStartTLS = false,
+
+    /// [List] of paths to a file containing certificates for verifying the
+    /// server TLS certificate. Uses [Tuple2], the first side is for path to the
+    /// cert file and the second to the password file
     List<Tuple2<String, String?>>? certs,
-    int connectionTimeout = 3000,
+
+    /// Represents the duration in milliseconds for which the system will wait
+    /// for a connection to be established before raising a [TimeoutException].
+    ///
+    /// Defaults to 2000 milliseconds
+    int connectionTimeout = 2000,
+
+    /// The maximum number of reconnection attempts that the [Transport] will
+    /// make in case the connection with the server is lost or cannot be
+    /// established initially. Defaults to 3
     int maxReconnectionAttempt = 3,
+
+    /// The maximum number of consecutive `see-other-host` redirections that
+    /// will be followed before quitting
     int maxRedirects = 5,
+
+    /// [Log] instance to print out various log messages properly
+    Log? logger,
   }) {
-    streamNamespace = Echotils.getNamespace('JABBER_STREAM');
-    this.defaultNamespace = defaultNamespace ?? Echotils.getNamespace('CLIENT');
+    streamNamespace = WhixpUtils.getNamespace('JABBER_STREAM');
+
+    /// If no default namespace is provided, then client "jabber:client" will
+    /// be used.
+    this.defaultNamespace =
+        defaultNamespace ?? WhixpUtils.getNamespace('CLIENT');
+
+    /// requested [JabberID] from the passed jabber ID.
     requestedJID = JabberID(jabberID);
+
+    /// [JabberID] from the passed jabber ID.
     final boundJID = JabberID(jabberID);
+
+    /// Initialize [PluginManager].
     _pluginManager = PluginManager();
+
+    /// Equals passed maxRedirect count to the local variable.
     _maxRedirects = maxRedirects;
+
+    this.logger = logger ?? Log();
 
     /// Assignee for later.
     late String address;
@@ -90,6 +152,7 @@ abstract class WhixpBase {
       },
     );
 
+    /// Set up the [Transport] with XMPP's root stanzas.
     transport
       ..registerStanza(IQ(generateID: false))
       ..registerStanza(Presence())
@@ -124,9 +187,13 @@ abstract class WhixpBase {
         ),
       );
 
+    /// Initialize [RosterManager].
     _roster = roster.RosterManager(this);
+
+    /// Add current user jid to the roster.
     _roster.add(boundJID.toString());
 
+    /// Get current user's roster from the roster manager.
     _clientRoster = _roster[boundJID.toString()] as roster.RosterNode;
 
     transport
@@ -175,6 +242,7 @@ abstract class WhixpBase {
         (presence) => _handleNewSubscription(presence!),
       );
   }
+  @internal
   late final Transport transport;
 
   /// Late final initialization of stream namespace.
@@ -190,6 +258,11 @@ abstract class WhixpBase {
   /// be followed before quitting.
   late final int _maxRedirects;
 
+  /// [Log] instance to print out various log messages properly.
+  late final Log logger;
+
+  /// The sasl data keeper. Works with [SASL] class and keeps various data(s)
+  /// that can be used accross package.
   final saslData = <String, dynamic>{};
 
   /// The distinction between clients and components can be important, primarily
@@ -210,6 +283,7 @@ abstract class WhixpBase {
 
   final streamFeatureOrder = <Tuple2<int, String>>[];
 
+  /// Register a stream feature handler.
   void registerFeature(
     String name,
     FutureOr<dynamic> Function(StanzaBase stanza) handler, {
@@ -221,20 +295,39 @@ abstract class WhixpBase {
     streamFeatureOrder.sort((a, b) => a.value1.compareTo(b.value1));
   }
 
-  void sendPresence({String? presenceFrom, String? prsenceTo}) {
-    final presence = makePresence(
-      presenceFrom: presenceFrom,
-    );
+  /// Create, initialize, and send a new [Presence].
+  void sendPresence({
+    /// The presence's show value
+    String? presenceFrom,
+
+    /// The recipient of a directed presence
+    String? prsenceTo,
+  }) {
+    final presence = makePresence(presenceFrom: presenceFrom);
     return presence.send();
   }
 
+  /// Create and initialize a new [Presence] stanza.
   Presence makePresence({
+    /// The presence's show value
     String? presenceShow,
+
+    /// The presence's status message
     String? presenceStatus,
+
+    /// The connection's priority
     String? presencePriority,
+
+    /// The recipient of a directed presence
     String? presenceTo,
+
+    /// The sender of the presence
     String? presenceFrom,
+
+    /// The type of presence, such as 'subscribe'
     String? presenceType,
+
+    /// Optional nickname of the presence's sender
     String? presenceNick,
   }) {
     final presence = _presence(
@@ -254,6 +347,7 @@ abstract class WhixpBase {
     return presence;
   }
 
+  /// Create a presence stanza associated with this stream.
   Presence _presence({
     String? stanzaType,
     String? stanzaTo,
@@ -269,6 +363,7 @@ abstract class WhixpBase {
     return presence;
   }
 
+  /// Request the roster from the server.
   void getRoster() {
     final iq = IQ(transport: transport);
     iq['type'] = 'get';
@@ -285,6 +380,9 @@ abstract class WhixpBase {
     );
   }
 
+  /// Register and configure a [plugin] instance for use in this stream.
+  ///
+  /// [name] is the name of plugin class. Plugin names must be unique.
   void registerPlugin(String name, PluginBase plugin) {
     if (!_pluginManager.registered(name)) {
       _pluginManager.register(name, plugin);
@@ -292,6 +390,7 @@ abstract class WhixpBase {
     _pluginManager.enable(name);
   }
 
+  /// Process incoming message stanzas.
   void _handleMessage(StanzaBase message) {
     final to = message['to'] as String;
     if (to.isNotEmpty) {
@@ -365,6 +464,10 @@ abstract class WhixpBase {
         .handleUnsubscribed(presence);
   }
 
+  /// Attempt to automatically handle subscription requests.
+  ///
+  /// Subscriptions will be approved if the request is from a whitelisted JID,
+  /// of `autoAuthorize` is true.
   void _handleNewSubscription(Presence presence) {
     final rost = _roster[presence['to'] as String] as roster.RosterNode;
     final rosterItem = rost[presence['from'] as String] as roster.RosterItem;
@@ -391,14 +494,24 @@ abstract class WhixpBase {
     if (error['condition'] == 'see-other-host') {
       final otherHost = error['see-other-host'] as String?;
       if (otherHost == null || otherHost.isEmpty) {
-        print('no other host specified');
+        logger.warning('No other host specified');
         return;
       }
 
-      transport.handleStreamError(otherHost);
+      transport.handleStreamError(otherHost, maxRedirects: _maxRedirects);
     }
   }
 
+  /// Add a custom event handler that will be executed whenever its event is
+  /// manually triggered.
+  void addEventHandler<B>(
+    String event,
+    FutureOr<void> Function(B? data) listener, {
+    bool once = false,
+  }) =>
+      transport.addEventHandler(event, listener, once: once);
+
+  /// Password from credentials.
   String get password => credentials['password']!;
 }
 

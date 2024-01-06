@@ -1,10 +1,14 @@
-part of '../../whixp.dart';
+part of 'starttls.dart';
 
-class _StartTLS extends StanzaBase {
-  _StartTLS()
+/// ```xml
+/// <starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>
+/// ```
+@internal
+class StartTLS extends StanzaBase {
+  StartTLS()
       : super(
           name: 'starttls',
-          namespace: Echotils.getNamespace('STARTTLS'),
+          namespace: WhixpUtils.getNamespace('STARTTLS'),
           interfaces: {'required'},
           pluginAttribute: 'starttls',
           getters: <Symbol, dynamic Function(dynamic args, XMLBase base)>{
@@ -13,25 +17,31 @@ class _StartTLS extends StanzaBase {
         );
 }
 
-class _Proceed extends StanzaBase {
-  _Proceed()
+/// ```xml
+/// <proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>
+/// ```
+@internal
+class Proceed extends StanzaBase {
+  Proceed()
       : super(
           name: 'proceed',
-          namespace: Echotils.getNamespace('STARTTLS'),
+          namespace: WhixpUtils.getNamespace('STARTTLS'),
           interfaces: const {},
         );
 
   @override
-  void exception(Exception excp) {
-    print('error handling $name stanza');
-  }
+  void exception(dynamic excp) => throw excp as Exception;
 }
 
-class _Failure extends StanzaBase {
-  _Failure()
+/// ```xml
+/// <failure xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>
+/// ```
+@internal
+class Failure extends StanzaBase {
+  Failure()
       : super(
           name: 'failure',
-          namespace: Echotils.getNamespace('STARTTLS'),
+          namespace: WhixpUtils.getNamespace('STARTTLS'),
           interfaces: const {},
         );
 }
