@@ -1,10 +1,10 @@
-# EchoX
+# Whixp
 
 ![Github last build (main)][last_build]
 [![License: MIT][license_badge]][license_link]
 ![GitHub Repo stars][star_count]
 
-EchoX is a lightweight and pure Dart library that allows you to connect to XMPP (Extensible Messaging and Presence Protocol) servers. This package provides a range of fundamental functionalities for XMPP communication. And is built on top of the popular [Strophe.js](https://github.com/strophe/strophejs) library, providing a streamlined and efficient solution for XMPP communication in Dart applications.
+Whixp is a lightweight and pure Dart library that allows you to connect to XMPP (Extensible Messaging and Presence Protocol) servers. This package provides a range of fundamental functionalities for XMPP communication.
 
 ## XMPP
 
@@ -12,46 +12,52 @@ XMPP is an open source standart protocol widely used for real-time communication
 
 ## Features
 
-**WebSocket Connectivity**: EchoX establishes connections to XMPP servers exclusively over the WebSocket protocol, ensuring efficient and reliable communication.
+**Connection Management**: Establishes secure connections to XMPP servers effortlessly. Manage connection states with ease: connect, disconnect, and handle reconnections properly.
 
-**Authentication Mechanisms**: Provides support for various XMPP authentication mechanisms, including **SASL SCRAM** with encryption options such as SHA-1, SHA-256, SHA-384, SHA-512, XOAUTH-2, OAUTHBEARER, Anonymous, and EXTERNAL.
+**Stanzas Handling**: Efficiently handles various XMPP stanzas, including IQ, message, and presence stanzas. You can customize stanza handling based on your application's requirements.
+
+**Extensions Support**: Extensible architecture supports XMPP protocol extensions.
+
+**Authentication Mechanisms**: Provides support for various XMPP authentication mechanisms, including **SASL SCRAM** with encryption options such as SHA-1, SHA-256, SHA-384, SHA-512, and Anonymous.
+
+**Pluggable Architecture**: Build on top of a modular and pluggable architecture. You can easily extend and customize Whixp to fit your specific use case.
 
 > While support for these mechanisms are available, only SHA-1, PLAIN, and SHA-256 have been tested thoroughly.
 
-**Fundamental Functionalities**: EchoX provides a set of fundamental functionalities, including sending and retrieving messages, presence management, roster management, and more.
+**Fundamental Functionalities**: Whixp provides a set of fundamental functionalities, including sending and retrieving messages, presence management, roster management, and more.
 
 **Pure Dart implementation**: Written in pure Dart, enabling easy integration with Dart and Flutter projects.
 
-**Lightweight**: EchoX is designed to be lightweight, providing a streamlined solution for XMPP connectivity without unnecessary dependencies or overhead.
+**Lightweight**: Whixp is designed to be lightweight, providing a streamlined solution for XMPP connectivity without unnecessary dependencies or overhead.
 
 ## API
 
-This code snippet demonstrates how to establish a connection using the `EchoX` package.
+This code snippet demonstrates how to establish a connection using the `Whixp` package.
 
 ```dart
-import 'package:echox/echox.dart';
+import 'package:whixp/whixp.dart';
 
-void main() async {
-  final echox = EchoX(
-    service: 'ws://example.com:port/ws',
-    jid: JabberID(
-      'user',
-      domain: 'localhost',
-      resource: 'mobile',
-    ),
-    password: 'somepsw',
+void main() {
+  final whixp = Whixp(
+    'vsevex@example.com/desktop',
+    'tester123',
+    host: 'example.com',
+    logger: Log(enableError: true, enableWarning: true),
   );
 
-  debug(echox);
-  echox.connect();
+  whixp.connect();
+  whixp.addEventHandler('sessionStart', (_) {
+    whixp.getRoster();
+    whixp.sendPresence();
+  });
 }
 ```
 
-## Contributing to EchoX
+## Contributing to Whixp
 
-We welcome and appreciate contributions from the community to enhance the `EchoX`. If you have any improvements, bug fixes, or new features to contribute, you can do so by creating a pull request.
+We welcome and appreciate contributions from the community to enhance the `Whixp`. If you have any improvements, bug fixes, or new features to contribute, you can do so by creating a pull request.
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
-[star_count]: https://img.shields.io/github/stars/vsevex/echox
-[last_build]: https://img.shields.io/github/actions/workflow/status/vsevex/echox/dart.yml
+[star_count]: https://img.shields.io/github/stars/vsevex/whixp
+[last_build]: https://img.shields.io/github/actions/workflow/status/vsevex/whixp/dart.yml
