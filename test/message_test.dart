@@ -1,6 +1,6 @@
-import 'package:echox/src/stream/base.dart';
-
 import 'package:test/test.dart';
+
+import 'package:whixp/src/stanza/message.dart';
 
 void main() {
   group('message stanza test cases', () {

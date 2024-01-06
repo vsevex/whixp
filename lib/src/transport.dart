@@ -6,39 +6,127 @@ import 'dart:math' as math;
 import 'package:connecta/connecta.dart';
 import 'package:dartz/dartz.dart';
 import 'package:dnsolve/dnsolve.dart';
-
-import 'package:echox/src/echotils/src/echotils.dart';
-import 'package:echox/src/handler/eventius.dart';
-import 'package:echox/src/handler/handler.dart';
-import 'package:echox/src/jid/jid.dart';
-import 'package:echox/src/stanza/handshake.dart';
-import 'package:echox/src/stream/base.dart';
-import 'package:echox/src/whixp.dart';
-
 import 'package:meta/meta.dart';
+
+import 'package:whixp/src/handler/eventius.dart';
+import 'package:whixp/src/handler/handler.dart';
+import 'package:whixp/src/jid/jid.dart';
+import 'package:whixp/src/log/log.dart';
+import 'package:whixp/src/stanza/handshake.dart';
+import 'package:whixp/src/stanza/root.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/utils/utils.dart';
+import 'package:whixp/src/whixp.dart';
 
 import 'package:xml/xml.dart' as xml;
 import 'package:xml/xml_events.dart' as parser;
 
+/// Filterization types of incoming and outgoing stanzas.
 enum FilterMode { iN, out, outSync }
 
+/// A synchronous filter function for processing [StanzaBase] objects.
+///
+/// This filter is a typedef representing a function that takes a [StanzaBase]
+/// object as input, processes it synchronously, and returns a modified or
+/// processed [StanzaBase].
+///
+/// It is typically used for applying synchronous transformations or filters to
+/// stanza objects.
+@internal
 typedef SyncFilter = StanzaBase Function(StanzaBase stanza);
+
+/// An asynchronous filter function for processing [StanzaBase] objects.
+///
+/// An AsyncFilter is a typedef representing a function that takes a
+/// [StanzaBase] object as input, processes it asynchronously, and returns a
+/// modified or processed [StanzaBase] wrapped in [Future].
+@internal
 typedef AsyncFilter = Future<StanzaBase> Function(StanzaBase stanza);
 
+/// Designed to simplify the complexities associated with establishing a
+/// connection to as server, as well as sending and receiving XML "stanzas".
+///
+/// The class manages two streams, each responsible for communication in a
+/// specific direction over the same socket.
 class Transport {
+  /// Typically, stanzas are first processed by a [Transport] event handler
+  /// which will then trigger ustom events to continue further processing,
+  /// especially since custom event handlers may run in individual threads.
+  ///
+  /// [Transport] establishes [io.Socket] connection in the first hand, then
+  /// initializes XML parser and tries to parse incoming XML's to the particular
+  /// stanzas.
+  ///
+  /// Note: This class should only be used in the associate of [Whixp] client
+  /// or component.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final transport = Transport('xmpp.is', port: 5223, useTLS: true);
+  /// transport.connect();  /// this will connect to the "xmpp.is" on port 5223 over DirectTLS
+  /// ```
   Transport(
+    /// The hostname that the client needs to establish a connection with
     this._host, {
+    /// Defaults to 5222
     int port = 5222,
-    String? dnsService,
-    this.isComponent = false,
-    bool useIPv6 = false,
-    bool debug = true,
-    bool useTLS = false,
-    bool disableStartTLS = false,
-    this.maxReconnectionAttempt = 3,
+
+    /// The JabberID (JID) used by this connection, as set after session
+    /// binding. This may even be a different bare JID than what was requested
     required this.boundJID,
+
+    /// The service name to check with DNS SRV records. For example, setting this
+    /// to "xmpp-client" would query the "_xmpp-clilent._tcp" service.
+    String? dnsService,
+
+    /// The distinction between clients and components can be important, primarily
+    /// for choosing how to handle the `to` and `from` [JabberID]s of stanzas
+    this.isComponent = false,
+
+    /// If set to `true`, attempt to use IPv6
+    bool useIPv6 = false,
+
+    /// Enable connecting to the server directly over TLS, in particular when the
+    /// service provides two ports: one for non-TLS traffic and another for TLS
+    /// traffic. Defaults to `false`
+    bool useTLS = false,
+
+    /// Defines whether the client will later call StartTLS or not
+    ///
+    /// When connecting to the server, there can be StartTLS handshaking and
+    /// when the client and server try to handshake, we need to upgrade our
+    /// connection. This flag disables that handshaking and forbids establishing
+    /// a TLS connection on the client side. Defaults to `false`
+    bool disableStartTLS = false,
+
+    /// If `true`, periodically send a whitespace character over the wire to
+    /// keep the connection alive
+    this.whitespaceKeepAlive = true,
+
+    /// The default interval between keepalive signals when [whitespaceKeepAlive]
+    /// is enabled. Represents in seconds. Defaults to 300
+    this.whitespaceKeepAliveInterval = 300,
+
+    /// The maximum number of reconnection attempts that the [Transport] will
+    /// make in case the connection with the server is lost or cannot be
+    /// established initially. Defaults to 3
+    this.maxReconnectionAttempt = 3,
+
+    /// [List] of paths to a file containing certificates for verifying the
+    /// server TLS certificate. Uses [Tuple2], the first side is for path to the
+    /// cert file and the second to the password file
     List<Tuple2<String, String?>>? caCerts,
-    this.connectionTimeout,
+
+    /// Represents the duration in milliseconds for which the system will wait
+    /// for a connection to be established before raising a [TimeoutException].
+    ///
+    /// Defaults to 2000 milliseconds
+    this.connectionTimeout = 2000,
+
+    /// The overrider for the function of [startStreamHandler].
+    ///
+    /// Performs any initialization actions, such as handshakes, once the stream
+    /// header has been sent
     void Function(
       List<parser.XmlEventAttribute> attributes,
       Transport transport,
@@ -46,100 +134,204 @@ class Transport {
   }) {
     _port = port;
 
-    _setup();
-
-    _debug = debug;
     _useTLS = useTLS;
     _disableStartTLS = disableStartTLS;
     _useIPv6 = useIPv6;
     _dnsService = dnsService;
 
     streamHeader = '<stream>';
+    streamFooter = '<stream/>';
 
-    _caCerts = caCerts ?? [];
+    _caCerts = caCerts ?? <Tuple2<String, String?>>[];
 
     _startStreamHandlerOverrider = startStreamHandler;
 
-    addEventHandler('sessionStart', <_>([_]) => _setSessionStart());
+    _setup();
   }
 
-  late final String _host;
-  late String serviceName;
+  /// The host that [Whixp] has to connect to.
+  final String _host;
 
-  /// Defaults to 5222;
+  /// The port that [Whixp] has to connect to.
   late int _port;
 
+  /// [Tuple2] type variable that holds both [_host] and [_port].
   late Tuple2<String, int> _address;
-  Connecta? _connecta;
-
-  late final Eventius _eventius;
-  late bool _debug;
-  late bool _useTLS;
-  late bool _disableStartTLS;
-  late bool sessionStarted;
-  late bool _useIPv6;
-  String? _dnsService;
-
-  late final Stream<Tuple2<StanzaBase, bool>> _waitingQueue;
-  final _waitingQueueController =
-      StreamController<Tuple2<StanzaBase, bool>>.broadcast();
-  final _queuedStanzas = <Tuple2<StanzaBase, bool>>[];
-  late async.Completer<dynamic>? _runOutFilters;
-  async.Completer<void>? _currentConnectionAttempt;
-  int _currentConnectionAttemptCount = 0;
-  late async.Completer<void> _abortCompleter;
-  late int _xmlDepth;
-
-  /// in milliseconds.
-  late final int? connectionTimeout;
-  Iterator<Tuple3<String, String, int>>? _dnsAnswers;
-  late String streamHeader;
-  late String streamFooter;
-  void Function(List<parser.XmlEventAttribute> attributes, Transport transport)?
-      _startStreamHandlerOverrider;
-
-  final _slowTasks = <Task>[];
-
-  bool isComponent = false;
-
-  /// The backoff of the connection attempt (increases exponentially after each
-  /// failure). Represented in milliseconds;
-  late int _connectFutureWait;
-
-  late String _eventWhenConnected;
-
-  late List<Tuple2<String, String?>> _caCerts;
-
-  String _defaultDomain = '';
-  late String defaultNamespace;
-
-  late bool _isConnectionSecured;
-  String? defaultLanguage;
-  String? peerDefaultLanguage;
-
-  late final List<Handler> _handlers;
-  final _rootStanza = <StanzaBase>[];
-
-  late bool sessionBind;
 
   /// The JabberID (JID) used by this connection, as set after session binding.
   ///
   /// This may even be a different bare JID than what was requested.
   late JabberID boundJID;
 
-  late bool _startStreamHandlerCalled;
+  /// Will hold host that [Whixp] is connected to and will work in the
+  /// association of [SASL].
+  late String serviceName;
+
+  /// The distinction between clients and components can be important, primarily
+  /// for choosing how to handle the `to` and `from` [JabberID]s of stanzas.
+  bool isComponent;
+
+  /// [Connecta] instance that will be declared when there is a connection
+  /// attempt to the server.
+  Connecta? _connecta;
+
+  /// [Eventius] type variable that holds actual event manager.
+  late final Eventius _eventius;
+
+  /// Enable connecting to the server directly over TLS, in particular when the
+  /// service provides two ports: one for non-TLS traffic and another for TLS
+  /// traffic.
+  late bool _useTLS;
+
+  /// Defines whether the client will later call StartTLS or not.
+  ///
+  /// When connecting to the server, there can be StartTLS handshaking and
+  /// when the client and server try to handshake, we need to upgrade our
+  /// connection. This flag disables that handshaking and forbids establishing
+  /// a TLS connection on the client side.
+  late bool _disableStartTLS;
+
+  /// Flag that indicates to if the session has been started or not.
+  late bool sessionStarted;
+
+  /// If set to `true`, attempt to use IPv6.
+  late bool _useIPv6;
+
+  /// If `true`, periodically send a whitespace character over the wire to keep
+  /// the connection alive.
+  final bool whitespaceKeepAlive;
+
+  /// The default interval between keepalive signals when [whitespaceKeepAlive]
+  /// is enabled.
+  final int whitespaceKeepAliveInterval;
+
+  /// Default [Timer] for [whitespaceKeepAliveInterval]. This will be assigned
+  /// when there is a [Timer] attached after connection established.
+  Timer? _whitespaceKeepAliveTimer;
+
+  /// The service name to check with DNS SRV records. For example, setting this
+  /// to "xmpp-client" would query the "_xmpp-clilent._tcp" service.
+  String? _dnsService;
+
+  /// Represents the duration in milliseconds for which the system will wait
+  /// for a connection to be established before raising a [TimeoutException].
+  final int connectionTimeout;
+
+  /// The maximum number of reconnection attempts that the [Transport] will
+  /// make in case the connection with the server is lost or cannot be
+  /// established initially. Defaults to 3.
   late int maxReconnectionAttempt;
 
-  late int _redirectAttempts;
+  /// [List] of paths to a file containing certificates for verifying the
+  /// server TLS certificate. Uses [Tuple2], the first side is for path to the
+  /// cert file and the second to the password file.
+  late List<Tuple2<String, String?>> _caCerts;
 
+  /// [Stream] variable that holds stanzas that are waiting to be sent.
+  late final Stream<Tuple2<StanzaBase, bool>> _waitingQueue;
+
+  /// [StreamController] for [_waitingQueue].
+  final _waitingQueueController =
+      StreamController<Tuple2<StanzaBase, bool>>.broadcast();
+  final _queuedStanzas = <Tuple2<StanzaBase, bool>>[];
+
+  late async.Completer<dynamic>? _runOutFilters;
+
+  /// [Completer] of current connection attempt. After the connection, this
+  /// [Completer] should be equal to null.
+  async.Completer<void>? _currentConnectionAttempt;
+
+  /// [Completer] of abortion of the current connection.
+  async.Completer<void>? _abortCompleter;
+
+  /// Current connection attempt count. It works with [maxReconnectionAttempt].
+  int _currentConnectionAttemptCount = 0;
+
+  /// This variable is used to keep track of stream header and footer. If stream
+  /// is opened without closing that, it will keep its state at "1". When there
+  /// is a closing tag, that means it should be equal to zero and close the
+  /// connection.
+  late int _xmlDepth;
+
+  /// [Iterator] of DNS results that have not yet been tried.
+  Iterator<Tuple3<String, String, int>>? _dnsAnswers;
+
+  /// The default opening tag for the stream element.
+  late String streamHeader;
+
+  /// The default closing tag for the stream element.
+  late String streamFooter;
+
+  /// The overrider for the function of [startStreamHandler].
+  ///
+  /// Performs any initialization actions, such as handshakes, once the stream
+  /// header has been sent.
+  void Function(List<parser.XmlEventAttribute> attributes, Transport transport)?
+      _startStreamHandlerOverrider;
+
+  /// [Task] [List] to keep track of [Task]s that are going to be sent slowly.
+  final _slowTasks = <Task>[];
+
+  /// [io.ConnectionTask] keeps current connection task and can be used to
+  /// cancel if there is a need.
   io.ConnectionTask<io.Socket>? _connectionTask;
 
+  /// The backoff of the connection attempt (increases exponentially after each
+  /// failure). Represented in milliseconds;
+  late int _connectFutureWait;
+
+  /// The event to trigger when the [_connect] succeeds. It can be "connected"
+  /// or "tlsSuccess" depending on the step we are at.
+  late String _eventWhenConnected;
+
+  /// The domain to try when querying DNS records.
+  String _defaultDomain = '';
+
+  /// The default namespace of the stream content, not of the stream wrapper it.
+  late String defaultNamespace;
+
+  /// Flag that indicates if the socket connection is secure or not.
+  late bool _isConnectionSecured;
+
+  /// Indicates to the default language of the streaming.
+  String? defaultLanguage;
+
+  /// Indicates to the default langauge of the last peer.
+  String? peerDefaultLanguage;
+
+  /// List of [Handler]s.
+  final _handlers = <Handler>[];
+
+  /// List of [StanzaBase] stanzas that incoming stanzas can built from.
+  final _rootStanza = <StanzaBase>[];
+
+  /// Indicates session bind.
+  late bool sessionBind;
+
+  /// Used when wrapping incoming xml stream.
+  late bool _startStreamHandlerCalled;
+
+  /// Current redirect attempt. Increases when there is an attempt occurs to
+  /// the redirection (see-other-host).
+  late int _redirectAttempts;
+
+  /// [Map] to keep "in", "out", and "outSync" type filters to use when there
+  /// is a need for stanza filtering.
   final _filters = <FilterMode, List<Tuple2<SyncFilter?, AsyncFilter?>>>{};
 
   void _setup() {
     _reset();
 
-    _eventius.on('disconnected', (_) => _setDisconnected());
+    addEventHandler('disconnected', (_) {
+      if (_whitespaceKeepAliveTimer != null) {
+        _whitespaceKeepAliveTimer!.cancel();
+      }
+      _setDisconnected();
+    });
+    addEventHandler('sessionStart', (_) {
+      _setSessionStart();
+      _startKeepAlive();
+    });
   }
 
   void _reset() {
@@ -148,24 +340,28 @@ class Transport {
 
     _eventius = Eventius();
 
+    sessionBind = false;
     sessionStarted = false;
     _startStreamHandlerCalled = false;
 
     _runOutFilters = null;
     _abortCompleter = async.Completer<void>();
 
+    _whitespaceKeepAliveTimer = null;
+
+    _eventWhenConnected = 'connected';
+    _redirectAttempts = 0;
     _connectFutureWait = 0;
     _xmlDepth = 0;
-    _eventWhenConnected = 'connected';
 
     defaultNamespace = '';
-    peerDefaultLanguage = null;
 
-    _handlers = <Handler>[];
+    _handlers.clear();
     _rootStanza.clear();
-    defaultLanguage = null;
+    _slowTasks.clear();
 
-    sessionBind = false;
+    defaultLanguage = null;
+    peerDefaultLanguage = null;
 
     _filters
       ..clear()
@@ -175,14 +371,27 @@ class Transport {
         FilterMode.outSync: <Tuple2<SyncFilter?, AsyncFilter?>>[],
       });
 
-    _slowTasks.clear();
     _connecta = null;
     _connectionTask = null;
 
     _waitingQueue = _waitingQueueController.stream;
-    _redirectAttempts = 0;
   }
 
+  /// Begin sending whitespace periodically to keep the connection alive.
+  void _startKeepAlive() {
+    if (whitespaceKeepAlive) {
+      _whitespaceKeepAliveTimer = Timer.periodic(
+        Duration(seconds: whitespaceKeepAliveInterval),
+        (_) => sendRaw(''),
+      );
+    }
+  }
+
+  /// Create a new socket and connect to the server.
+  ///
+  /// The parameters needed to establish connection in order are passed
+  /// beforehand when creating [Transport] instance.
+  @internal
   void connect() {
     if (_runOutFilters == null || _runOutFilters!.isCompleted) {
       _runOutFilters ??= async.Completer<dynamic>();
@@ -234,6 +443,7 @@ class Transport {
         ConnectaToolkit(
           hostname: _address.value1,
           port: _address.value2,
+          timeout: connectionTimeout,
           connectionType: ConnectionType.tls,
           onBadCertificateCallback: (cert) => true,
           context: context,
@@ -244,6 +454,7 @@ class Transport {
         ConnectaToolkit(
           hostname: _address.value1,
           port: _address.value2,
+          timeout: connectionTimeout,
           context: _disableStartTLS ? null : context,
           connectionType: _disableStartTLS
               ? ConnectionType.tcp
@@ -253,13 +464,24 @@ class Transport {
     }
 
     try {
-      print(
-        'trying to connect to ${_address.value1} on port ${_address.value2}',
+      Log.instance.info(
+        'Trying to connect to ${_address.value1} on port ${_address.value2}',
       );
+
       _connectionTask = await _connecta!.createTask(
         ConnectaListener(
           onData: _dataReceived,
-          onError: (error, trace) => print(error),
+          onError: (error, trace) async {
+            Log.instance.error(
+              'Connection error',
+              error: error,
+              stackTrace: trace as StackTrace,
+            );
+            final result = _rescheduleConnectionAttempt();
+            if (!result) {
+              await disconnect();
+            }
+          },
         ),
       );
 
@@ -281,6 +503,7 @@ class Transport {
     _isConnectionSecured = _connecta!.isConnectionSecure;
   }
 
+  /// Called when the TCP connection has been established with the server.
   void _connectionMade([bool clearAnswers = false]) {
     emit(_eventWhenConnected);
     _currentConnectionAttempt = null;
@@ -291,10 +514,14 @@ class Transport {
     }
   }
 
+  /// Performs handshake for TLS.
+  ///
+  /// If the handshake is successful, the XML stream will need to be restarted.
+  @internal
   Future<bool> startTLS() async {
     if (_connecta == null) return false;
     if (_disableStartTLS) {
-      print('disable start TLS is true');
+      Log.instance.info('Disable StartTLS is enabled');
       return false;
     }
     _eventWhenConnected = 'tlsSuccess';
@@ -302,13 +529,18 @@ class Transport {
       await _connecta!.upgradeConnection(
         listener: ConnectaListener(
           onData: _dataReceived,
-          onError: (error, trace) => print(error),
+          onError: (error, trace) => Log.instance.error(
+            'Connection error',
+            error: error,
+            stackTrace: trace as StackTrace,
+          ),
         ),
       );
 
       _connectionMade(true);
       return true;
-    } on ConnectaException {
+    } on ConnectaException catch (error) {
+      Log.instance.error(error.message);
       if (_dnsAnswers != null && _dnsAnswers!.moveNext()) {
         startTLS();
       } else {
@@ -318,19 +550,23 @@ class Transport {
     }
   }
 
+  /// Called when incoming data is received on the socket. We feed that data
+  /// to the parser and then see if this produced any XML event. This could
+  /// trigger one or more event.
   Future<void> _dataReceived(List<int> bytes) async {
     bool wrapped = false;
-    String data = Echotils.unicode(bytes);
+    String data = WhixpUtils.unicode(bytes);
     if (data.contains('<stream:stream') && !data.contains('</stream:stream>')) {
       data = _streamWrapper(data);
       wrapped = true;
     }
 
-    print('data received: $data');
     void onStartElement(parser.XmlStartElementEvent event) {
       if (event.isSelfClosing ||
           (event.name == 'stream:stream' && _startStreamHandlerCalled)) return;
       if (_xmlDepth == 0) {
+        /// We have received the start of the root element.
+        Log.instance.info('RECEIVED: $data');
         _startStreamHandler(event.attributes);
         _startStreamHandlerCalled = true;
       }
@@ -341,6 +577,8 @@ class Transport {
       if (event.name == 'stream:stream' && wrapped) return;
       _xmlDepth--;
       if (_xmlDepth == 0) {
+        /// The stream's root element has closed, terminating the stream.
+        Log.instance.info('End of stream received');
         abort();
         return;
       } else if (_xmlDepth == 1) {
@@ -353,11 +591,11 @@ class Transport {
         final element = xml.XmlDocument.parse(substring).rootElement;
         if (element.getAttribute('xmlns') == null) {
           if (element.qualifiedName == 'message') {
-            element.setAttribute('xmlns', Echotils.getNamespace('CLIENT'));
+            element.setAttribute('xmlns', WhixpUtils.getNamespace('CLIENT'));
           } else {
             element.setAttribute(
               'xmlns',
-              Echotils.getNamespace('JABBER_STREAM'),
+              WhixpUtils.getNamespace('JABBER_STREAM'),
             );
           }
         }
@@ -392,6 +630,8 @@ class Transport {
     });
   }
 
+  /// Helper method to wrap the incoming stanza in order not to get parser
+  /// error.
   String _streamWrapper(String data) {
     if (data.contains('<stream:stream')) {
       return '$data</stream:stream>';
@@ -399,6 +639,8 @@ class Transport {
     return data;
   }
 
+  /// Analyze incoming XML stanzas and convert them into stanza objects if
+  /// applicable and queue steram events to be processed by matching handlers.
   Future<void> _spawnEvent(xml.XmlElement element) async {
     final stanza = _buildStanza(element);
 
@@ -410,14 +652,12 @@ class Transport {
       }
     }
 
+    Log.instance.debug('RECEIVED: $element');
+
     for (final handler in handlers) {
-      print('Handler ${handler.name} ran...');
       try {
         await handler.run(stanza);
       } on Exception catch (excp) {
-        print(excp);
-
-        /// TODO: catch callback exceptions in here.
         stanza.exception(excp);
       }
       handled = true;
@@ -428,6 +668,10 @@ class Transport {
     }
   }
 
+  /// Create a stanza object from a given XML object.
+  ///
+  /// If a specialized stanza type is not found for the XML, then a generic
+  /// [StanzaBase] stanza will be returned.
   StanzaBase _buildStanza(xml.XmlElement element) {
     StanzaBase stanzaClass = StanzaBase(element: element, receive: true);
 
@@ -436,7 +680,7 @@ class Transport {
 
     for (final stanza in _rootStanza) {
       if (tag() == stanza.tag) {
-        stanzaClass = stanza.copy(element, null, true);
+        stanzaClass = stanza.copy(element: element, receive: true);
         break;
       }
     }
@@ -473,6 +717,8 @@ class Transport {
     }
   }
 
+  /// Background [Stream] that processes stanzas to send.
+  @internal
   Future<void> runFilters() async {
     _waitingQueueController.stream.listen((data) async {
       StanzaBase datum = data.value1;
@@ -486,8 +732,8 @@ class Transport {
             try {
               datum = await task.timeout(const Duration(seconds: 1)).run();
             } on async.TimeoutException {
-              // Handle the case where the timeout occurred
-              print('Timeout occurred and add to slow tasks');
+              /// Handle the case where the timeout occurred
+              Log.instance.error('Slow Future, rescheduling filters');
 
               _slowSend(task, alreadyRunFilters);
             }
@@ -519,8 +765,8 @@ class Transport {
   /// Forcibly close the connection.
   void abort() {
     if (_connecta != null) {
-      _abortCompleter.complete(_connecta!.socket.flush());
-      if (_abortCompleter.isCompleted) {
+      _abortCompleter!.complete(_connecta!.socket.flush());
+      if (_abortCompleter!.isCompleted) {
         _cancelConnectionAttempt();
         _connecta = null;
         emit('killed');
@@ -528,19 +774,28 @@ class Transport {
     }
   }
 
+  /// Calls disconnect(), and once we are disconnected (after the timeout, or
+  /// when the server ack is received), call connect().
   void reconnect() {
-    print('reconnecting..');
+    Log.instance.info('Reconnecting...');
     Future<void> handler(String? data) async {
       await Future.delayed(Duration.zero);
       connect();
     }
 
     _eventius.once<String>('disconnected', handler);
+    disconnect();
   }
 
-  Future<void> disconnect({String? reason, int timeout = 15000}) async {
-    print('disconnect is called');
-
+  /// Close the XML stream and wait for ack from the server for at most
+  /// [timeout] seconds. After the given number of seconds has passed
+  /// without a response from the server, or when the server successfully
+  /// responds with a closure of its own stream, abort() is called.
+  Future<void> disconnect({String? reason, int timeout = 2000}) async {
+    /// Run abort() if we do not received the disconnected event after a
+    /// waiting time.
+    ///
+    /// Timeout defaults to 2000 milliseconds.
     Future<void> endStreamWait() async {
       try {
         sendRaw(streamFooter);
@@ -568,11 +823,17 @@ class Transport {
     }
   }
 
+  /// Utility method to wake on the next firing of an event.
   Future<void> _waitUntil(String event, {int timeout = 15000}) async {
     final completer = Completer();
 
     void handler(dynamic data) {
-      completer.complete(data);
+      if (completer.isCompleted) {
+        Log.instance
+            .debug('Completer registered on event "$event" was already done');
+      } else {
+        completer.complete(data);
+      }
     }
 
     addEventHandler(event, handler, once: true);
@@ -580,13 +841,18 @@ class Transport {
     return completer.future.timeout(Duration(milliseconds: timeout));
   }
 
-  void registerStanza(StanzaBase stanza) {
-    print('registering stanza: $stanza');
-    _rootStanza.add(stanza);
-  }
+  /// Add a stanza class as a known root stanza.
+  ///
+  /// A root stanza is one that appears as a direct child of the stream's root
+  /// element.
+  ///
+  /// Stanzas that appear as substanzas of a root stanza do not need to be
+  /// registered here. That is done using [registerPluginStanza] from [XMLBase].
+  void registerStanza(StanzaBase stanza) => _rootStanza.add(stanza);
 
+  /// Add a stream event handler that will be executed when a matching stanza
+  /// is received.
   void registerHandler(Handler handler) {
-    print('registered handler: ${handler.name}');
     if (handler.transport == null) {
       handler.transport = this;
       _handlers.add(handler);
@@ -596,6 +862,9 @@ class Transport {
   /// Triggers a custom [event] manually.
   void emit<T>(String event, {T? data}) => _eventius.emit<T>(event, data);
 
+  /// Add a custom [event] handler that will be executed whenever its event is
+  /// manually triggered. Works with [Eventius] instance.
+  @internal
   void addEventHandler<B>(
     String event,
     FutureOr<void> Function(B? data) listener, {
@@ -608,6 +877,7 @@ class Transport {
     }
   }
 
+  /// Immediately cancel the current connect() [Future].
   void _cancelConnectionAttempt() {
     _currentConnectionAttempt = null;
     if (_connectionTask != null) {
@@ -634,11 +904,18 @@ class Transport {
   void _startStreamHandler(List<parser.XmlEventAttribute> attributes) =>
       _startStreamHandlerOverrider?.call(attributes, this);
 
+  /// Pick a server and port from DNS answers.
+  ///
+  /// And also performs DNS resolution for a given hostname.
+  ///
+  /// Resolution may perform SRV record lookups if a service and protocol are
+  /// specified. The returned addresses will be sorted according to the SRV
+  /// properties and weights.
   Future<Tuple3<String, String, int>?> _pickDNSAnswer(
     String domain, {
     String? service,
   }) async {
-    print('use of useIPv6  has been disabled');
+    Log.instance.warning('DNS: Use of IPv6 has been disabled');
 
     ResolveResponse? response;
     final srvs = <SRVRecord>[];
@@ -716,10 +993,13 @@ class Transport {
     return null;
   }
 
+  @internal
   void handleStreamError(String otherHost, {int maxRedirects = 5}) {
     if (_redirectAttempts > maxRedirects) {
       return;
     }
+
+    _redirectAttempts++;
 
     String host = otherHost;
     int port = 5222;
@@ -741,6 +1021,13 @@ class Transport {
     reconnect();
   }
 
+  /// Add a filter for incoming or outgoing stnzas.
+  ///
+  /// These filters are applied before incoming stanzas are passed to any
+  /// handlers, and before outgoing stanzas are put in the send queue.
+  ///
+  /// [mode] can be "iN", "out", and "outSync". Either sync or async filter
+  /// can be passed at the same time. You can not assign two type filters once.
   void addFilter<T>({
     FilterMode mode = FilterMode.iN,
     SyncFilter? filter,
@@ -777,23 +1064,23 @@ class Transport {
     _waitingQueueController.add(Tuple2(data, useFilters));
   }
 
+  /// Send raw data accross the socket.
+  ///
+  /// [data] can be either [List] of integers or [String].
   void sendRaw(dynamic data) {
     String rawData;
     if (data is List<int>) {
-      rawData = Echotils.unicode(data);
+      rawData = WhixpUtils.unicode(data);
     } else if (data is String) {
       rawData = data;
     } else {
       throw ArgumentError(
-        'passed data to be sent is neither List<int> nor String',
+        'Passed data to be sent is neither List<int> nor String',
       );
     }
-    if (_connecta != null) {
-      print('send: $data');
-      _connecta!.send(rawData);
-    } else {
-      /// TODO: throw not connected error
-    }
+    Log.instance.debug('SEND: $rawData');
+
+    _connecta!.send(rawData);
   }
 
   /// On session start, queue all pending stanzas to be sent.
@@ -807,12 +1094,16 @@ class Transport {
 
   void _setDisconnected() => sessionStarted = false;
 
+  /// Host and port keeper. First value refers to host and the second to port.
   Tuple2<String, int> get address => _address;
 
+  /// Indicates whether the connection is established or not.
   bool get isConnected => _connecta != null;
 
+  /// Indicates whether the connection is secured or not.
   bool get isConnectionSecured => _isConnectionSecured;
 
+  /// Indicates that if disable startTLS is activated or not.
   bool get disableStartTLS => _disableStartTLS;
 }
 
@@ -838,7 +1129,7 @@ Transport testTransport({
   client.transport.peerDefaultLanguage = null;
 
   client.transport._dataReceived(
-    Echotils.stringToArrayBuffer(client.transport.streamHeader),
+    WhixpUtils.stringToArrayBuffer(client.transport.streamHeader),
   );
 
   return client.transport;
@@ -847,5 +1138,5 @@ Transport testTransport({
 @visibleForTesting
 Future<void> receive(String data, Transport transport) async {
   await Future.delayed(const Duration(seconds: 1));
-  await transport._dataReceived(Echotils.stringToArrayBuffer(data));
+  await transport._dataReceived(WhixpUtils.stringToArrayBuffer(data));
 }

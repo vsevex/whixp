@@ -1,6 +1,8 @@
-import 'package:echox/src/plugins/base.dart';
-import 'package:echox/src/plugins/preapproval/stanza.dart';
-import 'package:echox/src/stream/base.dart';
+import 'package:whixp/src/plugins/base.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/utils/utils.dart';
+
+part 'stanza.dart';
 
 class FeaturePreApproval extends PluginBase {
   FeaturePreApproval(this._features, {required super.base})
@@ -15,7 +17,7 @@ class FeaturePreApproval extends PluginBase {
     base.registerFeature(
       'preapproval',
       (_) {
-        print('pre approval handling');
+        base.logger.debug('Server supports subscription pre-approvals');
         return base.features.add('preapproval');
       },
       order: 9001,

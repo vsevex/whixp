@@ -1,30 +1,68 @@
 part of 'whixp.dart';
 
 class Whixp extends WhixpBase {
+  /// Client class for [Whixp].
+  ///
+  /// Extends [WhixpBase] class and represents an XMPP client with additional
+  /// functionalities.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final whixp = Whixp('vsevex@example.com', 'passwd');
+  /// whixp.connect();
+  /// ```
   Whixp(
+    /// Jabber ID associated with the client
     String jabberID,
+
+    /// Password for authenticating the client.
     String password, {
+    /// Server host address
     super.host,
+
+    /// Port number for the server
     super.port,
+
+    /// If set to `true`, attempt to use IPv6
     super.useIPv6,
-    super.useTLS = true,
+
+    /// DirectTLS activator. Defaults to `false`
+    super.useTLS = false,
+
+    /// Disable StartTLS for secure communication. Defaults to `false`
     super.disableStartTLS,
+
+    /// Default language to use in stanza communication
+    String language = 'en',
+
+    /// [List] of paths to a file containing certificates for verifying the
+    /// server TLS certificate
     super.certs,
-    this.language = 'en',
+
+    /// [Log] instance to print out various log messages properly
+    super.logger,
+
+    /// Timeout for establishing the connection (in milliseconds). Defaults to
+    /// `2000`
     super.connectionTimeout,
+
+    /// Maximum number of reconnection attempts. Defaults to `3`
     super.maxReconnectionAttempt,
   }) : super(jabberID: jabberID) {
-    setup();
+    _language = language;
+
+    /// Automatically calls the `_setup()` method to configure the XMPP client.
+    _setup();
 
     credentials.addAll({'password': password});
   }
 
-  void setup() {
-    reset();
+  void _setup() {
+    _reset();
 
     /// Set [streamHeader] of declared transport for initial send.
     transport.streamHeader =
-        "<stream:stream to='${transport.boundJID.host}' xmlns:stream='$streamNamespace' xmlns='$defaultNamespace' xml:lang='$language' version='1.0'>";
+        "<stream:stream to='${transport.boundJID.host}' xmlns:stream='$streamNamespace' xmlns='$defaultNamespace' xml:lang='$_language' version='1.0'>";
     transport.streamFooter = "</stream:stream>";
 
     StanzaBase features = StreamFeatures();
@@ -45,7 +83,7 @@ class Whixp extends WhixpBase {
         FutureCallbackHandler(
           'Stream Features',
           (stanza) async {
-            features = features.copy(stanza.element);
+            features = features.copy(element: stanza.element);
             _handleStreamFeatures(features);
             return;
           },
@@ -61,15 +99,13 @@ class Whixp extends WhixpBase {
         (stanza) => _handleRoster(stanza!),
       );
 
-    transport.defaultLanguage = language;
+    transport.defaultLanguage = _language;
   }
 
-  void reset() {
-    streamFeatureHandlers.clear();
-  }
+  void _reset() => streamFeatureHandlers.clear();
 
   /// Default language to use in stanza communication.
-  final String language;
+  late final String _language;
 
   Future<bool> _handleStreamFeatures(StanzaBase features) async {
     for (final feature in streamFeatureOrder) {
@@ -111,7 +147,6 @@ class Whixp extends WhixpBase {
     }
 
     final items = stanza['items'] as Map<String, Map<String, dynamic>>;
-    print('items is $items');
 
     final validSubs = {'to', 'from', 'both', 'none', 'remove'};
     for (final item in items.entries) {
@@ -140,5 +175,9 @@ class Whixp extends WhixpBase {
     }
   }
 
+  /// Connects to the server.
+  ///
+  /// When no address is given, a SRV lookup for the server will be attempted.
+  /// If that fails, the server user in the JID will be used.
   void connect() => transport.connect();
 }

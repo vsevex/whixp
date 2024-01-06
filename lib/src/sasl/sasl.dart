@@ -1,4 +1,15 @@
-part of '../plugins/mechanisms/feature.dart';
+import 'dart:math' as math;
+
+import 'package:meta/meta.dart';
+
+import 'package:whixp/src/exception.dart';
+import 'package:whixp/src/plugins/mechanisms/feature.dart';
+import 'package:whixp/src/sasl/scram.dart';
+import 'package:whixp/src/utils/src/stringprep.dart';
+import 'package:whixp/src/utils/utils.dart';
+import 'package:whixp/src/whixp.dart';
+
+part 'mechanism.dart';
 
 class SASL {
   SASL(this._base) {
@@ -9,17 +20,17 @@ class SASL {
   final WhixpBase _base;
   late final Scram _scram;
 
-  final _mechanisms = <String, _Mechanism>{};
+  final _mechanisms = <String, Mechanism>{};
 
   /// Register a single [SASL] `mechanism`, to be supported by this client.
-  void _registerMechanism(_Mechanism mechanism) =>
+  void _registerMechanism(Mechanism mechanism) =>
       _mechanisms[mechanism.name] = mechanism;
 
   /// Register the SASL `mechanisms` which will be supported by this instance of
-  /// [EchoX] (i.e. which this XMPP client will support).
+  /// [Whixp] (i.e. which this XMPP client will support).
   void _registerMechanisms() {
     /// The list of all available authentication mechanisms.
-    late final mechanismList = <_Mechanism>[
+    late final mechanismList = <Mechanism>[
       _SASLAnonymous(_base),
       _SASLPlain(_base),
       _SASLSHA1(_base, scram: _scram),
@@ -32,7 +43,7 @@ class SASL {
 
   /// Sorts a list of objects with prototype SASLMechanism according to their
   /// properties.
-  List<_Mechanism?> _sortMechanismsByPriority(List<_Mechanism> mechanisms) {
+  List<Mechanism?> _sortMechanismsByPriority(List<Mechanism> mechanisms) {
     /// Iterate over all the available mechanisms.
     for (int i = 0; i < mechanisms.length - 1; i++) {
       int higher = i;
@@ -50,7 +61,7 @@ class SASL {
     return mechanisms;
   }
 
-  _Mechanism choose(
+  Mechanism choose(
     Iterable<String> mechanisms,
     SASLCallback saslCallback,
     SecurityCallback securityCallback, [
@@ -110,7 +121,7 @@ class SASL {
   }
 }
 
-class _SASLAnonymous extends _Mechanism {
+class _SASLAnonymous extends Mechanism {
   _SASLAnonymous(super.client) : super(name: 'ANONYMOUS', priority: 10);
 
   @override
@@ -122,7 +133,7 @@ class _SASLAnonymous extends _Mechanism {
   }
 }
 
-class _SASLPlain extends _Mechanism {
+class _SASLPlain extends Mechanism {
   _SASLPlain(super.client)
       : super(
           name: 'PLAIN',
@@ -162,7 +173,7 @@ class _SASLPlain extends _Mechanism {
     auth = '$auth$username';
     auth = '$auth\u0000';
     auth = '$auth$password';
-    return Echotils.utf16to8(auth);
+    return WhixpUtils.utf16to8(auth);
   }
 
   @override
@@ -171,7 +182,7 @@ class _SASLPlain extends _Mechanism {
   }
 }
 
-class _SASLSHA1 extends _Mechanism {
+class _SASLSHA1 extends Mechanism {
   _SASLSHA1(super.client, {required this.scram})
       : super(
           name: 'SCRAM-SHA-1',
@@ -191,7 +202,7 @@ class _SASLSHA1 extends _Mechanism {
       scram.scramResponse(challenge, 'SHA-1', 160);
 }
 
-class _SASLSHA256 extends _Mechanism {
+class _SASLSHA256 extends Mechanism {
   _SASLSHA256(super.client, {required this.scram})
       : super(
           name: 'SCRAM-SHA-256',
@@ -211,7 +222,7 @@ class _SASLSHA256 extends _Mechanism {
       scram.scramResponse(challenge, 'SHA-256', 256);
 }
 
-class _SASLSHA384 extends _Mechanism {
+class _SASLSHA384 extends Mechanism {
   _SASLSHA384(super.client, {required this.scram})
       : super(
           name: 'SCRAM-SHA-384',
@@ -231,7 +242,7 @@ class _SASLSHA384 extends _Mechanism {
       scram.scramResponse(challenge, 'SHA-384', 384);
 }
 
-class _SASLSHA512 extends _Mechanism {
+class _SASLSHA512 extends Mechanism {
   _SASLSHA512(super.client, {required this.scram})
       : super(
           name: 'SCRAM-SHA-512',

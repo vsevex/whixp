@@ -1,7 +1,6 @@
-// profile
-// -------
-// A profile is a list of operations.
+part of 'stringprep.dart';
 
+/// A profile is a list of operations.
 final Map<String, List<List<String>>> profiles = {
   "saslprep": [
     ['map', 'rfc3454-B_1'],

@@ -1,17 +1,36 @@
 part of 'manager.dart';
 
+/// A roster node is a roster for a single [JabberID].
 class RosterNode {
+  /// Creates an instance of [RosterNode] with the specified [Whixp] instance
+  /// and [JabberID] which owns the Roster.
   RosterNode(this.whixp, {required this.jid});
 
+  /// The main [WhixpBase] instance. Can be client or component.
   final WhixpBase whixp;
-  final String jid;
-  Presence? lastStatus;
-  final _jids = <String, RosterItem>{};
-  bool autoAuthorize = true;
-  bool autoSubscribe = true;
-  bool ignoreUpdates = false;
-  late String _version;
 
+  /// The JID associated and owns the roster.
+  final String jid;
+
+  /// The last sent [Presence] status that was broadcast to all contact JIDs.
+  Presence? lastStatus;
+
+  /// The [RosterItem] items that this roster includes.
+  final _jids = <String, RosterItem>{};
+
+  /// Determines how authorizations are handled.
+  bool autoAuthorize = true;
+
+  /// Determines if bi-directional subscriptions are created after auto
+  /// authorizing a subscription request.
+  bool autoSubscribe = true;
+
+  bool ignoreUpdates = false;
+
+  /// Roster's version ID.
+  String version = '';
+
+  /// Return the roster item for a subscribed [JabberID].
   dynamic operator [](String key) {
     final bare = JabberID(key).bare;
     if (!_jids.containsKey(bare)) {
@@ -20,6 +39,8 @@ class RosterNode {
     return _jids[bare];
   }
 
+  /// Remove a roster item from the local. To remotely remove the item from the
+  /// roster use [remove] method instead.
   void delete(String key) {
     final bare = JabberID(key).bare;
     if (_jids.containsKey(bare)) {
@@ -27,10 +48,13 @@ class RosterNode {
     }
   }
 
+  /// Returns a list of all subscribed JIDs in [String] format.
   Iterable<String> get keys => _jids.keys;
 
+  /// Returns whether the roster has a JID.
   bool hasJID(String jid) => _jids.containsKey(jid);
 
+  /// Returns a [Map] of group names.
   Map<dynamic, dynamic> groups() {
     final result = {};
 
@@ -52,15 +76,38 @@ class RosterNode {
     return result;
   }
 
+  /// Adds a new [JabberID] to the roster.
   void add(
+    /// The JID for the roster item
     String jid, {
+    /// An alias for the JID
     String name = '',
+
+    /// A list of group names
     List? groups,
+
+    /// Indicates if the JID has a subscription state of 'from'. Defaults to
+    /// `false`
     bool from = false,
+
+    /// Indicates if the JID has a subscription state of 'to'. Defaults to
+    /// `false`
     bool to = false,
+
+    /// Indicates if the JID has sent a subscription request to this
+    /// connection's JID. Defaults to `false`
     bool pendingIn = false,
+
+    /// Indicates if a subscription request has been send to this JID. Defaults
+    /// to `false`
     bool pendingOut = false,
+
+    /// Indicates if a subscription request from this JID should be
+    /// automatically authorized. Defaults to `false`
     bool whitelisted = false,
+
+    /// Indicates if the item should persisted immediately to an external
+    /// datastore, if one is used. Defaults to `false`
     bool save = false,
   }) {
     final bare = JabberID(jid).bare;
@@ -84,10 +131,13 @@ class RosterNode {
     );
   }
 
+  /// Update a [JabberID]'s subscription information.
   void subscribe(String jid) => (this[jid] as RosterItem).subscribe();
 
+  /// Unsubscribe from the [JabberID].
   void unsubscribe(String jid) => (this[jid] as RosterItem).unsubscribe();
 
+  /// Removes a [JabberID] from the roster (remote).
   void remove(String jid) {
     (this[jid] as RosterItem).remove();
     if (!whixp.transport.isComponent) {
@@ -95,6 +145,7 @@ class RosterNode {
     }
   }
 
+  /// Update a [JabberID]'s roster information.
   void update(
     String jid, {
     String? name,
@@ -121,6 +172,10 @@ class RosterNode {
     }
   }
 
+  /// Returns [Presence] information for a [JabberID]'s resources.
+  ///
+  /// May return either all onlnie resources' status, or a single [resource]'s
+  /// status.
   dynamic presence(String jid, {String? resource}) {
     if (resource == null) {
       return (this[jid] as RosterItem).resources;
@@ -135,12 +190,19 @@ class RosterNode {
     return (this[jid] as RosterItem).resources[resource] ?? defaultResource;
   }
 
+  /// Reset the state of the roster to forget any current presence information.
   void reset() {
     for (final jid in _jids.entries) {
       (this[jid.key] as RosterItem).reset();
     }
   }
 
+  /// Shortcut for sending a [Presence] stanza.
+  ///
+  /// Create, initialize, and send a [Presence] stanza.
+  ///
+  /// If no recipient is specified, send the presence immediately. Otherwise,
+  /// forward the send request to the recipient's roster entry for processing.
   void sendPresence() {
     String? presenceFrom;
     if (whixp.transport.isComponent) {
@@ -162,8 +224,4 @@ class RosterNode {
       presence.send();
     }
   }
-
-  String get version => '';
-
-  set version(String version) => _version = version;
 }

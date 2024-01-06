@@ -1,6 +1,13 @@
-import 'package:echox/src/plugins/base.dart';
-import 'package:echox/src/plugins/session/stanza.dart';
-import 'package:echox/src/stream/base.dart';
+import 'package:meta/meta.dart';
+
+import 'package:whixp/src/plugins/base.dart';
+import 'package:whixp/src/stanza/iq.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/utils/utils.dart';
+
+import 'package:xml/xml.dart' as xml;
+
+part 'stanza.dart';
 
 class FeatureSession extends PluginBase {
   FeatureSession(this._features, {required super.base})

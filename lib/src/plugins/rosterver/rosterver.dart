@@ -1,6 +1,8 @@
-import 'package:echox/src/plugins/base.dart';
-import 'package:echox/src/plugins/rosterver/stanza.dart';
-import 'package:echox/src/stream/base.dart';
+import 'package:whixp/src/plugins/base.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/utils/utils.dart';
+
+part 'stanza.dart';
 
 class FeatureRosterVersioning extends PluginBase {
   FeatureRosterVersioning(this._features, {required super.base})
@@ -15,7 +17,7 @@ class FeatureRosterVersioning extends PluginBase {
     base.registerFeature(
       'rosterver',
       (_) {
-        print('roster version handling');
+        base.logger.warning('Enabling roster versioning');
         return base.features.add('rosterver');
       },
       order: 9000,

@@ -1,11 +1,33 @@
 part of 'manager.dart';
 
+/// It is a single entry in a roster node, and tracks the subscription state
+/// and user annotations of a single [JabberID].
 class RosterItem {
+  /// [RosterItem]s provide methods for handling incoming [Presence] stanzas
+  /// that ensure that response stanzas are sent.
   RosterItem(
+    /// The [Whixp] instance which is assigned to this roster management
     this.whixp, {
+    /// The JID of  the roster item
     required this.jid,
     this.roster,
+
+    /// The Roster's owner [JabberID]
     JabberID? owner,
+
+    /// State fields:
+    ///
+    /// "from" indicates if a subscription of type "from" has been authorized
+    /// "to" indicates if a subcsription of type "to" has been authorized
+    /// "pending_in" indicates if a subscription request has been received from
+    /// this JID and it has not been authorized yet
+    /// "subscription" returns one of: "to", "from", "both", or "none" based on
+    /// the stanzas of from, to, pending_in, and pending_out. Assignment to this
+    /// value does not affect the states of other values
+    /// "whitelisted" indicates if a subscription request from this JID should
+    /// be automatically accepted
+    /// "name" is an alias for the JID
+    /// "groups" is a list of group for the JID
     Map<String, dynamic>? state,
   }) {
     _owner = owner ?? whixp.transport.boundJID;
@@ -24,17 +46,28 @@ class RosterItem {
     _transport = whixp.transport;
   }
 
+  /// The [Whixp] instance which is assigned to this roster management.
   final WhixpBase whixp;
+
+  /// The JID of  the roster item.
   final String jid;
   final RosterNode? roster;
+  late final Map<String, dynamic> _state;
+
+  /// A [Map] of online resources for this JID. Will contain the fields "show",
+  /// "status", and "priority".
   final resources = <String, dynamic>{};
 
+  /// Will be assigned from the [Whixp] instance later.
   late final Transport _transport;
-  late final Map<String, dynamic> _state;
+
+  /// The Roster's owner [JabberID].
   late final JabberID _owner;
 
+  /// The last [Presence] sent to this JID.
   Presence? lastStatus;
 
+  /// Send a subscription request to the JID.
   void subscribe() {
     final presence = Presence();
     presence['to'] = jid;
@@ -46,6 +79,7 @@ class RosterItem {
     presence.send();
   }
 
+  /// Authorize a received subscription request from the JID.
   void authorize() {
     this['from'] = true;
     this['pending_out'] = false;
@@ -53,6 +87,7 @@ class RosterItem {
     sendLastPresence();
   }
 
+  /// Deny a received subscription request from the JID.
   void unauthorize() {
     this['from'] = false;
     this['pending_in'] = false;
@@ -67,6 +102,7 @@ class RosterItem {
     presence.send();
   }
 
+  /// Handle ack a subscription.
   void _subscribed() {
     final presence = Presence();
     presence['to'] = jid;
@@ -77,6 +113,7 @@ class RosterItem {
     presence.send();
   }
 
+  /// Unsubscribe from the JID.
   void unsubscribe() {
     final presence = Presence();
     presence['to'] = jid;
@@ -87,6 +124,7 @@ class RosterItem {
     presence.send();
   }
 
+  /// Handle ack an unsubscribe request.
   void _unsubscribed() {
     final presence = Presence();
     presence['to'] = jid;
@@ -97,6 +135,10 @@ class RosterItem {
     presence.send();
   }
 
+  /// Create, initialize, and send a [Presence] stanza.
+  ///
+  /// If no recipient is specified, send the presence immediately. Otherwise,
+  /// forward the send request to the recipient's roster entry for processing.
   void sendPresence() {
     String? presenceFrom;
     String? presenceTo;
@@ -225,6 +267,7 @@ class RosterItem {
     }
   }
 
+  /// Returns a state field's value.
   dynamic operator [](String key) {
     if (_state.containsKey(key)) {
       if (key == 'subscription') {
@@ -234,6 +277,7 @@ class RosterItem {
     }
   }
 
+  /// Set the value of a state field.
   void operator []=(String attribute, dynamic value) {
     if (_state.containsKey(attribute)) {
       if ({'name', 'subscription', 'groups'}.contains(attribute)) {
@@ -245,6 +289,7 @@ class RosterItem {
     }
   }
 
+  /// Returns a proper subscription type based on current state.
   String _subscription() {
     if (this['to'] != null && this['from'] != null) {
       return 'both';
@@ -268,6 +313,8 @@ class RosterItem {
     }
   }
 
+  /// Remove a JID's whitelisted status and unsubscribe if a subscription
+  /// exists.
   void remove() {
     if (this['to'] != null) {
       final presence = Presence();
@@ -282,5 +329,7 @@ class RosterItem {
     this['whitelisted'] = false;
   }
 
+  /// Forgot current resource presence information as part of a roster reset
+  /// request.
   void reset() => resources.clear();
 }

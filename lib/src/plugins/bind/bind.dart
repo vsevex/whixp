@@ -1,14 +1,20 @@
-import 'package:echox/src/jid/jid.dart';
-import 'package:echox/src/plugins/base.dart';
-import 'package:echox/src/plugins/bind/stanza.dart';
-import 'package:echox/src/stream/base.dart';
+import 'package:meta/meta.dart';
+
+import 'package:whixp/src/jid/jid.dart';
+import 'package:whixp/src/plugins/base.dart';
+import 'package:whixp/src/stanza/iq.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/utils/utils.dart';
+
+part 'stanza.dart';
 
 class FeatureBind extends PluginBase {
   FeatureBind(this._stanza, {required super.base})
       : super('bind', description: 'Resource Binding');
 
-  final StanzaBase _stanza;
   StanzaBase? _features;
+
+  final StanzaBase _stanza;
   late final IQ _iq;
 
   @override
@@ -37,7 +43,7 @@ class FeatureBind extends PluginBase {
 
   void _onBindResponse(StanzaBase response) {
     base.transport.boundJID = JabberID(
-      (_iq.copy(response.element)['bind'] as XMLBase)['jid'] as String,
+      (_iq.copy(element: response.element)['bind'] as XMLBase)['jid'] as String,
     );
 
     base.transport.sessionBind = true;

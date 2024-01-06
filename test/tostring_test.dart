@@ -1,6 +1,7 @@
-import 'package:echox/src/echotils/echotils.dart';
-
 import 'package:test/test.dart';
+
+import 'package:whixp/src/utils/utils.dart';
+
 import 'package:xml/xml.dart' as xml;
 
 void main() {
@@ -13,7 +14,7 @@ void main() {
     expected ??= original;
     final element = xml.XmlDocument.parse(original).rootElement;
 
-    final result = Echotils.serialize(element);
+    final result = WhixpUtils.serialize(element);
     expect(result, expected, reason: '$message: $result');
   }
 

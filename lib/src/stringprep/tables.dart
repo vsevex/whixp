@@ -1,3 +1,5 @@
+part of 'stringprep.dart';
+
 final Map<String, List<List<dynamic>>> tables = {
   "rfc3454-A_1": [
     [545, 545, ""],

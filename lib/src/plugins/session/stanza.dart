@@ -1,13 +1,11 @@
-import 'package:echox/src/echotils/echotils.dart';
-import 'package:echox/src/stream/base.dart';
+part of 'session.dart';
 
-import 'package:xml/xml.dart' as xml;
-
+@internal
 class Session extends XMLBase {
   Session()
       : super(
           name: 'session',
-          namespace: Echotils.getNamespace('SESSION'),
+          namespace: WhixpUtils.getNamespace('SESSION'),
           interfaces: {'optional'},
           pluginAttribute: 'session',
         ) {

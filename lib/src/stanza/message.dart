@@ -1,6 +1,32 @@
-part of '../stream/base.dart';
+import 'package:whixp/src/jid/jid.dart';
+import 'package:whixp/src/stanza/root.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/utils/utils.dart';
 
+import 'package:xml/xml.dart' as xml;
+
+/// XMPP's <message> stanza are a "push" mechanism to send information to
+/// other XMPP entities without requiring a response.
+///
+/// Chat clients will typically use [Message] stanzas that have a type of either
+/// "chat" or "groupchat".
+///
+/// When handling a message event, be sure to check if the message is an error
+/// response.
+///
+/// ### Example:
+/// ```xml
+/// <message to="vsevex@example.com" from="alyosha@example.com">
+///   <body>salam!</body>
+/// </message>
+/// ```
+///
+/// For more information on "id" and "type" please refer to [XML stanzas](https://xmpp.org/rfcs/rfc3920.html#stanzas)
 class Message extends RootStanza {
+  /// [types] may be one of: normal, chat, headline, groupchat, or error.
+  ///
+  /// All parameters are extended from [RootStanza]. For more information please
+  /// take a look at [RootStanza].
   Message({
     super.transport,
     super.includeNamespace = false,
@@ -20,7 +46,7 @@ class Message extends RootStanza {
     super.parent,
   }) : super(
           name: 'message',
-          namespace: Echotils.getNamespace('CLIENT'),
+          namespace: WhixpUtils.getNamespace('CLIENT'),
           pluginAttribute: 'message',
           interfaces: {
             'type',
@@ -38,9 +64,9 @@ class Message extends RootStanza {
           languageInterfaces: {'body', 'subject', 'thread'},
           types: {'normal', 'chat', 'headline', 'error', 'groupchat'},
         ) {
-    if (!this.receive && this['id'] == '') {
+    if (!receive && this['id'] == '') {
       if (transport != null) {
-        this['id'] = Echotils.getUniqueId();
+        this['id'] = WhixpUtils.getUniqueId();
       }
     }
 
@@ -56,7 +82,7 @@ class Message extends RootStanza {
           if (value != null) {
             if (element == null) {
               final thread =
-                  Echotils.xmlElement('thread', namespace: namespace);
+                  WhixpUtils.xmlElement('thread', namespace: namespace);
               base.element!.children.add(thread);
             }
           } else {
@@ -121,10 +147,16 @@ class Message extends RootStanza {
     );
   }
 
+  /// Set the message type to "chat".
   void chat() => this['type'] = 'chat';
 
+  /// Set the message type to "normal".
   void normal() => this['type'] = 'normal';
 
+  /// Overrider of [reply] method for [Message] stanza class. Can take optional
+  /// [body] parameter which is assigned to the body of the [Message] stanza.
+  ///
+  /// Sets proper "to" attribute if the message is a from a MUC.
   Message replyMessage({String? body, bool clear = true}) {
     final message = super.reply<Message>(copiedStanza: copy(), clear: clear);
 
@@ -138,7 +170,7 @@ class Message extends RootStanza {
     message.delete('id');
 
     if (transport != null) {
-      message['id'] = Echotils.getUniqueId();
+      message['id'] = WhixpUtils.getUniqueId();
     }
 
     if (body != null) {
@@ -148,6 +180,7 @@ class Message extends RootStanza {
     return message;
   }
 
+  /// Return the name of the MUC room where the message originated.
   String get mucRoom {
     if (this['type'] == 'groupchat') {
       return JabberID(this['from'] as String).bare;
@@ -155,6 +188,7 @@ class Message extends RootStanza {
     return '';
   }
 
+  /// Return the nickname of the MUC user that sent the message.
   String get mucNick {
     if (this['type'] == 'groupchat') {
       return JabberID(this['from'] as String).resource;
@@ -163,24 +197,24 @@ class Message extends RootStanza {
   }
 
   @override
-  Message copy([
+  Message copy({
     xml.XmlElement? element,
     XMLBase? parent,
     bool receive = false,
-  ]) =>
+  }) =>
       Message(
-        getters: _getters,
-        setters: _setters,
-        deleters: _deleters,
+        pluginMultiAttribute: pluginMultiAttribute,
+        overrides: overrides,
         pluginTagMapping: pluginTagMapping,
-        pluginAttributeMapping: _pluginAttributeMapping,
-        pluginMultiAttribute: _pluginMultiAttribute,
-        pluginIterables: _pluginIterables,
-        overrides: _overrides,
-        isExtension: _isExtension,
+        pluginAttributeMapping: pluginAttributeMapping,
+        boolInterfaces: boolInterfaces,
+        pluginIterables: pluginIterables,
+        isExtension: isExtension,
+        includeNamespace: includeNamespace,
+        getters: getters,
+        setters: setters,
+        deleters: deleters,
         setupOverride: setupOverride,
-        boolInterfaces: _boolInterfaces,
-        includeNamespace: _includeNamespace,
         receive: receive,
         element: element,
         parent: parent,
@@ -198,7 +232,8 @@ class Message extends RootStanza {
     if (sub != null) {
       sub.setAttribute('id', value);
     } else {
-      final sub = Echotils.xmlElement('origin-id', namespace: 'urn:xmpp:sid:0');
+      final sub =
+          WhixpUtils.xmlElement('origin-id', namespace: 'urn:xmpp:sid:0');
       sub.setAttribute('id', value);
       return base.element!.children.add(sub);
     }

@@ -1,15 +1,47 @@
 import 'package:dartz/dartz.dart';
-import 'package:echox/src/echotils/echotils.dart';
-import 'package:echox/src/jid/jid.dart';
-import 'package:echox/src/stream/base.dart';
+
+import 'package:whixp/src/jid/jid.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
 
+/// ### Example:
+/// ```xml
+///  <iq type="set">
+///   <query xmlns="jabber:iq:roster">
+///     <item jid="vsevex@example.com" subscription="both" name="Vsevolod">
+///       <group>hokkabazlar</group>
+///     </item>
+///   </query>
+/// </iq>
+/// ```
 class Roster extends XMLBase {
+  /// The [Roster] class provides functionality for handling XMPP roster-related
+  /// queries.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final iq = IQ();
+  /// final roster = Roster();
+  /// iq.registerPlugin(roster);
+  /// (iq['roster'] as XMLBase)['items'] = {
+  ///   'vsevex@example.com': {
+  ///     'name': 'Vsevolod',
+  ///     'subscription': 'both',
+  ///     'groups': ['cart', 'hella'],
+  ///   },
+  ///   'alyosha@example.com': {
+  ///    'name': 'Alyosha',
+  ///    'subscription': 'both',
+  ///    'groups': ['gup'],
+  ///   },
+  /// }; /// ...sets items of the [Roster] stanza in the IQ stanza
+  /// ```
   Roster()
       : super(
           name: 'query',
-          namespace: Echotils.getNamespace('ROSTER'),
+          namespace: WhixpUtils.getNamespace('ROSTER'),
           pluginAttribute: 'roster',
           interfaces: {'items', 'ver'},
         ) {
@@ -61,11 +93,18 @@ class Roster extends XMLBase {
   }
 }
 
+/// Represents an individual roster item within the roster query.
 class RosterItem extends XMLBase {
+  /// ### Example:
+  /// ```dart
+  /// final roster = Roster();
+  /// final item = RosterItem();
+  /// roster.registerPlugin(item);
+  /// ```
   RosterItem({super.includeNamespace = false})
       : super(
           name: 'item',
-          namespace: Echotils.getNamespace('ROSTER'),
+          namespace: WhixpUtils.getNamespace('ROSTER'),
           pluginAttribute: 'item',
           interfaces: {
             'jid',
@@ -98,7 +137,7 @@ class RosterItem extends XMLBase {
       const Symbol('groups'): (value, args, base) {
         base.delete('groups');
         for (final groupName in value as List) {
-          final group = Echotils.xmlElement('group');
+          final group = WhixpUtils.xmlElement('group');
           group.innerText = groupName as String;
           base.element!.children.add(group);
         }

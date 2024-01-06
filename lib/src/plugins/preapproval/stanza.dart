@@ -1,11 +1,10 @@
-import 'package:echox/src/echotils/echotils.dart';
-import 'package:echox/src/stream/base.dart';
+part of 'preapproval.dart';
 
 class PreApproval extends XMLBase {
   PreApproval()
       : super(
           name: 'sub',
-          namespace: Echotils.getNamespace('PREAPPROVAL'),
+          namespace: WhixpUtils.getNamespace('PREAPPROVAL'),
           interfaces: const <String>{},
           pluginAttribute: 'preapproval',
         );

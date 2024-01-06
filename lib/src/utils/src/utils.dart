@@ -3,37 +3,37 @@ import 'dart:math' as math;
 import 'dart:mirrors' as mirrors;
 import 'dart:typed_data';
 
-import 'package:echox/src/escaper/escaper.dart';
+import 'package:whixp/src/escaper/escaper.dart';
 
 import 'package:xml/xml.dart' as xml;
 
 part '_constants.dart';
 
-/// A utility class for various EchoX-related operations.
+/// A utility class for various Whixp-related operations.
 ///
 /// Contains a collection of utility methods for performing various operations
-/// related to [EchoX], such as XML manipulation, stanza handling, error
+/// related to [Whixp], such as XML manipulation, stanza handling, error
 /// management, and data conversions.
 ///
 /// ### Example:
 /// ```dart
-/// final element = Echotils.xmlElement(
+/// final element = WhixpUtils.xmlElement(
 ///   'book',
 ///   attributes: {'author': 'Vsevolod', 'year': '2023'},
 /// );
 ///
 /// log(element); /// outputs "<book author="Vsevolod" year="2023"/>"
 /// ```
-class Echotils {
-  /// Creates an instance of the [Echotils] utility class.
+class WhixpUtils {
+  /// Creates an instance of the [WhixpUtils] utility class.
   ///
   /// Typically, you do not need to create instances of this class, as it
   /// provides static utility methods.
-  const Echotils();
+  const WhixpUtils();
 
-  /// This line define field `_xmlGenerator`. The purpose of this code line is
-  /// to create a single instance of the [xml.XmlBuilder] class that can
-  /// be reused throughout the code.
+  /// Defines field `_xmlGenerator`. The purpose of this code line is to create
+  /// a single instance of the [xml.XmlBuilder] class that can be reused
+  /// throughout the code.
   static final _xmlGenerator = xml.XmlBuilder();
 
   /// The [xml.XmlBuilder] class is part of the [xml] package in Dart and is
@@ -56,7 +56,7 @@ class Echotils {
   ///
   /// ### Example:
   /// ```dart
-  /// final element = Echotils.xmlElement(
+  /// final element = WhixpUtils.xmlElement(
   ///   'test',
   ///   attributes: {'attr1': 'blya'},
   ///   text: 'hert, blya!',
@@ -128,56 +128,6 @@ class Echotils {
     return builder.buildDocument().rootElement.copy();
   }
 
-  /// Extracts and concatenates the text content from an XML element and its
-  /// descendants.
-  ///
-  /// This method traverses the XML element's children recursively and collects
-  /// all text content within the element and its descendants. It returns the
-  /// concatenated text content as a single string with XML escaping applied.
-  ///
-  /// If the provided [element] is an XML text node, its value is directly
-  /// included in the result string. If it is an XML element node, this method
-  /// recursively traverses its children to gather text content.
-  ///
-  /// ### Example:
-  /// ```dart
-  /// final element =
-  ///     xml.XmlDocument.parse('<root>hert lerko</root>').rootElement;
-  /// final result = Echotils.getText(element); /// outputs "hert lerko"
-  /// ```
-  static String getText(xml.XmlNode element) {
-    /// Define empty string buffer without [StringBuffer].
-    String buffer = '';
-
-    if (element.children.isEmpty && element.nodeType == xml.XmlNodeType.TEXT) {
-      buffer += element.value!;
-    }
-
-    for (int i = 0; i < element.children.length; i++) {
-      if (element.children[i].nodeType == xml.XmlNodeType.TEXT) {
-        buffer += element.children[i].value!;
-      } else if (element.children[i].nodeType == xml.XmlNodeType.ELEMENT) {
-        /// Recursively run the method for gathering if there is a text inside
-        /// of the passed element.
-        buffer += getText(element.children[i]);
-      }
-    }
-
-    return Escaper().xmlEscape(buffer);
-  }
-
-  /// This method creates an XML text node using the provided [text].
-  ///
-  /// Creates an [xml.XmlBuilder] instance using the `makeGenerator()` method.
-  ///
-  /// ### Example:
-  /// ```dart
-  /// final textNode = Echotils.xmlTextNode('hert');
-  ///
-  /// log(textNode.root.value); /// outputs "hert"
-  /// ```
-  static xml.XmlNode xmlTextNode(String text) => copyElement(xml.XmlText(text));
-
   /// This is a method colled [copyElement] that takes an [xml.XmlNode]
   /// [element] as input and returns an [xml.XmlNode] element as output.
   ///
@@ -215,46 +165,6 @@ class Echotils {
     /// The method throws an [ArgumentError] if the input node is of an
     /// unsupported type.
     throw ArgumentError('Invalid node type: ${element.nodeType}');
-  }
-
-  /// Returns a [bool] indicating whether the name of the XML element matches
-  /// the specified name.
-  /// <br /> Checks whether the qualified name of the [element] matches the
-  /// [name] parameter. If they match, the method returns `true`, otherwise
-  /// `false`.
-  ///
-  /// ### Example:
-  /// ```dart
-  /// final isEqual = Echotils.isTagEqual(childElement, 'hert');
-  /// ```
-  static bool isTagEqual(xml.XmlElement element, String name) =>
-      element.name.qualified == name;
-
-  /// Maps a function over some or all child elements of a given element.
-  ///
-  /// This is a small convenience function for mapping a function over some or
-  /// all of the children of an element. If [element] is `null`, all children
-  /// will be passed to the [function], otherwise only children whose tag names
-  /// match [name] will be passed.
-  static void forEachChild(
-    xml.XmlElement? element,
-    String? name,
-    void Function(xml.XmlElement child) function,
-  ) {
-    if (element == null) return;
-
-    for (int i = 0; i < element.descendantElements.length; i++) {
-      final childNode = element.descendantElements.toList()[i];
-
-      /// Child element of the given `element`, the function checks whether it
-      /// is an `XmlElement` and whether it matches the given `name` filter (if
-      /// provided). If both of these conditions are true, the specified
-      /// function func is called with the child element as the parameter.
-      if (childNode.nodeType == xml.XmlNodeType.ELEMENT &&
-          (name == null || isTagEqual(childNode, name))) {
-        function(childNode);
-      }
-    }
   }
 
   /// This method takes an XML [element] and seralizes it into string
@@ -397,7 +307,7 @@ class Echotils {
   /// ### Example:
   /// ```dart
   /// const encoded = 'SGVsbG8gV29ybGQ='
-  /// final bytes = Echotils.base64ToArrayBuffer(encoded);
+  /// final bytes = WhixpUtils.base64ToArrayBuffer(encoded);
   /// ```
   ///
   /// See also:
@@ -421,7 +331,7 @@ class Echotils {
   ///
   /// ### Example:
   /// ```dart
-  /// final decodedString = Echotils.atob('aGVydCwgbGVya28=');
+  /// final decodedString = WhixpUtils.atob('aGVydCwgbGVya28=');
   /// print(decodedString); /// outputs "hert, lerko"
   /// ```
   static String atob(String input) =>
@@ -438,7 +348,7 @@ class Echotils {
   ///
   /// ### Example
   /// ```dart
-  /// final encodedString = Echotils.btoa('hert, lerko');
+  /// final encodedString = WhixpUtils.btoa('hert, lerko');
   /// print(encodedString); /// outputs "aGVydCwgbGVya28='"
   /// ```
   static String btoa(String input) => base64.encode(stringToArrayBuffer(input));
@@ -453,7 +363,7 @@ class Echotils {
   /// ### Example:
   /// ```dart
   /// final value = 'hert, blya!';
-  /// final bytes = Echotils.stringToArrayBuffer(value);
+  /// final bytes = WhixpUtils.stringToArrayBuffer(value);
   /// ```
   static Uint8List stringToArrayBuffer(String value) {
     final bytes = value.codeUnits;
@@ -496,9 +406,10 @@ class Echotils {
   ///
   /// ### Example:
   /// ```dart
-  /// final streamNamespace = Echotils.getNamespace('STREAM');
+  /// final streamNamespace = Whixputils.getNamespace('STREAM');
   /// ```
-  static String getNamespace(String ns) => _namespace[ns.toUpperCase()]!;
+  static String getNamespace(String namespace) =>
+      _namespace[namespace.toUpperCase()]!;
 
   /// Adds a namespace to the current list of namespaces for a server
   /// configuration.
@@ -507,7 +418,7 @@ class Echotils {
   ///
   /// ### Example:
   /// ```dart
-  /// Echotils.addNamespace('CLIENT', 'jabber:client');
+  /// WhixpUtils.addNamespace('CLIENT', 'jabber:client');
   /// ```
   static void addNamespace(String name, String key) => _namespace[name] = key;
 
@@ -520,7 +431,7 @@ class Echotils {
   /// ### Example:
   /// ```dart
   /// final object = SomeClass();
-  /// if (Echotils.hasAttr(object, 'property')) {
+  /// if (WhixpUtils.hasAttr(object, 'property')) {
   ///   log('property exists!');
   /// } else {
   ///   /// ...otherwise do something
@@ -543,7 +454,7 @@ class Echotils {
   /// ### Example:
   /// ```dart
   /// final exampleObject = Example();
-  /// final name = Echotils.getAttr(exampleObject, 'name');
+  /// final name = WhixpUtils.getAttr(exampleObject, 'name');
   /// log(name); /// outputs name
   /// ```
   ///
@@ -569,7 +480,7 @@ class Echotils {
   /// ### Example:
   /// ```dart
   /// final exampleObject = Example();
-  /// final name = Echotils.setAttr(exampleObject, 'name', 'hert');
+  /// final name = WhixpUtils.setAttr(exampleObject, 'name', 'hert');
   /// ```
   /// **Warning:**
   /// * Reflection can be affected by certain build configurations, and the

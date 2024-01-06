@@ -1,7 +1,8 @@
-part of '../plugins/mechanisms/feature.dart';
+part of 'sasl.dart';
 
-abstract class _Mechanism {
-  _Mechanism(
+@internal
+abstract class Mechanism {
+  Mechanism(
     this._base, {
     required this.name,
     int? priority,

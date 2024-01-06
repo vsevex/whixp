@@ -1,8 +1,8 @@
-import 'package:echox/src/stringprep/profiles.dart';
-import 'package:echox/src/stringprep/tables.dart';
-
 import 'package:memoize/memoize.dart';
 import 'package:unorm_dart/unorm_dart.dart' as unorm;
+
+part 'profiles.dart';
+part 'tables.dart';
 
 typedef STRPREPFUNC = String Function(String str);
 

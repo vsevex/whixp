@@ -1,6 +1,6 @@
-import 'package:echox/src/escaper/escaper.dart';
-
 import 'package:test/test.dart';
+
+import 'package:whixp/src/escaper/escaper.dart';
 
 void main() {
   group('escape and unescape methods test', () {

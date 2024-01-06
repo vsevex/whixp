@@ -1,7 +1,8 @@
-import 'package:echox/src/echotils/src/echotils.dart';
-import 'package:echox/src/stream/base.dart';
-
 import 'package:test/test.dart';
+
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/utils/utils.dart';
+
 import 'package:xml/xml.dart' as xml;
 
 void main() {
@@ -47,7 +48,7 @@ void main() {
 
       stanza.setTo('cart@hert.org');
       stanza.setFrom('lerko@hert.org');
-      stanza.setPayload([Echotils.xmlElement('foo', namespace: 'test')]);
+      stanza.setPayload([WhixpUtils.xmlElement('foo', namespace: 'test')]);
 
       final reply = stanza.reply(copiedStanza: stanza);
 

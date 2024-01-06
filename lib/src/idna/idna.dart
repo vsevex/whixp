@@ -1,10 +1,10 @@
 import 'dart:convert';
 
-import 'package:echox/echox.dart';
-import 'package:echox/src/idna/punycode.dart';
-import 'package:echox/src/stringprep/stringprep.dart';
-
 import 'package:unorm_dart/unorm_dart.dart' as unorm;
+
+import 'package:whixp/src/exception.dart';
+import 'package:whixp/src/idna/punycode.dart';
+import 'package:whixp/src/stringprep/stringprep.dart';
 
 class IDNA {
   const IDNA();

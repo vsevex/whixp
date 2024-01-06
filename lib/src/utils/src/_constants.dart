@@ -1,4 +1,4 @@
-part of 'echotils.dart';
+part of 'utils.dart';
 
 /// ### Common namespace constants from the XMPP RFCs and XEPs
 ///

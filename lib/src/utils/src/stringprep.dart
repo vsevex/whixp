@@ -1,7 +1,8 @@
-import 'package:echox/echox.dart';
-import 'package:echox/src/idna/idna.dart';
-import 'package:echox/src/stringprep/stringprep.dart';
 import 'package:memoize/memoize.dart';
+
+import 'package:whixp/src/exception.dart';
+import 'package:whixp/src/idna/idna.dart';
+import 'package:whixp/src/stringprep/stringprep.dart';
 
 class StringPreparationProfiles {
   final _nodePrep = StringPreparation().preps['nodeprep'];

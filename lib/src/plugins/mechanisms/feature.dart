@@ -1,15 +1,15 @@
-import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:echox/echox.dart';
-import 'package:echox/src/echotils/src/stringprep.dart';
-import 'package:echox/src/handler/callback.dart';
-import 'package:echox/src/plugins/base.dart';
-import 'package:echox/src/plugins/mechanisms/stanza/stanza.dart';
-import 'package:echox/src/sasl/scram.dart';
-import 'package:echox/src/stream/base.dart';
-import 'package:echox/src/stream/matcher/xpath.dart';
-import 'package:echox/src/whixp.dart';
+import 'package:meta/meta.dart';
+
+import 'package:whixp/src/exception.dart';
+import 'package:whixp/src/handler/handler.dart';
+import 'package:whixp/src/plugins/base.dart';
+import 'package:whixp/src/plugins/mechanisms/stanza/stanza.dart';
+import 'package:whixp/src/sasl/sasl.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/stream/matcher/matcher.dart';
+import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
 
@@ -18,13 +18,14 @@ part 'stanza/_failure.dart';
 part 'stanza/_challenge.dart';
 part 'stanza/_response.dart';
 part 'stanza/_success.dart';
-part '../../sasl/sasl.dart';
-part '../../sasl/mechanism.dart';
 
+@internal
 typedef SASLCallback = Map<String, String> Function(
   Set<String> required,
   Set<String> optional,
 );
+
+@internal
 typedef SecurityCallback = Map<String, bool> Function(Set<String> values);
 
 class FeatureMechanisms extends PluginBase {
@@ -46,6 +47,7 @@ class FeatureMechanisms extends PluginBase {
 
   SASLCallback? saslCallback;
   SecurityCallback? securityCallback;
+
   late final bool _encryptedPlain;
   late final bool _unencryptedPlain;
   late final bool _unencryptedScram;
@@ -53,7 +55,7 @@ class FeatureMechanisms extends PluginBase {
   final mechanisms = <String>[];
 
   late final attemptedMechanisms = <String>[];
-  late _Mechanism _mech;
+  late Mechanism _mech;
 
   @override
   void initialize() {
@@ -179,13 +181,15 @@ class FeatureMechanisms extends PluginBase {
 
     try {
       _mech = sasl.choose(mechList, saslCallback!, securityCallback!);
-    } on SASLException catch (error) {
-      print(error);
+    } on SASLException {
+      base.logger.error('No appropriate login method');
 
-      /// TODO: disconnect.
+      base.transport.disconnect();
       return false;
     } on StringPreparationException {
-      /// TODO: disconnect.
+      base.logger.error('A credential value did not pass SASL preperation');
+
+      base.transport.disconnect();
       return false;
     }
 
@@ -193,7 +197,7 @@ class FeatureMechanisms extends PluginBase {
     response['mechanism'] = _mech.name;
 
     try {
-      response['value'] = Echotils.btoa(_mech.process());
+      response['value'] = WhixpUtils.btoa(_mech.process());
     } on SASLException {
       attemptedMechanisms.add(_mech.name);
       return _sendAuthentication();
@@ -209,7 +213,7 @@ class FeatureMechanisms extends PluginBase {
     try {
       response['value'] = _mech.challenge(stanza['value'] as String);
     } on SASLException {
-      /// TODO: disconnect.
+      base.transport.disconnect();
     }
     response.send();
   }
@@ -222,6 +226,8 @@ class FeatureMechanisms extends PluginBase {
 
   bool _handleFailure(StanzaBase stanza) {
     attemptedMechanisms.add(_mech.name);
+    base.logger.info('Authentication failed: ${stanza['condition']}');
+    base.transport.emit<StanzaBase>('failedAuth', data: stanza);
     _sendAuthentication();
     return true;
   }

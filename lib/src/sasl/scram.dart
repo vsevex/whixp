@@ -3,9 +3,9 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
 
-import 'package:echox/src/echotils/echotils.dart';
-import 'package:echox/src/exception.dart';
-import 'package:echox/src/whixp.dart';
+import 'package:whixp/src/exception.dart';
+import 'package:whixp/src/utils/utils.dart';
+import 'package:whixp/src/whixp.dart';
 
 /// [Scram] is a class used for the SCRAM (Saited Challenge Response
 /// Authentication Mechanism) authentication in the XMPP protocol.
@@ -33,7 +33,7 @@ class Scram {
     final signature =
         hmacShaConvert(storedKey, Uint8List.fromList(message.codeUnits), hash);
 
-    return Echotils.xorUint8Lists(clientKey, signature);
+    return WhixpUtils.xorUint8Lists(clientKey, signature);
   }
 
   /// The purpose ofthis method is to sign the given `message` using the
@@ -67,7 +67,7 @@ class Scram {
     int? iter;
 
     /// If challenge is null, throw a SCRAM error.
-    if (challenge == null) {
+    if (challenge == null || challenge.isEmpty) {
       throw SASLException.scram('The challenge from the server is null');
     }
 
@@ -87,7 +87,7 @@ class Scram {
       if (matches[1] == 'r') {
         nonce = matches[2];
       } else if (matches[1] == 's') {
-        salt = Echotils.base64ToArrayBuffer(matches[2]!);
+        salt = WhixpUtils.base64ToArrayBuffer(matches[2]!);
       } else if (matches[1] == 'i') {
         iter = int.parse(matches[2]!, radix: 10);
       } else {
@@ -142,12 +142,12 @@ class Scram {
     return <String, String>{
       'ck': hmacShaConvert(
         saltedPasswordBites,
-        Echotils.stringToArrayBuffer('Client Key'),
+        WhixpUtils.stringToArrayBuffer('Client Key'),
         hash,
       ),
       'sk': hmacShaConvert(
         saltedPasswordBites,
-        Echotils.stringToArrayBuffer('Server Key'),
+        WhixpUtils.stringToArrayBuffer('Server Key'),
         hash,
       ),
     };
@@ -264,7 +264,7 @@ class Scram {
     final bytes = List<int>.generate(16, (index) => math.Random().nextInt(256));
 
     /// Base64-encode the nonce
-    return Echotils.arrayBufferToBase64(Uint8List.fromList(bytes));
+    return WhixpUtils.arrayBufferToBase64(Uint8List.fromList(bytes));
   }
 
   /// Returns a string containing the client first message.
@@ -318,7 +318,6 @@ class Scram {
   ///
   /// See also:
   ///
-  /// - [EchoX], the EchoX connection for which the response is generated.
   /// - [parseChallenge], a method used to parse the received challenge string.
   /// - [deriveKeys], a method used to derive client and server keys.
   /// - [clientProof], a method used to compute the client proof.
@@ -376,17 +375,17 @@ class Scram {
     final proof = clientProof(message, clientKey!, hashName);
     final serverSignature = serverSign(message, serverKey!, hashName);
 
-    whixp.saslData['server-signature'] = Echotils.btoa(serverSignature);
+    whixp.saslData['server-signature'] = WhixpUtils.btoa(serverSignature);
     whixp.saslData['keys'] = {
       'name': hashName,
       'iter': challengeData['iter'],
-      'salt': Echotils.arrayBufferToBase64(
+      'salt': WhixpUtils.arrayBufferToBase64(
         challengeData['salt'] as Uint8List,
       ),
-      'ck': Echotils.btoa(clientKey),
-      'sk': Echotils.btoa(serverKey),
+      'ck': WhixpUtils.btoa(clientKey),
+      'sk': WhixpUtils.btoa(serverKey),
     };
 
-    return '$clientFinalMessageBare,p=${Echotils.btoa(proof)}';
+    return '$clientFinalMessageBare,p=${WhixpUtils.btoa(proof)}';
   }
 }

@@ -1,90 +1,21 @@
 import 'dart:typed_data';
 
-import 'package:echox/src/echotils/echotils.dart';
-
 import 'package:test/test.dart';
+
+import 'package:whixp/src/utils/utils.dart';
+
 import 'package:xml/xml.dart' as xml;
 
 import 'class/property.dart';
 
 void main() {
-  group('isTagEqual method tests', () {
-    test('must return true if tags are equal', () {
-      final element = xml.XmlElement(xml.XmlName('child1'));
-      final result = Echotils.isTagEqual(element, 'child1');
-      expect(result, isTrue);
-    });
-    test('must return false if tags are different', () {
-      final element = xml.XmlElement(xml.XmlName('tag'));
-      final result = Echotils.isTagEqual(element, 'differentOne');
-      expect(result, isFalse);
-    });
-  });
-
-  group('XHTML getText method tests', () {
-    test('must return valid text', () {
-      final element =
-          xml.XmlDocument.parse('<root>hert, blyat</root>').rootElement;
-      final result = Echotils.getText(element);
-      expect(result, equals('hert, blyat'));
-    });
-
-    test('must return valid text', () {
-      final element = xml.XmlDocument.parse(
-        '<description>blya, <b>hert</b> lerko.</description>',
-      ).rootElement;
-      final result = Echotils.getText(element);
-      expect(result, 'blya, hert lerko.');
-    });
-  });
-
-  group('forEachChild method tests', () {
-    xml.XmlElement? element;
-
-    setUp(
-      () => {
-        element = xml.XmlElement(xml.XmlName('test'), [], [
-          xml.XmlElement(xml.XmlName('lerko')),
-          xml.XmlElement(xml.XmlName('hert')),
-          xml.XmlElement(xml.XmlName('blya')),
-        ]),
-      },
-    );
-
-    test('returns 0 without children', () {
-      final element = xml.XmlElement(xml.XmlName('test'));
-      int count = 0;
-      Echotils.forEachChild(element, null, (node) => count++);
-      expect(count, 0);
-    });
-    test('returns exact count of children with passed children', () {
-      int count = 0;
-
-      Echotils.forEachChild(element, null, (node) => count++);
-
-      expect(count, 3);
-    });
-
-    test('returns exact count with name filter', () {
-      int count = 0;
-      Echotils.forEachChild(element, 'blya', (node) => count++);
-      expect(count, 1);
-    });
-
-    test('returns 0 with non-matching name but with children ', () {
-      int count = 0;
-      Echotils.forEachChild(element, 'firch', (node) => count++);
-      expect(count, 0);
-    });
-  });
-
   group('serialize method tests', () {
     test('returns null if element is null', () {
-      final result = Echotils.serialize(null);
+      final result = WhixpUtils.serialize(null);
       expect(result, isNull);
     });
     test('returns correct serialization', () {
-      final result = Echotils.serialize(xml.XmlElement(xml.XmlName('hert')));
+      final result = WhixpUtils.serialize(xml.XmlElement(xml.XmlName('hert')));
       expect(result, '<hert/>');
     });
 
@@ -92,7 +23,7 @@ void main() {
       final element = xml.XmlElement(xml.XmlName('a'));
       element.setAttribute('href', 'https://example.com');
       element.setAttribute('target', '_cart');
-      final result = Echotils.serialize(element);
+      final result = WhixpUtils.serialize(element);
       const expected = '<a href="https://example.com" target="_cart"/>';
       expect(result, expected);
     });
@@ -101,7 +32,7 @@ void main() {
       final document = xml.XmlDocument.parse(
         '<book><![CDATA[This is some <CDATA> content.]]></book>',
       );
-      final result = Echotils.serialize(document.rootElement);
+      final result = WhixpUtils.serialize(document.rootElement);
       const expected = '<book><![CDATA[This is some <CDATA> content.]]></book>';
       expect(result, expected);
     });
@@ -118,7 +49,7 @@ void main() {
       element.children.add(xml.XmlElement(xml.XmlName('lerko')));
 
       /// Create a copy of the given XML
-      final copy = Echotils.copyElement(element);
+      final copy = WhixpUtils.copyElement(element);
 
       expect((copy as xml.XmlElement).name.local, equals('test'));
       expect(copy.attributes.length, equals(2));
@@ -131,7 +62,7 @@ void main() {
           '<book id="123"><title>Notes from Underground</title><author>Fyodor Mikhaylovich</author></book>';
       final document = xml.XmlDocument.parse(xmlString);
       final originalElement = document.getElement('book');
-      final copy = Echotils.copyElement(originalElement!);
+      final copy = WhixpUtils.copyElement(originalElement!);
       const expected =
           '<book id="123"><title>Notes from Underground</title><author>Fyodor Mikhaylovich</author></book>';
       expect(copy.toString(), expected);
@@ -139,27 +70,27 @@ void main() {
 
     test('returns copied text element type correctly', () {
       final element = xml.XmlText('cart');
-      final copy = Echotils.copyElement(element);
+      final copy = WhixpUtils.copyElement(element);
 
       expect(copy.nodeType, equals(xml.XmlNodeType.TEXT));
     });
 
     test('will throw an error for unsupported node type', () {
       final element = xml.XmlComment('test');
-      expect(() => Echotils.copyElement(element), throwsArgumentError);
+      expect(() => WhixpUtils.copyElement(element), throwsArgumentError);
     });
   });
 
   group('xmlElement() method tests', () {
     test('must return correct text with valid inputs', () {
-      final xmlNode = Echotils.xmlElement('lerko');
+      final xmlNode = WhixpUtils.xmlElement('lerko');
       expect(xmlNode.toString(), '<lerko/>');
 
       final xmlNodeWithAttr =
-          Echotils.xmlElement('test', attributes: {'attr1': 'hert'});
+          WhixpUtils.xmlElement('test', attributes: {'attr1': 'hert'});
       expect(xmlNodeWithAttr.toString(), '<test attr1="hert"/>');
 
-      final xmlNodeWithMapAttr = Echotils.xmlElement(
+      final xmlNodeWithMapAttr = WhixpUtils.xmlElement(
         'test',
         attributes: {'attr1': 'value1'},
         text: 'Hello, blya!',
@@ -171,12 +102,12 @@ void main() {
     });
 
     test('returns valid output with element name and attributes', () {
-      final element = Echotils.xmlElement(
+      final element = WhixpUtils.xmlElement(
         'book',
         attributes: {'author': 'Vsevolod', 'year': '2023'},
       );
       expect(
-        Echotils.serialize(element),
+        WhixpUtils.serialize(element),
         '<book author="Vsevolod" year="2023"/>',
       );
     });
@@ -185,13 +116,13 @@ void main() {
   group('base64ToArrayBuffer method tests', () {
     test('must return a valid array buffer', () {
       const input = 'SGVsbG8gV29ybGQ=';
-      final output = Echotils.base64ToArrayBuffer(input);
+      final output = WhixpUtils.base64ToArrayBuffer(input);
       expect(output, isA<Uint8List>());
     });
 
     test('must return expected output', () {
       const input = 'YmFzZTY0IGlzIGEgdGVzdA==';
-      final output = Echotils.base64ToArrayBuffer(input);
+      final output = WhixpUtils.base64ToArrayBuffer(input);
       expect(
         output,
         equals(
@@ -221,7 +152,7 @@ void main() {
   group('stringToArrayBuffer method tests', () {
     test('must return a buffer from a provided string', () {
       const value = 'Hello, world!';
-      final result = Echotils.stringToArrayBuffer(value);
+      final result = WhixpUtils.stringToArrayBuffer(value);
       expect(
         result,
         Uint8List.fromList(
@@ -234,7 +165,7 @@ void main() {
   group('arrayBufferToBase64 method tests', () {
     test('must return base64 from array buffer', () {
       final buffer = Uint8List.fromList([104, 101, 108, 108, 111]);
-      final result = Echotils.arrayBufferToBase64(buffer);
+      final result = WhixpUtils.arrayBufferToBase64(buffer);
 
       expect(result, equals('aGVsbG8='));
     });
@@ -243,14 +174,14 @@ void main() {
   group('btoa Method Test', () {
     test('Must return correct result based on input', () {
       const input = '12345';
-      final result = Echotils.btoa(input);
+      final result = WhixpUtils.btoa(input);
       expect(result, 'MTIzNDU=');
     });
 
     test('Must return valid output when input is long text', () {
       const input =
           'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec a diam lectus. Sed sit amet ipsum mauris. Maecenas congue ligula ac quam viverra nec consectetur ante hendrerit.';
-      final result = Echotils.btoa(input);
+      final result = WhixpUtils.btoa(input);
       const expected =
           'TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVyIGFkaXBpc2NpbmcgZWxpdC4gRG9uZWMgYSBkaWFtIGxlY3R1cy4gU2VkIHNpdCBhbWV0IGlwc3VtIG1hdXJpcy4gTWFlY2VuYXMgY29uZ3VlIGxpZ3VsYSBhYyBxdWFtIHZpdmVycmEgbmVjIGNvbnNlY3RldHVyIGFudGUgaGVuZHJlcml0Lg==';
       expect(result, expected);
@@ -262,35 +193,35 @@ void main() {
 
     test(
       'object must have the specified property',
-      () => expect(Echotils.hasAttr(testClass, 'firstProperty'), isTrue),
+      () => expect(WhixpUtils.hasAttr(testClass, 'firstProperty'), isTrue),
     );
 
     test(
       'object must not have the specified property',
       () => expect(
-        Echotils.hasAttr(testClass, 'nonexistingproperty'),
+        WhixpUtils.hasAttr(testClass, 'nonexistingproperty'),
         isFalse,
       ),
     );
 
     test('object is null', () {
       const Object? object = null;
-      expect(Echotils.hasAttr(object, 'someProperty'), isFalse);
+      expect(WhixpUtils.hasAttr(object, 'someProperty'), isFalse);
     });
 
     test(
       'property name is an empty string',
-      () => expect(Echotils.hasAttr(testClass, ''), isFalse),
+      () => expect(WhixpUtils.hasAttr(testClass, ''), isFalse),
     );
 
     test(
       'must return true when object has nullable property',
-      () => expect(Echotils.hasAttr(testClass, 'nullProperty'), isTrue),
+      () => expect(WhixpUtils.hasAttr(testClass, 'nullProperty'), isTrue),
     );
 
     test(
       'must return true when class contains specified method',
-      () => expect(Echotils.hasAttr(testClass, 'intMethod'), isTrue),
+      () => expect(WhixpUtils.hasAttr(testClass, 'intMethod'), isTrue),
     );
   });
 
@@ -298,12 +229,12 @@ void main() {
     final testClass = PropertyTestClass();
 
     test('must get property value', () {
-      final property = Echotils.getAttr(testClass, 'firstProperty');
+      final property = WhixpUtils.getAttr(testClass, 'firstProperty');
       expect(property, equals(42));
     });
 
     test('must get method result', () {
-      final method = Echotils.getAttr(testClass, 'intMethod');
+      final method = WhixpUtils.getAttr(testClass, 'intMethod');
       expect(method, isA<Function>());
 
       final result = (method as Function()).call();
@@ -312,12 +243,13 @@ void main() {
 
     test(
       'attribute does not exist',
-      () => expect(Echotils.getAttr(testClass, 'nonexistentproperty'), isNull),
+      () =>
+          expect(WhixpUtils.getAttr(testClass, 'nonexistentproperty'), isNull),
     );
 
     test(
       'object is null',
-      () => expect(Echotils.getAttr(null, 'nonexistentproperty'), isNull),
+      () => expect(WhixpUtils.getAttr(null, 'nonexistentproperty'), isNull),
     );
   });
 
@@ -325,17 +257,17 @@ void main() {
     final testClass = PropertyTestClass();
 
     test('sets property value', () {
-      expect(Echotils.getAttr(testClass, 'firstProperty'), equals(42));
+      expect(WhixpUtils.getAttr(testClass, 'firstProperty'), equals(42));
 
-      Echotils.setAttr(testClass, 'firstProperty', 50);
+      WhixpUtils.setAttr(testClass, 'firstProperty', 50);
 
-      expect(Echotils.getAttr(testClass, 'firstProperty'), equals(50));
+      expect(WhixpUtils.getAttr(testClass, 'firstProperty'), equals(50));
     });
 
     test(
       'throws error for non-existent property',
       () => expect(
-        () => Echotils.setAttr(testClass, 'nonExistent', 'value'),
+        () => WhixpUtils.setAttr(testClass, 'nonExistent', 'value'),
         throwsArgumentError,
       ),
     );
@@ -343,7 +275,7 @@ void main() {
     test(
       'throws error for null object',
       () => expect(
-        () => Echotils.setAttr(null, 'firstProperty', 40),
+        () => WhixpUtils.setAttr(null, 'firstProperty', 40),
         throwsArgumentError,
       ),
     );

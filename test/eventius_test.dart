@@ -1,6 +1,6 @@
-import 'package:echox/src/handler/eventius.dart';
-
 import 'package:test/test.dart';
+
+import 'package:whixp/src/handler/eventius.dart';
 
 void main() {
   late Eventius eventius;

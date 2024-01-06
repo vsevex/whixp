@@ -1,15 +1,16 @@
-import 'package:echox/echox.dart';
+import 'package:whixp/whixp.dart';
 
-Future<void> main() async {
-  final echox = EchoX(
-    service: 'ws://localhost:5443/ws',
-    jid: JabberID(
-      'user',
-      domain: 'localhost',
-      resource: 'mobile',
-    ),
-    password: 'somepsw',
+void main() {
+  final whixp = Whixp(
+    'alyosha@example.com/desktop',
+    'alyosha13',
+    host: 'example.com',
+    logger: Log(enableError: true, enableWarning: true),
   );
 
-  echox.connect();
+  whixp.connect();
+  whixp.addEventHandler('sessionStart', (_) {
+    whixp.getRoster();
+    whixp.sendPresence();
+  });
 }

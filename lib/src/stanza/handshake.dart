@@ -1,5 +1,5 @@
-import 'package:echox/src/echotils/echotils.dart';
-import 'package:echox/src/stream/base.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart';
 
@@ -15,9 +15,9 @@ import 'package:xml/xml.dart';
 /// Component sends this stanza:
 /// ```xml
 /// <stream:stream
-/// xmlns='jabber:component:accept'
-/// xmlns:stream='http://etherx.jabber.org/streams'
-/// to='plays.shakespeare.lit'>
+///   xmlns='jabber:component:accept'
+///   xmlns:stream='http://etherx.jabber.org/streams'
+///   to='plays.shakespeare.lit'>
 /// ```
 ///
 /// `to` identifier in this case refers to component name, not the server name.
@@ -25,7 +25,7 @@ class Handshake extends StanzaBase {
   Handshake()
       : super(
           name: 'handshake',
-          namespace: Echotils.getNamespace('COMPONENT'),
+          namespace: WhixpUtils.getNamespace('COMPONENT'),
           interfaces: {
             'value',
           },

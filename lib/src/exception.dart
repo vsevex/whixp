@@ -1,4 +1,4 @@
-import 'package:echox/src/stream/base.dart';
+import 'package:whixp/src/stream/base.dart';
 
 /// The given given class is a custom written [Exception] class for [Whixp].
 ///
@@ -14,55 +14,92 @@ import 'package:echox/src/stream/base.dart';
 abstract class WhixpException implements Exception {
   /// Constructs an [WhixpException] object with the provided [message] and
   /// [code].
-  const WhixpException(this.message, [this.code]);
-
-  /// An optional [int] representing the error code associated with the
-  /// exception. If not provided, it defaults to `null`.
-  final int? code;
+  const WhixpException(this.message);
 
   /// A [String] containing the error message associated with the exception.
   final String message;
 
   @override
-  String toString() =>
-      '''Whixp Exception: $message${code != null ? ' (code: $code)' : ''} ''';
+  String toString() => '''Whixp Exception: $message''';
 }
 
+/// Represents an exception related to XMPP stanzas within the context of the
+/// [Whixp].
+///
+/// ### Example:
+/// ```dart
+/// try {
+///   // ...some XMPP-related code that may throw StanzaException
+/// } catch (error) {
+///   if (error is StanzaException) {
+///     print('Stanza Exception: ${error.toString()}');
+///   }
+/// }
+/// ```
 class StanzaException extends WhixpException {
+  /// Creates a [StanzaException] with the specified error message, stanza, and
+  /// optional details.
   StanzaException(
+    /// The error message associated with the exception
     super.message,
+
+    /// The XMPP stanza associated with the exception
     this.stanza, {
+    /// Additional text information from the stanza related to the exception
     this.text = '',
+
+    /// The condition associated with the exception, defaults to
+    /// 'undefined-condition'
     this.condition = 'undefined-condition',
+
+    /// The type of error associated with the exception, defaults to 'cancel'
     this.errorType = 'cancel',
   });
 
+  /// The error message associated with the exception.
   final String text;
+
+  /// The condition associated with the exception.
   final String condition;
+
+  /// The type of error associated with the exception.
   final String errorType;
+
+  /// The XMPP stanza associated with the exception.
   final XMLBase stanza;
 
+  /// Creates a [StanzaException] for a timed-out response from the server.
   factory StanzaException.timeout(StanzaBase stanza) => StanzaException(
         'Waiting for response from the server is timed out',
         stanza,
         condition: 'remote-server-timeout',
       );
+
+  /// Creates a [StanzaException] for a received service unavailable stanza.
   factory StanzaException.serviceUnavailable(StanzaBase stanza) =>
       StanzaException(
         'Received service unavailable stanza',
         stanza,
         condition: stanza['condition'] as String,
       );
-  factory StanzaException.iq(XMLBase stanza) {
-    return StanzaException(
-      'IQ error is occured',
-      stanza,
-      text: stanza['text'] as String,
-      condition: stanza['condition'] as String,
-      errorType: stanza['type'] as String,
-    );
-  }
 
+  /// Creates a [StanzaException] for an IQ error with additional details.
+  factory StanzaException.iq(XMLBase iq) => StanzaException(
+        'IQ error has occured',
+        iq,
+        text: (iq['error'] as XMLBase)['text'] as String,
+        condition: (iq['error'] as XMLBase)['condition'] as String,
+        errorType: (iq['error'] as XMLBase)['type'] as String,
+      );
+
+  /// Creates a [StanzaException] for an IQ timeout.
+  factory StanzaException.iqTimeout(XMLBase iq) => StanzaException(
+        'IQ timeout has occured',
+        iq,
+        condition: 'remote-server-timeout',
+      );
+
+  /// Formats the exception details.
   String get _format {
     final text = StringBuffer('$errorType: $condition');
 
@@ -73,6 +110,8 @@ class StanzaException extends WhixpException {
     return text.toString();
   }
 
+  /// Overrides the [toString] method to provide a formatted string
+  /// representation of the exception.
   @override
   String toString() => _format;
 }
@@ -92,7 +131,21 @@ class StringPreparationException extends WhixpException {
       StringPreparationException(message);
 }
 
+/// Represents an exception related to SASL (Simple Authentication and Security
+/// Layer) mechanisms within the context of the [Whixp].
+///
+/// ### Example:
+/// ```dart
+/// try {
+///   // ...some SASL-related code that may throw SASLException
+/// } catch (error) {
+///   if (error is SASLException) {
+///     log('SASL Exception: ${e.message}');
+///   }
+/// }
+/// ```
 class SASLException extends WhixpException {
+  /// Creates a [SASLException] with the specified error message.
   SASLException(super.message);
 
   factory SASLException.cancelled(String message) => SASLException(message);

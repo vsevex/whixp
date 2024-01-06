@@ -1,4 +1,4 @@
-import 'package:echox/src/stream/base.dart';
+import 'package:whixp/src/stream/base.dart';
 
 /// Base class for stanza matchers.
 ///

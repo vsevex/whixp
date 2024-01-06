@@ -1,8 +1,10 @@
-import 'package:echox/src/echotils/echotils.dart';
-import 'package:echox/src/stanza/error.dart';
-import 'package:echox/src/stream/base.dart';
-
 import 'package:test/test.dart';
+
+import 'package:whixp/src/stanza/error.dart';
+import 'package:whixp/src/stanza/iq.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/utils/utils.dart';
+
 import 'package:xml/xml.dart' as xml;
 
 import 'test_base.dart';
@@ -17,7 +19,7 @@ void main() {
     test('setting iq stanza payload must work properly', () {
       final iq = IQ();
       iq.setPayload(
-        <xml.XmlElement>[Echotils.xmlElement('test', namespace: 'tester')],
+        <xml.XmlElement>[WhixpUtils.xmlElement('test', namespace: 'tester')],
       );
       check(iq, '<iq id="0"><tester xmlns="test"/></iq>');
     });

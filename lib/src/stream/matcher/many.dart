@@ -1,11 +1,15 @@
-import 'package:echox/src/stream/base.dart';
-import 'package:echox/src/stream/matcher/base.dart';
+import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/stream/matcher/base.dart';
 
 /// The [ManyMatcher] matcher may compare a stanza against multiple criteria.
 ///
 /// It is essentially an OR relation combining multiple matchers. Each of the
 /// criteria must implement a `match()` method.
 class ManyMatcher extends BaseMatcher {
+  /// The [ManyMatcher] matcher may compare a stanza against multiple criteria.
+  ///
+  /// It is essentially an OR relation combining multiple matchers. Each of the
+  /// criteria must implement a `match()` method.
   ManyMatcher(super.criteria);
 
   /// Match a stanza against multiple criteria. The match is successful if one

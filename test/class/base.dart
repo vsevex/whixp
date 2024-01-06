@@ -1,4 +1,4 @@
-import 'package:echox/src/stream/base.dart';
+import 'package:whixp/src/stream/base.dart';
 
 import 'package:xml/src/xml/nodes/element.dart';
 
@@ -22,13 +22,13 @@ XMLBase createTestStanza({
     _TestStanza(
       name: name,
       namespace: namespace,
-      pluginAttribute: pluginAttribute,
+      pluginAttribute: pluginAttribute!,
       pluginMultiAttribute: pluginMultiAttribute,
-      overrides: overrides,
-      interfaces: interfaces,
-      subInterfaces: subInterfaces,
-      boolInterfaces: boolInterfaces,
-      languageInterfaces: languageInterfaces,
+      overrides: overrides!,
+      interfaces: interfaces!,
+      subInterfaces: subInterfaces!,
+      boolInterfaces: boolInterfaces!,
+      languageInterfaces: languageInterfaces!,
       getters: getters,
       setters: setters,
       deleters: deleters,
