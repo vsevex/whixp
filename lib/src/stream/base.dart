@@ -357,8 +357,8 @@ class XMLBase {
     this.subInterfaces = const <String>{},
     this.boolInterfaces = const <String>{},
     this.languageInterfaces = const <String>{},
-    this.pluginOverrides = const <String, String>{},
-    this.pluginIterables = const <XMLBase>{},
+    Map<String, String>? pluginOverrides,
+    Set<XMLBase>? pluginIterables,
     this.receive = false,
     this.isExtension = false,
     this.includeNamespace = true,
@@ -371,6 +371,8 @@ class XMLBase {
   }) {
     this.pluginTagMapping = pluginTagMapping ?? <String, XMLBase>{};
     this.pluginAttributeMapping = pluginAttributeMapping ?? <String, XMLBase>{};
+    this.pluginOverrides = pluginOverrides ?? <String, String>{};
+    this.pluginIterables = pluginIterables ?? <XMLBase>{};
 
     /// Defaults to `CLIENT`.
     this.namespace = namespace ?? WhixpUtils.getNamespace('CLIENT');
@@ -469,11 +471,11 @@ class XMLBase {
   /// ```dart
   /// log(pluginOverrides); /// outputs {'body': Function()}
   /// ```
-  final Map<String, String> pluginOverrides;
+  late final Map<String, String> pluginOverrides;
 
   /// The set of stanza classes that can be iterated over using the `substanzas`
   /// interface.
-  final Set<XMLBase> pluginIterables;
+  late final Set<XMLBase> pluginIterables;
 
   /// Declares if stanza is incoming or outgoing stanza. Defaults to false.
   final bool receive;
