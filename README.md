@@ -20,9 +20,9 @@ XMPP is an open source standart protocol widely used for real-time communication
 
 **Authentication Mechanisms**: Provides support for various XMPP authentication mechanisms, including **SASL SCRAM** with encryption options such as SHA-1, SHA-256, SHA-384, SHA-512, and Anonymous.
 
-**Pluggable Architecture**: Build on top of a modular and pluggable architecture. You can easily extend and customize Whixp to fit your specific use case.
-
 > While support for these mechanisms are available, only SHA-1, PLAIN, and SHA-256 have been tested thoroughly.
+
+**Pluggable Architecture**: Build on top of a modular and pluggable architecture. You can easily extend and customize Whixp to fit your specific use case.
 
 **Fundamental Functionalities**: Whixp provides a set of fundamental functionalities, including sending and retrieving messages, presence management, roster management, and more.
 
