@@ -31,7 +31,6 @@ typedef SecurityCallback = Map<String, bool> Function(Set<String> values);
 class FeatureMechanisms extends PluginBase {
   FeatureMechanisms(
     this._features, {
-    required super.base,
     this.saslCallback,
     this.securityCallback,
     bool encryptedPlain = false,

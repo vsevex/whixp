@@ -386,6 +386,9 @@ abstract class WhixpBase {
   void registerPlugin(String name, PluginBase plugin) {
     if (!_pluginManager.registered(name)) {
       _pluginManager.register(name, plugin);
+
+      /// Assign the instance of this class to the [plugin].
+      plugin.base = this;
     }
     _pluginManager.enable(name);
   }

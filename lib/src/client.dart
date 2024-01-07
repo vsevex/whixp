@@ -67,15 +67,13 @@ class Whixp extends WhixpBase {
 
     StanzaBase features = StreamFeatures();
 
-    registerPlugin('bind', FeatureBind(features, base: this));
-    registerPlugin('session', FeatureSession(features, base: this));
-    registerPlugin('starttls', FeatureStartTLS(features, base: this));
-    registerPlugin('mechanisms', FeatureMechanisms(features, base: this));
-    registerPlugin(
-      'rosterversioning',
-      FeatureRosterVersioning(features, base: this),
-    );
-    registerPlugin('preapproval', FeaturePreApproval(features, base: this));
+    /// Register all necessary features.
+    registerPlugin('bind', FeatureBind(features));
+    registerPlugin('session', FeatureSession(features));
+    registerPlugin('starttls', FeatureStartTLS(features));
+    registerPlugin('mechanisms', FeatureMechanisms(features));
+    registerPlugin('rosterversioning', FeatureRosterVersioning(features));
+    registerPlugin('preapproval', FeaturePreApproval(features));
 
     transport
       ..registerStanza(features)

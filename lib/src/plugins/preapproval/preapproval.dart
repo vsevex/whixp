@@ -5,7 +5,7 @@ import 'package:whixp/src/utils/utils.dart';
 part 'stanza.dart';
 
 class FeaturePreApproval extends PluginBase {
-  FeaturePreApproval(this._features, {required super.base})
+  FeaturePreApproval(this._features)
       : super('preapproval', description: 'Subscription Pre-Approval');
 
   final StanzaBase _features;

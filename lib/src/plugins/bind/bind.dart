@@ -9,8 +9,7 @@ import 'package:whixp/src/utils/utils.dart';
 part 'stanza.dart';
 
 class FeatureBind extends PluginBase {
-  FeatureBind(this._stanza, {required super.base})
-      : super('bind', description: 'Resource Binding');
+  FeatureBind(this._stanza) : super('bind', description: 'Resource Binding');
 
   StanzaBase? _features;
 

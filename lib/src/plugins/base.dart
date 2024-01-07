@@ -100,12 +100,9 @@ class PluginManager {
 /// ```
 abstract class PluginBase {
   /// Creates an instance [PluginBase] with the specified parameters.
-  const PluginBase(
+  PluginBase(
     /// Short name
     this.name, {
-    /// [WhixpBase] instance
-    required this.base,
-
     /// Long name
     this.description = '',
 
@@ -129,9 +126,13 @@ abstract class PluginBase {
   final Set<String> dependencies;
 
   /// [WhixpBase] instance to use accross the plugin implementation.
-  final WhixpBase base;
+  late final WhixpBase base;
 
   /// Initializes the plugin. Concrete implementations should override this
   /// method to perform necessary setup or initialization.
   void initialize();
+
+  /// Initializes the plugin with [WhixpBase]. When plugin initializes, this
+  /// method called first.
+  set base(WhixpBase base) => this.base = base;
 }

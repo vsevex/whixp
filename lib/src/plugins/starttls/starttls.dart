@@ -9,7 +9,7 @@ import 'package:whixp/src/utils/utils.dart';
 part 'stanza.dart';
 
 class FeatureStartTLS extends PluginBase {
-  const FeatureStartTLS(this._features, {required super.base})
+  FeatureStartTLS(this._features)
       : super(
           'starttls',
           description: 'Stream Feature: STARTTLS',
@@ -54,7 +54,6 @@ class FeatureStartTLS extends PluginBase {
 
   /// Restart the XML stream when TLS is accepted.
   Future<void> _handleStartTLSProceed() async {
-    
     if (await base.transport.startTLS()) {
       base.features.add('starttls');
     }

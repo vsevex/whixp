@@ -10,7 +10,7 @@ import 'package:xml/xml.dart' as xml;
 part 'stanza.dart';
 
 class FeatureSession extends PluginBase {
-  FeatureSession(this._features, {required super.base})
+  FeatureSession(this._features)
       : super('session', description: 'Start Session');
 
   final StanzaBase _features;

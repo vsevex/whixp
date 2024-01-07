@@ -5,7 +5,7 @@ import 'package:whixp/src/utils/utils.dart';
 part 'stanza.dart';
 
 class FeatureRosterVersioning extends PluginBase {
-  FeatureRosterVersioning(this._features, {required super.base})
+  FeatureRosterVersioning(this._features)
       : super('rosterversioning', description: 'Roster Versioning');
 
   final StanzaBase _features;
