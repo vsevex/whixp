@@ -126,7 +126,7 @@ abstract class PluginBase {
   final Set<String> dependencies;
 
   /// [WhixpBase] instance to use accross the plugin implementation.
-  late final WhixpBase base;
+  late final WhixpBase _base;
 
   /// Initializes the plugin. Concrete implementations should override this
   /// method to perform necessary setup or initialization.
@@ -135,4 +135,7 @@ abstract class PluginBase {
   /// Initializes the plugin with [WhixpBase]. When plugin initializes, this
   /// method called first.
   set base(WhixpBase base) => this.base = base;
+
+  /// Get [Whixp]
+  WhixpBase get base => _base;
 }
