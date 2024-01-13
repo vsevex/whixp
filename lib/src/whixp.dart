@@ -8,7 +8,10 @@ import 'package:whixp/src/handler/handler.dart';
 import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/log/log.dart';
 import 'package:whixp/src/plugins/base.dart';
+import 'package:whixp/src/plugins/disco/disco.dart';
 import 'package:whixp/src/plugins/features.dart';
+import 'package:whixp/src/plugins/ping/ping.dart';
+import 'package:whixp/src/plugins/rsm/stanza.dart';
 import 'package:whixp/src/roster/manager.dart' as roster;
 import 'package:whixp/src/stanza/error.dart';
 import 'package:whixp/src/stanza/features.dart';
@@ -84,8 +87,7 @@ abstract class WhixpBase {
 
     /// If no default namespace is provided, then client "jabber:client" will
     /// be used.
-    this.defaultNamespace =
-        defaultNamespace ?? WhixpUtils.getNamespace('CLIENT');
+    _defaultNamespace = defaultNamespace ?? WhixpUtils.getNamespace('CLIENT');
 
     /// requested [JabberID] from the passed jabber ID.
     requestedJID = JabberID(jabberID);
@@ -99,13 +101,13 @@ abstract class WhixpBase {
     /// Equals passed maxRedirect count to the local variable.
     _maxRedirects = maxRedirects;
 
-    this.logger = logger ?? Log();
+    _logger = logger ?? Log();
 
     /// Assignee for later.
     late String address;
     late String? dnsService;
 
-    if (!_isComponent) {
+    if (!isComponent) {
       /// Check if this class is not used for component initialization, and try
       /// to point [host] and [port] properly.
       if (host == null) {
@@ -128,7 +130,7 @@ abstract class WhixpBase {
       port: port,
       useIPv6: useIPv6,
       disableStartTLS: disableStartTLS,
-      isComponent: _isComponent,
+      isComponent: isComponent,
       dnsService: dnsService,
       useTLS: useTLS,
       caCerts: certs,
@@ -146,15 +148,27 @@ abstract class WhixpBase {
           }
         }
 
-        if (!_isComponent && streamVersion.isEmpty) {
+        if (!isComponent && streamVersion.isEmpty) {
           transport.emit('legacyProtocol');
         }
       },
     );
+    final info = DiscoInformationAbstract();
+    final items = DiscoItemsAbstract();
+    items.registerPlugin(DiscoItem(), iterable: true);
 
-    /// Set up the [Transport] with XMPP's root stanzas.
+    final rsm = RSMStanza();
+    final ping = PingStanza();
+
+    /// Set up the transport with XMPP's root stanzas & handlers.
     transport
-      ..registerStanza(IQ(generateID: false))
+      ..registerStanza(
+        IQ(generateID: false)
+          ..registerPlugin(ping)
+          ..registerPlugin(info)
+          ..registerPlugin(items)
+          ..registerPlugin(rsm),
+      )
       ..registerStanza(Presence())
       ..registerStanza(Message(includeNamespace: true))
       ..registerStanza(StreamError())
@@ -162,28 +176,28 @@ abstract class WhixpBase {
         CallbackHandler(
           'Presence',
           _handlePresence,
-          matcher: XPathMatcher('<presence xmlns="${this.defaultNamespace}"/>'),
+          matcher: XPathMatcher('{$_defaultNamespace}presence'),
         ),
       )
       ..registerHandler(
         CallbackHandler(
           'IM',
           _handleMessage,
-          matcher: XPathMatcher('<message xmlns="${this.defaultNamespace}"/>'),
+          matcher: XPathMatcher('{$defaultNamespace}message'),
         ),
       )
       ..registerHandler(
         CallbackHandler(
           'IM',
           _handleMessage,
-          matcher: XPathMatcher('<body xmlns="${this.defaultNamespace}"/>'),
+          matcher: XPathMatcher('{$defaultNamespace}body'),
         ),
       )
       ..registerHandler(
         CallbackHandler(
           'Stream Error',
           _handleStreamError,
-          matcher: XPathMatcher('<error xmlns="$streamNamespace"/>'),
+          matcher: XPathMatcher('{$streamNamespace}error'),
         ),
       );
 
@@ -246,12 +260,14 @@ abstract class WhixpBase {
   late final Transport transport;
 
   /// Late final initialization of stream namespace.
+  @internal
   late final String streamNamespace;
 
   /// Late final initialization of default namespace.
-  late final String defaultNamespace;
+  late final String _defaultNamespace;
 
   /// The JabberID (JID) requested for this connection.
+  @internal
   late final JabberID requestedJID;
 
   /// The maximum number of consecutive `see-other-host` redirections that will
@@ -259,16 +275,18 @@ abstract class WhixpBase {
   late final int _maxRedirects;
 
   /// [Log] instance to print out various log messages properly.
-  late final Log logger;
+  late final Log _logger;
 
   /// The sasl data keeper. Works with [SASL] class and keeps various data(s)
   /// that can be used accross package.
+  @internal
   final saslData = <String, dynamic>{};
 
   /// The distinction between clients and components can be important, primarily
   /// for choosing how to handle the `to` and `from` JIDs of stanzas.
-  final bool _isComponent = false;
+  final bool isComponent = false;
 
+  @internal
   Map<String, String> credentials = <String, String>{};
 
   late final PluginManager _pluginManager;
@@ -278,9 +296,10 @@ abstract class WhixpBase {
 
   final features = <String>{};
 
-  final streamFeatureHandlers =
+  final _streamFeatureHandlers =
       <String, Tuple2<FutureOr<dynamic> Function(StanzaBase stanza), bool>>{};
 
+  @internal
   final streamFeatureOrder = <Tuple2<int, String>>[];
 
   /// Register a stream feature handler.
@@ -290,7 +309,7 @@ abstract class WhixpBase {
     bool restart = false,
     int order = 5000,
   }) {
-    streamFeatureHandlers[name] = Tuple2(handler, restart);
+    _streamFeatureHandlers[name] = Tuple2(handler, restart);
     streamFeatureOrder.add(Tuple2(order, name));
     streamFeatureOrder.sort((a, b) => a.value1.compareTo(b.value1));
   }
@@ -380,18 +399,24 @@ abstract class WhixpBase {
     );
   }
 
-  /// Register and configure a [plugin] instance for use in this stream.
-  ///
-  /// [name] is the name of plugin class. Plugin names must be unique.
-  void registerPlugin(String name, PluginBase plugin) {
-    if (!_pluginManager.registered(name)) {
-      _pluginManager.register(name, plugin);
+  /// Registers and configures a [PluginBase] instance to use in this stream.
+  void registerPlugin(PluginBase plugin) {
+    if (!_pluginManager.registered(plugin.name)) {
+      _pluginManager.register(plugin.name, plugin);
 
       /// Assign the instance of this class to the [plugin].
       plugin.base = this;
     }
-    _pluginManager.enable(name);
+    _pluginManager.enable(plugin.name, enabled: _pluginManager.enabledPlugins);
   }
+
+  /// Responsible for retrieving an instance of a specified type [T] which
+  /// extends [PluginBase] from the plugin registry.
+  ///
+  /// Optionally, it can activate the plugin if it is registered but not yet
+  /// active.
+  P? getPluginInstance<P>(String name, {bool enableIfRegistered = true}) =>
+      _pluginManager.getPluginInstance<P>(name);
 
   /// Process incoming message stanzas.
   void _handleMessage(StanzaBase message) {
@@ -412,7 +437,7 @@ abstract class WhixpBase {
       return;
     }
 
-    if (!_isComponent && JabberID(presence['to'] as String).bare.isNotEmpty) {
+    if (!isComponent && JabberID(presence['to'] as String).bare.isNotEmpty) {
       presence['to'] = transport.boundJID.toString();
     }
 
@@ -497,7 +522,7 @@ abstract class WhixpBase {
     if (error['condition'] == 'see-other-host') {
       final otherHost = error['see-other-host'] as String?;
       if (otherHost == null || otherHost.isEmpty) {
-        logger.warning('No other host specified');
+        _logger.warning('No other host specified');
         return;
       }
 
@@ -505,14 +530,14 @@ abstract class WhixpBase {
     }
   }
 
-  /// Add a custom event handler that will be executed whenever its event is
-  /// manually triggered.
+  /// Adds a custom [event] [handler] which will be executed whenever its event
+  /// is manually triggered.
   void addEventHandler<B>(
     String event,
-    FutureOr<void> Function(B? data) listener, {
+    FutureOr<void> Function(B? data) handler, {
     bool once = false,
   }) =>
-      transport.addEventHandler(event, listener, once: once);
+      transport.addEventHandler(event, handler, once: once);
 
   /// Password from credentials.
   String get password => credentials['password']!;
