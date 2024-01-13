@@ -176,7 +176,10 @@ class Transport {
   Connecta? _connecta;
 
   /// [Eventius] type variable that holds actual event manager.
-  late final Eventius _eventius;
+  late Eventius _eventius;
+
+  /// Scheduled callback handler [Map] late initializer.
+  late Map<String, Timer> _scheduledEvents;
 
   /// Enable connecting to the server directly over TLS, in particular when the
   /// service provides two ports: one for non-TLS traffic and another for TLS
@@ -228,7 +231,7 @@ class Transport {
   late List<Tuple2<String, String?>> _caCerts;
 
   /// [Stream] variable that holds stanzas that are waiting to be sent.
-  late final Stream<Tuple2<StanzaBase, bool>> _waitingQueue;
+  late Stream<Tuple2<StanzaBase, bool>> _waitingQueue;
 
   /// [StreamController] for [_waitingQueue].
   final _waitingQueueController =
@@ -374,6 +377,7 @@ class Transport {
     _connecta = null;
     _connectionTask = null;
 
+    _scheduledEvents = <String, Timer>{};
     _waitingQueue = _waitingQueueController.stream;
   }
 
@@ -590,7 +594,9 @@ class Transport {
         if (substring.isEmpty) return;
         final element = xml.XmlDocument.parse(substring).rootElement;
         if (element.getAttribute('xmlns') == null) {
-          if (element.qualifiedName == 'message') {
+          if (element.qualifiedName == 'message' ||
+              element.qualifiedName == 'presence' ||
+              element.qualifiedName == 'iq') {
             element.setAttribute('xmlns', WhixpUtils.getNamespace('CLIENT'));
           } else {
             element.setAttribute(
@@ -675,11 +681,10 @@ class Transport {
   StanzaBase _buildStanza(xml.XmlElement element) {
     StanzaBase stanzaClass = StanzaBase(element: element, receive: true);
 
-    String tag() =>
-        '<${element.localName} xmlns="${element.getAttribute('xmlns')}"/>';
+    final tag = '{${element.getAttribute('xmlns')}}${element.qualifiedName}';
 
     for (final stanza in _rootStanza) {
-      if (tag() == stanza.tag) {
+      if (tag == stanza.tag) {
         stanzaClass = stanza.copy(element: element, receive: true);
         break;
       }
@@ -767,8 +772,8 @@ class Transport {
     if (_connecta != null) {
       _abortCompleter!.complete(_connecta!.socket.flush());
       if (_abortCompleter!.isCompleted) {
+        _connecta!.destroy();
         _cancelConnectionAttempt();
-        _connecta = null;
         emit('killed');
       }
     }
@@ -792,6 +797,8 @@ class Transport {
   /// without a response from the server, or when the server successfully
   /// responds with a closure of its own stream, abort() is called.
   Future<void> disconnect({String? reason, int timeout = 2000}) async {
+    Log.instance.warning('disconnect is called');
+
     /// Run abort() if we do not received the disconnected event after a
     /// waiting time.
     ///
@@ -809,6 +816,8 @@ class Transport {
       await Future.delayed(Duration(milliseconds: timeout));
       await endStreamWait();
     }
+
+    emit('sessionEnd');
 
     if (_connecta != null) {
       if (await _waitingQueue.isEmpty) {
@@ -859,6 +868,17 @@ class Transport {
     }
   }
 
+  /// Removes any transport callback handlers with the given [name].
+  bool removeHandler(String name) {
+    for (final handler in _handlers) {
+      if (handler.name == name) {
+        _handlers.remove(handler);
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// Triggers a custom [event] manually.
   void emit<T>(String event, {T? data}) => _eventius.emit<T>(event, data);
 
@@ -874,6 +894,56 @@ class Transport {
       _eventius.once<B>(event, listener);
     } else {
       _eventius.on<B>(event, listener);
+    }
+  }
+
+  /// Removes an [event] listeners from the [Eventius] instance according to
+  /// provided [handler]. If there is not any [handler] provided, then removes
+  /// all the stored handlers.
+  void removeEventHandler(String event, {Function? handler}) {
+    if (handler == null) {
+      _eventius.off(event);
+    } else {
+      if (_eventius.events[event] != null) {
+        _eventius.events[event]!.removeWhere((callback) => callback == handler);
+      }
+    }
+  }
+
+  /// Schedules a callback function to execute after a given delay.
+  ///
+  /// A unique [name] for the scheduled callback is required.
+  /// [seconds] represents the time in seconds to wait before executing.
+  /// [repeat] flag indicates if the scheduled event should be reset and repeat
+  /// after executing.
+  void schedule(
+    String name,
+    void Function() callback, {
+    int seconds = 30,
+    bool repeat = false,
+  }) {
+    if (_scheduledEvents.containsKey(name) && _scheduledEvents[name] != null) {
+      return;
+    }
+    late Timer handler;
+    if (repeat) {
+      handler = Timer.periodic(Duration(seconds: seconds), (_) {
+        callback();
+        _scheduledEvents.remove(name);
+      });
+    } else {
+      handler = Timer(Duration(seconds: seconds), () {
+        callback();
+      });
+    }
+    _scheduledEvents[name] = handler;
+  }
+
+  /// Cancels already assigned scheduled callback with the provided [name].
+  void cancelSchedule(String name) {
+    final handler = _scheduledEvents.remove(name);
+    if (handler != null) {
+      handler.cancel();
     }
   }
 
@@ -923,7 +993,8 @@ class Transport {
 
     if (service != null) {
       response = await DNSolve()
-          .lookup('_$service._tcp.$domain', type: RecordType.srv);
+          .lookup('_$service._tcp.$domain', type: RecordType.srv)
+          .timeout(Duration(milliseconds: connectionTimeout));
     }
 
     if (response != null &&
