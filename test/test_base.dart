@@ -89,7 +89,6 @@ xml.XmlElement parseXMLFromString(String xmlToParse) {
 void check(
   XMLBase stanza,
   dynamic criteria, {
-  String method = 'exact',
   bool useValues = true,
 }) {
   late xml.XmlElement eksemel;
