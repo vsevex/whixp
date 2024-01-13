@@ -44,7 +44,6 @@ class StanzaBase extends XMLBase {
     super.getters,
     super.setters,
     super.deleters,
-    super.setupOverride,
     super.element,
     super.parent,
   }) {
@@ -150,9 +149,7 @@ class StanzaBase extends XMLBase {
   /// Handle exceptions thrown during stanza processing.
   ///
   /// Meant to be overridden.
-  void exception(dynamic excp) {
-    Log.instance.error('Error handling <$name xmlns="$namespace"/> stanza');
-  }
+  void exception(dynamic excp) {}
 
   void send() {
     if (transport != null) {
@@ -189,7 +186,6 @@ class StanzaBase extends XMLBase {
         getters: _getters,
         setters: _setters,
         deleters: _deleters,
-        setupOverride: setupOverride,
         element: element,
         parent: parent,
       );
