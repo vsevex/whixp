@@ -1,3 +1,4 @@
+import 'package:whixp/src/log/log.dart';
 import 'package:whixp/src/plugins/base.dart';
 import 'package:whixp/src/stream/base.dart';
 import 'package:whixp/src/utils/utils.dart';
@@ -11,13 +12,13 @@ class FeatureRosterVersioning extends PluginBase {
   final StanzaBase _features;
 
   @override
-  void initialize() {
+  void pluginInitialize() {
     final rosterver = RosterVersioning();
 
     base.registerFeature(
       'rosterver',
       (_) {
-        base.logger.warning('Enabling roster versioning');
+        Log.instance.warning('Enabling roster versioning');
         return base.features.add('rosterver');
       },
       order: 9000,
@@ -25,4 +26,12 @@ class FeatureRosterVersioning extends PluginBase {
 
     _features.registerPlugin(rosterver);
   }
+
+  /// Do not implement.
+  @override
+  void sessionBind(String? jid) {}
+
+  /// Do not implement.
+  @override
+  void pluginEnd() {}
 }

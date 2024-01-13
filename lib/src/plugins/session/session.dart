@@ -17,7 +17,7 @@ class FeatureSession extends PluginBase {
   late final IQ _iq;
 
   @override
-  void initialize() {
+  void pluginInitialize() {
     final session = Session();
     _iq = IQ(transport: base.transport);
 
@@ -45,4 +45,12 @@ class FeatureSession extends PluginBase {
     base.transport.sessionStarted = true;
     base.transport.emit('sessionStart');
   }
+
+  /// Do not implement.
+  @override
+  void pluginEnd() {}
+
+  /// Do not implement.
+  @override
+  void sessionBind(String? jid) {}
 }

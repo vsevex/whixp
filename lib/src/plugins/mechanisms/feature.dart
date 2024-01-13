@@ -4,6 +4,7 @@ import 'package:meta/meta.dart';
 
 import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/handler/handler.dart';
+import 'package:whixp/src/log/log.dart';
 import 'package:whixp/src/plugins/base.dart';
 import 'package:whixp/src/plugins/mechanisms/stanza/stanza.dart';
 import 'package:whixp/src/sasl/sasl.dart';
@@ -57,7 +58,7 @@ class FeatureMechanisms extends PluginBase {
   late Mechanism _mech;
 
   @override
-  void initialize() {
+  void pluginInitialize() {
     base.registerFeature(
       'mechanisms',
       _handleSASLAuth,
@@ -73,21 +74,21 @@ class FeatureMechanisms extends PluginBase {
       ..registerHandler(
         CallbackHandler(
           'SASL Challenge',
-          _handleChallenge,
+          (stanza) => _handleChallenge(challenge.copy(element: stanza.element)),
           matcher: XPathMatcher(challenge.tag),
         ),
       )
       ..registerHandler(
         CallbackHandler(
           'SASL Success',
-          _handleSuccess,
+          (stanza) => _handleSuccess(success.copy(element: stanza.element)),
           matcher: XPathMatcher(success.tag),
         ),
       )
       ..registerHandler(
         CallbackHandler(
           'SASL Failure',
-          _handleFailure,
+          (stanza) => _handleFailure(failure.copy(element: stanza.element)),
           matcher: XPathMatcher(failure.tag),
         ),
       );
@@ -181,12 +182,12 @@ class FeatureMechanisms extends PluginBase {
     try {
       _mech = sasl.choose(mechList, saslCallback!, securityCallback!);
     } on SASLException {
-      base.logger.error('No appropriate login method');
+      Log.instance.error('No appropriate login method');
 
       base.transport.disconnect();
       return false;
     } on StringPreparationException {
-      base.logger.error('A credential value did not pass SASL preperation');
+      Log.instance.error('A credential value did not pass SASL preperation');
 
       base.transport.disconnect();
       return false;
@@ -225,9 +226,17 @@ class FeatureMechanisms extends PluginBase {
 
   bool _handleFailure(StanzaBase stanza) {
     attemptedMechanisms.add(_mech.name);
-    base.logger.info('Authentication failed: ${stanza['condition']}');
+    Log.instance.info('Authentication failed: ${stanza['condition']}');
     base.transport.emit<StanzaBase>('failedAuth', data: stanza);
     _sendAuthentication();
     return true;
   }
+
+  /// Do not implement.
+  @override
+  void pluginEnd() {}
+
+  /// Do not implement.
+  @override
+  void sessionBind(String? jid) {}
 }

@@ -68,7 +68,7 @@ class Scram {
 
     /// If challenge is null, throw a SCRAM error.
     if (challenge == null || challenge.isEmpty) {
-      throw SASLException.scram('The challenge from the server is null');
+      throw SASLException.scram('The challenge from the server is empty');
     }
 
     /// An attribute for matching attribute-value pairs of the passed challenge.

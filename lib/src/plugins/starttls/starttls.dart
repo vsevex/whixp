@@ -18,7 +18,7 @@ class FeatureStartTLS extends PluginBase {
   final StanzaBase _features;
 
   @override
-  void initialize() {
+  void pluginInitialize() {
     final proceed = Proceed();
     final failure = Failure();
 
@@ -58,4 +58,12 @@ class FeatureStartTLS extends PluginBase {
       base.features.add('starttls');
     }
   }
+
+  /// Do not implement.
+  @override
+  void pluginEnd() {}
+
+  /// Do not implement.
+  @override
+  void sessionBind(String? jid) {}
 }

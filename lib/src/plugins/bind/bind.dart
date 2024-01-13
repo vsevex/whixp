@@ -17,7 +17,7 @@ class FeatureBind extends PluginBase {
   late final IQ _iq;
 
   @override
-  void initialize() {
+  void pluginInitialize() {
     final bind = BindStanza();
 
     _iq = IQ(transport: base.transport);
@@ -57,4 +57,12 @@ class FeatureBind extends PluginBase {
       base.transport.emit('sessionStart');
     }
   }
+
+  /// Do not implement.
+  @override
+  void pluginEnd() {}
+
+  /// Do not implement.
+  @override
+  void sessionBind(String? jid) {}
 }
