@@ -8,11 +8,6 @@ class _Failure extends StanzaBase {
           interfaces: {'condition', 'text'},
           pluginAttribute: 'failure',
           subInterfaces: {'text'},
-          setupOverride: (base, [element]) {
-            if (element != null) {
-              base['condition'] = 'not-authorized';
-            }
-          },
         ) {
     addGetters(
       <Symbol, dynamic Function(dynamic args, XMLBase base)>{
@@ -52,6 +47,14 @@ class _Failure extends StanzaBase {
         },
       },
     );
+  }
+
+  @override
+  bool setup([xml.XmlElement? element]) {
+    if (element != null) {
+      this['condition'] = 'not-authorized';
+    }
+    return super.setup(element);
   }
 
   final _conditions = <String>{
