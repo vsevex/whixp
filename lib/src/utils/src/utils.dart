@@ -69,11 +69,6 @@ class WhixpUtils {
     String? namespace,
     String? text,
   }) {
-    /// Return if the passed `name` is empty.
-    if (name.isEmpty || name.trim().isEmpty) {
-      throw UnimplementedError('Name can not not be empty');
-    }
-
     /// Define empty attributes for later assign.
     final attrs = <String, String>{};
 
