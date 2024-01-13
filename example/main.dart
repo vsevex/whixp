@@ -2,8 +2,8 @@ import 'package:whixp/whixp.dart';
 
 void main() {
   final whixp = Whixp(
-    'alyosha@example.com/desktop',
-    'alyosha13',
+    'vsevex@example.com/desktop',
+    'passwd',
     host: 'example.com',
     logger: Log(enableError: true, enableWarning: true),
   );
