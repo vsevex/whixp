@@ -1,4 +1,6 @@
 import 'package:whixp/src/exception.dart';
+import 'package:whixp/src/stanza/error.dart';
+import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stream/base.dart';
 
 /// Top-level stanza in a Transport.
@@ -32,7 +34,6 @@ abstract class RootStanza extends StanzaBase {
     super.pluginIterables,
     super.overrides,
     super.isExtension,
-    super.setupOverride,
     super.boolInterfaces,
     super.element,
     super.parent,
@@ -48,15 +49,16 @@ abstract class RootStanza extends StanzaBase {
   void exception(dynamic excp) {
     if (excp is StanzaException) {
       if (excp.message == 'IQ error has occured') {
-        final stanza = reply(copiedStanza: copy());
+        final stanza = (this as IQ).replyIQ();
+        stanza.transport = transport;
+        stanza.registerPlugin(StanzaError());
         stanza.enable('error');
         final error = stanza['error'] as XMLBase;
         error['condition'] = 'undefined-condition';
         error['text'] = 'External error';
         error['type'] = 'cancel';
         stanza.send();
-      }
-      if (excp.condition == 'remote-server-timeout') {
+      } else if (excp.condition == 'remote-server-timeout') {
         final stanza = reply(copiedStanza: copy());
         stanza.enable('error');
         final error = stanza['error'] as XMLBase;
