@@ -39,12 +39,12 @@ Tuple2<String?, List<String>?> fixNamespace(
 }) {
   final fixed = <String>[];
 
-  final namespaceBlocks = xPath.split('<');
+  final namespaceBlocks = xPath.split('{');
   for (final block in namespaceBlocks) {
     late String namespace;
     late List<String> elements;
-    if (block.contains('>') && block.contains('xmlns')) {
-      final namespaceBlockSplit = block.split('>');
+    if (block.contains('}')) {
+      final namespaceBlockSplit = block.split('}');
       namespace = namespaceBlockSplit[0];
       elements = namespaceBlockSplit[1].split('/');
     } else {
@@ -93,7 +93,7 @@ void registerStanzaPlugin(
   /// handlers for the parent stanza, based on the plugin's [overrides] field.
   bool overrides = false,
 }) {
-  final tag = '<${plugin.name} xmlns="${plugin.namespace}"/>';
+  final tag = '{${plugin.namespace}}${plugin.name}';
 
   stanza.pluginAttributeMapping[plugin.pluginAttribute] = plugin;
   stanza.pluginTagMapping[tag] = plugin;
@@ -121,8 +121,6 @@ XMLBase multifactory(XMLBase stanza, String pluginAttribute) {
     interfaces: {pluginAttribute},
     languageInterfaces: {pluginAttribute},
     isExtension: true,
-    setupOverride: (base, [element]) =>
-        base.element = xml.XmlElement(xml.XmlName('')),
   );
 
   multistanza
@@ -149,22 +147,33 @@ typedef _MultiFilter = bool Function(XMLBase);
 class _Multi extends XMLBase {
   _Multi(
     this._multistanza, {
+    super.getters,
+    super.setters,
+    super.deleters,
     super.pluginAttribute,
     super.interfaces,
     super.languageInterfaces,
     super.isExtension,
-    super.setupOverride,
+    super.element,
+    super.parent,
   });
   late final Type _multistanza;
 
   List<XMLBase> getMulti(XMLBase base, [String? lang]) {
     final parent = failWithoutParent(base);
     final iterable = _XMLBaseIterable(parent);
-    final result = lang == null || lang == '*'
+
+    final result = (lang == null || lang.isEmpty) || lang == '*'
         ? iterable.where(pluginFilter())
         : iterable.where(pluginLanguageFilter(lang));
 
     return result.toList();
+  }
+
+  @override
+  bool setup([xml.XmlElement? element]) {
+    this.element = WhixpUtils.xmlElement('');
+    return false;
   }
 
   void setMulti(XMLBase base, List<dynamic> value, [String? language]) {
@@ -190,7 +199,7 @@ class _Multi extends XMLBase {
   void deleteMulti(XMLBase base, [String? language]) {
     final parent = failWithoutParent(base);
     final iterable = _XMLBaseIterable(parent);
-    final result = language == null || language == '*'
+    final result = (language == null || language.isEmpty) || language == '*'
         ? iterable.where(pluginFilter()).toList()
         : iterable.where(pluginLanguageFilter(language)).toList();
 
@@ -202,7 +211,7 @@ class _Multi extends XMLBase {
     } else {
       while (result.isNotEmpty) {
         final stanza = result.removeLast();
-        parent._iterables.remove(stanza);
+        parent.iterables.remove(stanza);
         parent.element!.children.remove(stanza.element);
       }
     }
@@ -212,6 +221,20 @@ class _Multi extends XMLBase {
 
   _MultiFilter pluginLanguageFilter(String? language) =>
       (x) => x.runtimeType == _multistanza && x['lang'] == language;
+
+  @override
+  _Multi copy({xml.XmlElement? element, XMLBase? parent}) => _Multi(
+        _multistanza,
+        getters: getters,
+        setters: setters,
+        deleters: deleters,
+        pluginAttribute: pluginAttribute,
+        interfaces: interfaces,
+        languageInterfaces: languageInterfaces,
+        isExtension: isExtension,
+        element: element,
+        parent: parent,
+      );
 }
 
 class _XMLBaseIterable extends Iterable<XMLBase> {
@@ -229,12 +252,12 @@ class _XMLBaseIterator implements Iterator<XMLBase> {
 
   @override
   XMLBase get current {
-    return parent._iterables[parent._index - 1];
+    return parent.iterables[parent._index - 1];
   }
 
   @override
   bool moveNext() {
-    if (parent._index >= parent._iterables.length) {
+    if (parent._index >= parent.iterables.length) {
       parent._index = 0;
       return false;
     } else {
@@ -365,7 +388,6 @@ class XMLBase {
     Map<Symbol, _GetterOrDeleter>? getters,
     Map<Symbol, _Setter>? setters,
     Map<Symbol, _GetterOrDeleter>? deleters,
-    this.setupOverride,
     this.element,
     this.parent,
   }) {
@@ -384,20 +406,28 @@ class XMLBase {
     if (setters != null) addSetters(setters);
     if (deleters != null) addDeleters(deleters);
 
-    if (_setup(element)) return;
+    if (setup(element)) return;
+    final children = <Tuple2<xml.XmlElement, XMLBase?>>{};
 
-    for (final child in element!.childElements) {
-      final tag =
-          '<${child.qualifiedName} xmlns="${child.getAttribute('xmlns')}"/>';
+    for (final child in element!.childElements.toSet()) {
+      final namespace =
+          child.getAttribute('xmlns') ?? element!.getAttribute('xmlns');
+      final tag = '{$namespace}${child.qualifiedName}';
+
       if (this.pluginTagMapping.containsKey(tag) &&
           this.pluginTagMapping[tag] != null) {
         final pluginClass = this.pluginTagMapping[tag];
-        _initPlugin(
-          pluginClass!.pluginAttribute,
-          existingXML: child,
-          reuse: false,
-        );
+        children.add(Tuple2(child, pluginClass));
       }
+    }
+
+    /// Growable iterable fix
+    for (final child in children) {
+      _initPlugin(
+        child.value2!.pluginAttribute,
+        existingXML: child.value1,
+        reuse: false,
+      );
     }
   }
 
@@ -506,16 +536,13 @@ class XMLBase {
   late final Map<Symbol, _GetterOrDeleter> _deleters =
       <Symbol, _GetterOrDeleter>{};
 
-  final _iterables = <XMLBase>[];
+  final iterables = <XMLBase>[];
 
   /// Keeps all initialized plugins across stanza.
   final _plugins = <Tuple2<String, String>, XMLBase>{};
 
   /// Keeps all loaded plugins across stanza.
   final _loadedPlugins = <String>{};
-
-  /// Overrider for [_setup] for method.
-  final void Function(XMLBase base, [xml.XmlElement? element])? setupOverride;
 
   /// The underlying [element] for the stanza.
   xml.XmlElement? element;
@@ -537,10 +564,7 @@ class XMLBase {
   /// Will return `true` if XML was generated according to the stanza's
   /// definition instead of building a stanza object from an existing XML
   /// object.
-  bool _setup([xml.XmlElement? element]) {
-    if (setupOverride != null) {
-      setupOverride?.call(this, element);
-    }
+  bool setup([xml.XmlElement? element]) {
     if (this.element != null) {
       return false;
     }
@@ -583,7 +607,7 @@ class XMLBase {
   XMLBase? getPlugin(String name, {String? language, bool check = false}) {
     /// If passed `language` is null, then try to retrieve it through built-in
     /// method.
-    final lang = language ?? _getLang;
+    final lang = (language == null || language.isEmpty) ? _getLang : language;
 
     if (!pluginAttributeMapping.containsKey(name)) {
       return null;
@@ -617,7 +641,8 @@ class XMLBase {
     XMLBase? element,
   }) {
     final defaultLanguage = _getLang;
-    final lang = language ?? defaultLanguage;
+    final lang =
+        (language == null || language.isEmpty) ? defaultLanguage : language;
 
     late final pluginClass = pluginAttributeMapping[attribute]!;
 
@@ -644,11 +669,8 @@ class XMLBase {
       _plugins[Tuple2(attribute, lang)] = plugin;
     }
 
-    if (pluginIterables
-        .where((element) => element == pluginClass)
-        .toList()
-        .isNotEmpty) {
-      _iterables.add(plugin);
+    if (pluginIterables.contains(pluginClass)) {
+      iterables.add(plugin);
       if (pluginClass.pluginMultiAttribute != null) {
         _initPlugin(pluginClass.pluginMultiAttribute!);
       }
@@ -680,7 +702,8 @@ class XMLBase {
     }
 
     final defaultLanguage = _getLang;
-    final lang = language ?? defaultLanguage;
+    final lang =
+        (language == null || language.isEmpty) ? defaultLanguage : language;
 
     final stanzas = element!.queryXPath(castedName).nodes;
 
@@ -753,7 +776,8 @@ class XMLBase {
     String? language,
   }) {
     final defaultLanguage = _getLang;
-    final lang = language ?? defaultLanguage;
+    final lang =
+        (language == null || language.isEmpty) ? defaultLanguage : language;
 
     if ((text == null || text.isEmpty) && !keep) {
       deleteSub(name, language: lang);
@@ -841,7 +865,8 @@ class XMLBase {
     final originalTarget = path.last;
 
     final defaultLanguage = _getLang;
-    final lang = language ?? defaultLanguage;
+    final lang =
+        (language == null || language.isEmpty) ? defaultLanguage : language;
 
     Iterable<int> enumerate<T>(List<T> iterable) sync* {
       for (int i = 0; i < iterable.length; i++) {
@@ -974,7 +999,7 @@ class XMLBase {
         : {};
 
     if (attribute == 'substanzas') {
-      return _iterables;
+      return iterables;
     } else if (interfaces.contains(attribute) || attribute == 'lang') {
       final getMethod = attribute.toLowerCase();
 
@@ -1200,13 +1225,13 @@ class XMLBase {
           reuse: false,
         );
       } else if (pluginIterables.contains(base)) {
-        _iterables.add(base);
+        iterables.add(base);
         if (base.pluginMultiAttribute != null &&
             base.pluginMultiAttribute!.isNotEmpty) {
           _initPlugin(base.pluginMultiAttribute!);
         }
       } else {
-        _iterables.add(base);
+        iterables.add(base);
       }
     }
 
@@ -1220,7 +1245,7 @@ class XMLBase {
   /// Returns the namespaced name of the stanza's root element.
   ///
   /// The format for the tag name is: '{namespace}elementName'.
-  String get _tagName => '<$name xmlns="$namespace"/>';
+  String get _tagName => '{$namespace}$name';
 
   /// Gets current language of the xml element with xPath query.
   String? _lang(xml.XmlNode element) {
@@ -1249,6 +1274,85 @@ class XMLBase {
   /// Getter for stanza plugins list.
   Map<Tuple2<String, String>, XMLBase> get plugins => _plugins;
 
+  /// Compares a stanza object with an XPath-like expression.
+  ///
+  /// If the XPath matches the contents o the stanza obejct, the match is
+  /// succesfull.
+  ///
+  /// The XPath expression may include checks for stanza attributes.
+  bool match(Tuple2<String?, List<String>?> xPath) {
+    late List<String> xpath;
+    if (xPath.value1 != null) {
+      xpath = _fixNamespace(xPath.value1!, split: true).value2!;
+    } else {
+      xpath = xPath.value2!;
+    }
+
+    /// Extract the tag name and attribute checks for the first XPath node
+    final components = xpath[0].split('@');
+    final tag = components[0];
+    final attributes = components.sublist(1);
+
+    if (!{name, '{$namespace}$name'}.contains(tag) &&
+        !_loadedPlugins.contains(tag) &&
+        !pluginAttribute.contains(tag)) {
+      return false;
+    }
+
+    /// Checks the rest of the XPath against any substanzas
+    bool matchedSubstanzas = false;
+    for (final substanza in iterables) {
+      if (xpath.sublist(1).isEmpty) {
+        break;
+      }
+      matchedSubstanzas = substanza.match(Tuple2(null, xpath.sublist(1)));
+      if (matchedSubstanzas) {
+        break;
+      }
+    }
+
+    /// Checks attribute values
+    for (final attribute in attributes) {
+      final name = attribute.split('=')[0];
+      final value = attribute.split('=')[1];
+
+      if (this[name] != value) {
+        return false;
+      }
+    }
+
+    /// Checks sub interfaces
+    if (xpath.length > 1) {
+      final nextTag = xpath[1];
+      if (subInterfaces.contains(nextTag) && this[nextTag] != null) {
+        return true;
+      }
+    }
+
+    /// Attempt to continue matching the XPath using the stanza's plugin
+    if (!matchedSubstanzas && xpath.length > 1) {
+      final nextTag = xpath[1].split('@')[0].split('}').last;
+      final languages = <String>[];
+
+      for (final entry in _plugins.entries) {
+        if (entry.key.value1 == nextTag) {
+          languages.add(entry.key.value2);
+        }
+      }
+
+      for (final language in languages) {
+        final plugin = getPlugin(nextTag, language: language);
+        if (plugin != null && plugin.match(Tuple2(null, xpath.sublist(1)))) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    /// Everything matched
+    return true;
+  }
+
   /// Returns the names of all stanza interfaces provided by the stanza object.
   ///
   /// Allows stanza objects to be used as [Map].
@@ -1261,7 +1365,7 @@ class XMLBase {
       buffer.add(x);
     }
     buffer.add('lang');
-    if (_iterables.isNotEmpty) {
+    if (iterables.isNotEmpty) {
       buffer.add('substanzas');
     }
     return buffer;
@@ -1280,23 +1384,20 @@ class XMLBase {
     }
 
     if (values.containsKey('substanzas')) {
-      for (final stanza in _iterables) {
-        try {
-          element!.children.remove(stanza.element);
-        } catch (_) {}
+      for (final stanza in iterables) {
+        element!.children.remove(stanza.element);
       }
-      _iterables.clear();
+      iterables.clear();
 
       final substanzas = values['substanzas'] as List<Map<String, dynamic>>;
       for (final submap in substanzas) {
         if (submap.containsKey('__childtag__')) {
           for (final subclass in pluginIterables) {
-            final childtag =
-                '<${subclass.name} xmlns="${subclass.namespace}"/>';
+            final childtag = '{${subclass.namespace}}${subclass.name}';
             if (submap['__childtag__'] == childtag) {
               final sub = subclass.copy(parent: this);
               sub.values = submap;
-              _iterables.add(sub);
+              iterables.add(sub);
             }
           }
         }
@@ -1350,15 +1451,15 @@ class XMLBase {
         values[plugin.key.value1] = plugin.value.values;
       }
     }
-    if (_iterables.isNotEmpty) {
-      final iterables = <Map<String, dynamic>>[];
-      for (final stanza in _iterables) {
-        iterables.add(stanza.values);
-        if (iterables.length - 1 >= 0) {
-          iterables[iterables.length - 1]['__childtag__'] = stanza.tag;
+    if (iterables.isNotEmpty) {
+      final iter = <Map<String, dynamic>>[];
+      for (final stanza in iterables) {
+        iter.add(stanza.values);
+        if (iter.length - 1 >= 0) {
+          iter[iter.length - 1]['__childtag__'] = stanza.tag;
         }
       }
-      values['substanzas'] = iterables;
+      values['substanzas'] = iter;
     }
     return values;
   }
@@ -1421,7 +1522,6 @@ class XMLBase {
         deleters: _deleters,
         isExtension: isExtension,
         includeNamespace: includeNamespace,
-        setupOverride: setupOverride,
         element: element,
         parent: parent,
       );
