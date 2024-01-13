@@ -41,10 +41,10 @@ class StanzaException extends WhixpException {
   /// optional details.
   StanzaException(
     /// The error message associated with the exception
-    super.message,
-
+    super.message, {
     /// The XMPP stanza associated with the exception
-    this.stanza, {
+    this.stanza,
+
     /// Additional text information from the stanza related to the exception
     this.text = '',
 
@@ -66,12 +66,12 @@ class StanzaException extends WhixpException {
   final String errorType;
 
   /// The XMPP stanza associated with the exception.
-  final XMLBase stanza;
+  final XMLBase? stanza;
 
   /// Creates a [StanzaException] for a timed-out response from the server.
   factory StanzaException.timeout(StanzaBase stanza) => StanzaException(
         'Waiting for response from the server is timed out',
-        stanza,
+        stanza: stanza,
         condition: 'remote-server-timeout',
       );
 
@@ -79,32 +79,33 @@ class StanzaException extends WhixpException {
   factory StanzaException.serviceUnavailable(StanzaBase stanza) =>
       StanzaException(
         'Received service unavailable stanza',
-        stanza,
+        stanza: stanza,
         condition: stanza['condition'] as String,
       );
 
   /// Creates a [StanzaException] for an IQ error with additional details.
   factory StanzaException.iq(XMLBase iq) => StanzaException(
         'IQ error has occured',
-        iq,
-        text: (iq['error'] as XMLBase)['text'] as String,
-        condition: (iq['error'] as XMLBase)['condition'] as String,
-        errorType: (iq['error'] as XMLBase)['type'] as String,
+        stanza: iq,
+        text: iq['text'] as String,
+        condition: iq['condition'] as String,
+        errorType: iq['type'] as String,
       );
 
   /// Creates a [StanzaException] for an IQ timeout.
   factory StanzaException.iqTimeout(XMLBase iq) => StanzaException(
         'IQ timeout has occured',
-        iq,
+        stanza: iq,
         condition: 'remote-server-timeout',
       );
 
   /// Formats the exception details.
   String get _format {
-    final text = StringBuffer('$errorType: $condition');
+    final text =
+        StringBuffer('$message: Error Type: $errorType, Condition: $condition');
 
     if (this.text.isNotEmpty) {
-      text.write(': ${this.text}');
+      text.write(', Text: ${this.text}');
     }
 
     return text.toString();
