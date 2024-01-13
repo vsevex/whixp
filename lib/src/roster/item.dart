@@ -179,8 +179,8 @@ class RosterItem {
     if (resources.containsKey(resource)) {
       resources[resource] = {};
     }
-    final oldStatus = (resources[resource] as Map)['status'] ?? '';
-    final oldShow = (resources[resource] as Map)['show'];
+    final oldStatus = (resources[resource] as Map?)?['status'] ?? '';
+    final oldShow = (resources[resource] as Map?)?['show'];
     resources[resource] = data;
     if (gotOnline) {
       whixp.transport.emit<Presence>('gotOnline', data: presence);
