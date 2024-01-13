@@ -1,7 +1,5 @@
 import 'package:whixp/src/stream/base.dart';
 
-import 'package:xml/src/xml/nodes/element.dart';
-
 XMLBase createTestStanza({
   required String name,
   String? namespace,
@@ -17,7 +15,6 @@ XMLBase createTestStanza({
   Map<Symbol, void Function(dynamic, XMLBase)>? deleters,
   bool isExtension = false,
   bool includeNamespace = true,
-  bool Function(XMLBase base, [XmlElement? element])? setupOverride,
 }) =>
     _TestStanza(
       name: name,
@@ -34,7 +31,6 @@ XMLBase createTestStanza({
       deleters: deleters,
       isExtension: isExtension,
       includeNamespace: includeNamespace,
-      setupOverride: setupOverride,
     );
 
 class _TestStanza extends XMLBase {
@@ -53,7 +49,6 @@ class _TestStanza extends XMLBase {
     super.deleters,
     super.isExtension,
     super.includeNamespace,
-    super.setupOverride,
   });
 }
 
@@ -63,5 +58,7 @@ class MultiTestStanza2 extends XMLBase {
     super.namespace,
     super.pluginAttribute,
     super.pluginMultiAttribute,
+    super.element,
+    super.parent,
   });
 }
