@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:meta/meta.dart';
 import 'package:synchronized/synchronized.dart';
 
+import 'package:whixp/src/log/log.dart';
 import 'package:whixp/src/whixp.dart';
 
 /// Manages the registration and activation of XMPP plugins.
@@ -44,7 +46,7 @@ class PluginManager {
         if (_pluginDependents.containsKey(name) &&
             _pluginDependents[name] != null &&
             _pluginDependents[name]!.isNotEmpty) {
-          for (final dependent in plugin.dependencies) {
+          for (final dependent in plugin._dependencies) {
             _pluginDependents[dependent]!.add(name);
           }
         } else {
@@ -54,6 +56,21 @@ class PluginManager {
     );
   }
 
+  /// Gets [PluginBase] instance if there is any registered one under specific
+  /// [name]. If [enableIfRegistered] passed as true, then plugin activates
+  /// if it is not active yet. Otherwise, returns `null`.
+  T? getPluginInstance<T>(String name, {bool enableIfRegistered = true}) {
+    if (_pluginRegistery[name] != null && enabledPlugins.contains(name)) {
+      return _pluginRegistery[name] as T;
+    } else if (_pluginRegistery[name] != null) {
+      if (enableIfRegistered) {
+        enable(name);
+      }
+      return _pluginRegistery[name] as T;
+    }
+    return null;
+  }
+
   /// Enables a plugin and its dependencies.
   void enable(String name, {Set<String>? enabled}) {
     final enabledTemp = enabled ?? {};
@@ -61,18 +78,22 @@ class PluginManager {
 
     _lockCompleter.complete(
       _lock.synchronized(() {
+        /// Indicates that the plugin is already enabled.
+        if (enabledTemp.contains(name)) {
+          return;
+        }
         enabledTemp.add(name);
         enabledPlugins.add(name);
         if (_pluginRegistery.containsKey(name) &&
             _pluginRegistery[name] != null) {
           final plugin = _pluginRegistery[name]!;
           activePlugins[name] = plugin;
-          if (plugin.dependencies.isNotEmpty) {
-            for (final dependency in plugin.dependencies) {
+          if (plugin._dependencies.isNotEmpty) {
+            for (final dependency in plugin._dependencies) {
               enable(dependency, enabled: enabledTemp);
             }
           }
-          plugin.initialize();
+          plugin._initialize();
         }
         return;
       }),
@@ -104,11 +125,14 @@ abstract class PluginBase {
     /// Short name
     this.name, {
     /// Long name
-    this.description = '',
+    String description = '',
 
     /// Plugin related dependencies
-    this.dependencies = const <String>{},
-  });
+    Set<String> dependencies = const <String>{},
+  }) {
+    _description = description;
+    _dependencies = dependencies;
+  }
 
   /// A short name for the plugin based on the implemented specification.
   ///
@@ -118,24 +142,40 @@ abstract class PluginBase {
   /// A longer name for the plugin, describing its purpose. For example a
   /// plugin for StartTLS would use "Stream Feature: STARTTLS" as its
   /// description value.
-  final String description;
+  late final String _description;
 
   /// Some plugins may depend on others in order to function properly. Any
   /// plugins names included in [dependencies] will be initialized as
   /// needed if this plugin is enabled.
-  final Set<String> dependencies;
+  late final Set<String> _dependencies;
 
   /// [WhixpBase] instance to use accross the plugin implementation.
-  late final WhixpBase _base;
+  late final WhixpBase base;
 
   /// Initializes the plugin. Concrete implementations should override this
   /// method to perform necessary setup or initialization.
-  void initialize();
+  void _initialize() {
+    base.addEventHandler<String>('sessionBind', sessionBind);
+    base.addEventHandler('sessionEnd', (_) => pluginEnd());
+    if (base.transport.sessionBind) {
+      sessionBind(base.transport.boundJID.toString());
+    }
+    pluginInitialize();
+    Log.instance.debug('Loaded plugin: $_description');
+  }
 
-  /// Initializes the plugin with [WhixpBase]. When plugin initializes, this
-  /// method called first.
-  set base(WhixpBase base) => this.base = base;
+  /// Initialize plugin state, such as registering event handlers.
+  @internal
+  void pluginInitialize();
 
-  /// Get [Whixp]
-  WhixpBase get base => _base;
+  /// Cleanup plugin state, and prepare for plugin removal.
+  @internal
+  void pluginEnd();
+
+  /// Initialize plugin state based on the bound [jid].
+  @internal
+  void sessionBind(String? jid);
+
+  @override
+  String toString() => 'Plugin: $name: $_description';
 }
