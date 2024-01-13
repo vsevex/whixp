@@ -20,7 +20,7 @@ class XPathMatcher extends BaseMatcher {
   ///
   /// ### Example:
   /// ```dart
-  /// final matcher = XPathMatcher('<$element xmlns="elementNs"/>');
+  /// final matcher = XPathMatcher('{namespace}name');
   /// ```
   ///
   /// __Note__: Actually, this class is not matches stanzas over the XPath expression.
@@ -30,11 +30,14 @@ class XPathMatcher extends BaseMatcher {
   bool match(XMLBase base) {
     final element = base.element;
 
+    /// Namespace fix.
+    final rawCriteria = fixNamespace(criteria as String).value1!;
+
     /// Retrieves the XML tag of the [base.element].
-    String tag() =>
+    final tag =
         '<${element!.localName} xmlns="${element.getAttribute('xmlns')}"/>';
 
     /// Compare the stored criteria with the XML tag of the stanza.
-    return criteria == tag();
+    return rawCriteria == tag;
   }
 }
