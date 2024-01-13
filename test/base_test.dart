@@ -10,6 +10,22 @@ import 'class/base.dart';
 import 'test_base.dart' as tester;
 
 void main() {
+  group('fix namespace test caases', () {
+    test('fixing namespaces in an XPath expression', () {
+      const namespace = 'http://jabber.org/protocol/disco#items';
+      const result = '{$namespace}test/bar/{abc}baz';
+
+      expect(
+        fixNamespace(result),
+        equals(
+          const Tuple2(
+            '<test xmlns="http://jabber.org/protocol/disco#items"/>/<bar xmlns="http://jabber.org/protocol/disco#items"/>/<baz xmlns="abc"/>',
+            null,
+          ),
+        ),
+      );
+    });
+  });
   group('xml base test method and property test cases', () {
     test('extended name must return stanza correctly', () {
       final stanza = createTestStanza(name: 'foo/bar/baz', namespace: 'test');
@@ -345,10 +361,6 @@ void main() {
             }
           },
         },
-        setupOverride: (base, [element]) {
-          base.element = xml.XmlElement(xml.XmlName(''));
-          return false;
-        },
       );
 
       stanza['bar'] = 'foo';
@@ -390,6 +402,7 @@ void main() {
 
       registerStanzaPlugin(stanza, extension);
       stanza['extended'] = 'testing';
+
       tester.check(
         stanza,
         '<foo xmlns="test"><extended>testing</extended></foo>',
@@ -437,13 +450,13 @@ void main() {
                 'lang': '',
                 'bar': '',
                 'baz': 'b',
-                '__childtag__': '<foo2 xmlns="test"/>',
+                '__childtag__': '{test}foo2',
               },
               {
                 'lang': '',
                 'bar': 'c',
                 'baz': '',
-                '__childtag__': '<subfoo xmlns="test"/>',
+                '__childtag__': '{test}subfoo',
               }
             ],
           },
@@ -524,14 +537,14 @@ void main() {
           {
             'bar': 'c',
             'baz': '',
-            '__childtag__': '<subfoo xmlns="test"/>',
+            '__childtag__': '{test}subfoo',
           }
         ],
       };
       stanza.values = values;
       tester.check(
         stanza,
-        '<foo bar="a" xmlns="tes"><subfoo bar="c"/><pluginfoo baz="b"/></foo>',
+        '<foo bar="a" xmlns="test"><subfoo bar="c"/><pluginfoo baz="b"/></foo>',
       );
     });
 
