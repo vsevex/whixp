@@ -5,5 +5,6 @@ library whixp;
 export 'src/exception.dart';
 export 'src/jid/jid.dart';
 export 'src/log/log.dart';
+export 'src/plugins/plugins.dart';
 export 'src/utils/utils.dart';
 export 'src/whixp.dart';
