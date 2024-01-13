@@ -18,9 +18,9 @@ XMPP is an open source standart protocol widely used for real-time communication
 
 **Extensions Support**: Extensible architecture supports XMPP protocol extensions.
 
-**Authentication Mechanisms**: Provides support for various XMPP authentication mechanisms, including **SASL SCRAM** with encryption options such as SHA-1, SHA-256, SHA-384, SHA-512, and Anonymous.
+**Authentication Mechanisms**: Provides support for various XMPP authentication mechanisms, including **SASL SCRAM** with encryption options such as SHA-1, SHA-256, SHA-384, SHA-512, PLAIN and ANONYMOUS.
 
-> While support for these mechanisms are available, only SHA-1, PLAIN, and SHA-256 have been tested thoroughly.
+> While support for these mechanisms are available, only SHA-1, SHA-256, PLAIN, and ANONYMOUS have been tested thoroughly.
 
 **Pluggable Architecture**: Build on top of a modular and pluggable architecture. You can easily extend and customize Whixp to fit your specific use case.
 
@@ -40,7 +40,7 @@ import 'package:whixp/whixp.dart';
 void main() {
   final whixp = Whixp(
     'vsevex@example.com/desktop',
-    'tester123',
+    'passwd',
     host: 'example.com',
     logger: Log(enableError: true, enableWarning: true),
   );
@@ -55,7 +55,7 @@ void main() {
 
 ## Contributing to Whixp
 
-We welcome and appreciate contributions from the community to enhance the `Whixp`. If you have any improvements, bug fixes, or new features to contribute, you can do so by creating a pull request.
+I do welcome and appreciate contributions from the community to enhance the `Whixp`. If you have any improvements, bug fixes, or new features to contribute, you can do so by creating a pull request.
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
