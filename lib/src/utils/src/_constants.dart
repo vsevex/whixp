@@ -2,20 +2,27 @@ part of 'utils.dart';
 
 /// ### Common namespace constants from the XMPP RFCs and XEPs
 ///
-/// * _[HTTPBIND]_ - HTTP BIND namespace from XEP 124.
+/// * _[HTTPBIND]_ - HTTP BIND namespace from XEP-0124.
 /// * _[CLIENT]_ - Main XMPP client namespace.
 /// * _[AUTH]_ - Legacy authentication namespace.
 /// * _[ROSTER]_ - Roster operations namespace.
 /// * _[PROFILE]_ - Profile namespace.
-/// * _[DISCO_INFO]_ - Service discovery info namespace from XEP 30.
-/// * _[DISCO_ITEMS]_ - Service discovery items namespace from XEP 30.
-/// * _[MUC]_ - Multi-User Chat namespace from XEP 45.
+/// * _[VCARD]_ - vCard (Virtual Business Card) namespace.
+/// * _[PREAPPROVAL] - Features Pre-Approval namespace.
+/// * _[COMPONENT]_ - Jabber Component Accept namespace.
+/// * _[DISCO_INFO]_ - Service discovery info namespace from XEP-0030.
+/// * _[DISCO_ITEMS]_ - Service discovery items namespace from XEP-0030.
+/// * _[MUC]_ - Multi-User Chat namespace from XEP-0045.
 /// * _[SASL]_ - XMPP SASL namespace from RFC 3920.
 /// * _[STREAM]_ - XMPP Streams namespace from RFC 3920.
+/// * _[FORMS]_ - XMPP Forms namespace.
 /// * _[BIND]_ - XMPP Binding namespace from RFC 3920 and RFC 6120.
+/// * _[RSM]_ - Result Set Management namespace.
+/// * _[STARTTLS]_ - XMPP StartTLS namespace.
 /// * _[SESSION]_ - XMPP Session namespace from RFC 3920.
-/// * _[XHTML_IM]_ - XHTML-IM namespace from XEP 71.
-/// * _[XHTML]_ - XHTML body namespace from XEP 71.
+/// * _[VER]_ - Roster Versioning namespace.
+/// * _[VERSION]_ - XMPP Version namespace.
+/// * _[STANZAS]_ - XMPP Stanzas namespace.
 final _namespace = <String, String>{
   'HTTPBIND': "http://jabber.org/protocol/httpbind",
   'CLIENT': "jabber:client",
@@ -29,7 +36,8 @@ final _namespace = <String, String>{
   'DISCO_ITEMS': "http://jabber.org/protocol/disco#items",
   'MUC': "http://jabber.org/protocol/muc",
   'SASL': "urn:ietf:params:xml:ns:xmpp-sasl",
-  'STREAM': 'urn:ietf:params:xml:ns:xmpp-streams',
+  'STREAM': "urn:ietf:params:xml:ns:xmpp-streams",
+  'FORMS': "jabber:x:data",
   'JABBER_STREAM': "http://etherx.jabber.org/streams",
   'FRAMING': "urn:ietf:params:xml:ns:xmpp-framing",
   'BIND': "urn:ietf:params:xml:ns:xmpp-bind",
@@ -39,7 +47,5 @@ final _namespace = <String, String>{
   'VER': "urn:xmpp:features:rosterver",
   'VERSION': "jabber:iq:version",
   'STANZAS': "urn:ietf:params:xml:ns:xmpp-stanzas",
-  'XHTML_IM': "http://jabber.org/protocol/xhtml-im",
-  'XHTML': "http://www.w3.org/1999/xhtml",
   'XML': "http://www.w3.org/XML/1998/namespace",
 };
