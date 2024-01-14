@@ -35,6 +35,10 @@ class DiscoveryInformation extends StanzaConcrete {
   /// ```
   const DiscoveryInformation(super.concrete);
 
+  @override
+  DiscoInformationAbstract get concrete =>
+      super.concrete as DiscoInformationAbstract;
+
   /// Returns a [Set] or [List] of all identities in [DiscoveryIdentity].
   ///
   /// If a [language] was specified, only return identities using that language.
@@ -44,8 +48,7 @@ class DiscoveryInformation extends StanzaConcrete {
     String? language,
     bool duplicate = false,
   }) =>
-      (concrete as DiscoInformationAbstract)
-          .getIdentities(language: language, duplicate: duplicate);
+      concrete.getIdentities(language: language, duplicate: duplicate);
 
   /// Adds a new identity element. Each identity must be unique in terms of all
   /// four identity components.
@@ -67,8 +70,7 @@ class DiscoveryInformation extends StanzaConcrete {
     String? name,
     String? language,
   }) =>
-      (concrete as DiscoInformationAbstract)
-          .addIdentity(category, type, name: name, language: language);
+      concrete.addIdentity(category, type, name: name, language: language);
 
   /// Adds or replaces all entities. The [identities] must be in a
   /// [DiscoveryIdentity] form.
@@ -79,8 +81,7 @@ class DiscoveryInformation extends StanzaConcrete {
     Iterable<DiscoveryIdentity> identities, {
     String? language,
   }) =>
-      (concrete as DiscoInformationAbstract)
-          .setIdentities(identities, language: language);
+      concrete.setIdentities(identities, language: language);
 
   /// Removes a given identity.
   bool deleteIdentity(
@@ -89,14 +90,12 @@ class DiscoveryInformation extends StanzaConcrete {
     String? name,
     String? language,
   }) =>
-      (concrete as DiscoInformationAbstract)
-          .deleteIdentity(category, type, name: name, language: language);
+      concrete.deleteIdentity(category, type, name: name, language: language);
 
   /// Removes all identities. If a [language] was specified, only remove
   /// identities using that language.
   void deleteIdentities({String? language}) =>
-      (concrete as DiscoInformationAbstract)
-          .deleteIdentities(language: language);
+      concrete.deleteIdentities(language: language);
 
   /// Returns a [Set] or [List] of all features as so:
   /// __(category, type, name, language)__
@@ -104,7 +103,7 @@ class DiscoveryInformation extends StanzaConcrete {
   /// If [duplicate] was set to true, then use [List] as it is allowed to
   /// duplicate items.
   Iterable<String> getFeatures({bool duplicate = false}) =>
-      (concrete as DiscoInformationAbstract).getFeatures(duplicate: duplicate);
+      concrete.getFeatures(duplicate: duplicate);
 
   /// Adds a single feature.
   ///
@@ -113,21 +112,17 @@ class DiscoveryInformation extends StanzaConcrete {
   /// 'http://jabber.org/protocol/disco#info' namespace;
   ///
   /// see <https://xmpp.org/registrar/disco-features.html>
-  bool addFeature(String feature) =>
-      (concrete as DiscoInformationAbstract).addFeature(feature);
+  bool addFeature(String feature) => concrete.addFeature(feature);
 
   /// Adds or replaces all supported [features]. The [features]  must be in a
   /// [Set] where each identity is a [String].
-  void setFeatures(Iterable<String> features) =>
-      (concrete as DiscoInformationAbstract).setFeatures(features);
+  void setFeatures(Iterable<String> features) => concrete.setFeatures(features);
 
   /// Deletes a single feature.
-  bool deleteFeature(String feature) =>
-      (concrete as DiscoInformationAbstract).deleteFeature(feature);
+  bool deleteFeature(String feature) => concrete.deleteFeature(feature);
 
   /// Removes all features.
-  void deleteFeatures() =>
-      (concrete as DiscoInformationAbstract).deleteFeatures();
+  void deleteFeatures() => concrete.deleteFeatures();
 
   /// Returns the serialized format of the concrete [XMLBase] stanza.
   @override

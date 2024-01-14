@@ -25,9 +25,11 @@ class DiscoItem extends XMLBase {
 class DiscoveryItems extends StanzaConcrete {
   DiscoveryItems(super.concrete);
 
+  @override
+  DiscoItemsAbstract get concrete => super.concrete as DiscoItemsAbstract;
+
   /// Returns all items
-  Set<SingleDiscoveryItem> get items => (concrete as DiscoItemsAbstract)
-      .items
+  Set<SingleDiscoveryItem> get items => concrete.items
       .map(
         (item) => SingleDiscoveryItem(
           item.value1,
@@ -38,21 +40,20 @@ class DiscoveryItems extends StanzaConcrete {
       .toSet();
 
   /// Removes all items.
-  void removeItems() => (concrete as DiscoItemsAbstract).removeItems();
+  void removeItems() => concrete.removeItems();
 
   /// Sets or replaces all items. The given [items] ust in a [Set] where each
   /// item is a [DiscoveryItem] form.
-  void setItems(Set<SingleDiscoveryItem> items) =>
-      (concrete as DiscoItemsAbstract).setItems(items);
+  void setItems(Set<SingleDiscoveryItem> items) => concrete.setItems(items);
 
   /// Adds a new item element. Each item is required to have Jabber ID, but may
   /// also specify a [node] value to reference non-addressable entities.
   bool addItem(String jid, {String? node, String? name}) =>
-      (concrete as DiscoItemsAbstract).addItem(jid, node: node, name: name);
+      concrete.addItem(jid, node: node, name: name);
 
   /// Removes a single item.
   bool removeItem(String jid, {String? node}) =>
-      (concrete as DiscoItemsAbstract).removeItem(jid, node: node);
+      concrete.removeItem(jid, node: node);
 }
 
 /// Represents an item used in the context of discovery. It is designed to hold
