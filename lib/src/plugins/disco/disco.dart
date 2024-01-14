@@ -106,9 +106,8 @@ class ServiceDiscovery extends PluginBase {
       Log.instance
           .debug('Looking up local disco#info data for $jid, node $node');
 
-      DiscoInformationAbstract? information = _static
-          .getInformation(jid: jid, node: node, iqFrom: iqFrom)
-          .concrete as DiscoInformationAbstract;
+      DiscoInformationAbstract? information =
+          _static.getInformation(jid: jid, node: node, iqFrom: iqFrom).concrete;
 
       information = _fixDefaultInformation(information);
       _wrap(iqTo: iqFrom, iqFrom: jid, payload: information);
@@ -117,8 +116,7 @@ class ServiceDiscovery extends PluginBase {
     if (cached) {
       Log.instance
           .debug('Looking up cached disco#info data for $jid, node $node');
-      final information =
-          _static.getCachedInformation()?.concrete as DiscoInformationAbstract?;
+      final information = _static.getCachedInformation()?.concrete;
 
       if (information != null) {
         _wrap(iqTo: iqFrom, iqFrom: jid, payload: information);
@@ -236,7 +234,7 @@ class ServiceDiscovery extends PluginBase {
             jid: iq['to'] as String,
             node: (iq['disco_info'] as XMLBase)['node'] as String,
           )
-          .concrete as DiscoInformationAbstract;
+          .concrete;
 
       final node = (iq['disco_info'] as XMLBase)['node'] as String;
 
