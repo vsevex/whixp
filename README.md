@@ -3,6 +3,7 @@
 ![Github last build (main)][last_build]
 [![License: MIT][license_badge]][license_link]
 ![GitHub Repo stars][star_count]
+![whixp](https://raw.githubusercontent.com/vsevex/whixp/37a0e49ee3efa3f69d515ca7fee7273c35c50b94/assets/whixp_dark.svg)
 
 Whixp is a lightweight and pure Dart library that allows you to connect to XMPP (Extensible Messaging and Presence Protocol) servers. This package provides a range of fundamental functionalities for XMPP communication.
 
