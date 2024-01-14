@@ -10,6 +10,7 @@ import 'package:whixp/src/log/log.dart';
 import 'package:whixp/src/plugins/base.dart';
 import 'package:whixp/src/plugins/disco/disco.dart';
 import 'package:whixp/src/plugins/features.dart';
+import 'package:whixp/src/plugins/form/dataforms.dart';
 import 'package:whixp/src/plugins/ping/ping.dart';
 import 'package:whixp/src/plugins/rsm/stanza.dart';
 import 'package:whixp/src/roster/manager.dart' as roster;
@@ -159,6 +160,11 @@ abstract class WhixpBase {
 
     final rsm = RSMStanza();
     final ping = PingStanza();
+    final form = FormAbstract();
+    final formField = FormFieldAbstract();
+    final fieldOption = FieldOption();
+    formField.registerPlugin(fieldOption);
+    form.registerPlugin(formField);
 
     /// Set up the transport with XMPP's root stanzas & handlers.
     transport
@@ -167,10 +173,11 @@ abstract class WhixpBase {
           ..registerPlugin(ping)
           ..registerPlugin(info)
           ..registerPlugin(items)
-          ..registerPlugin(rsm),
+          ..registerPlugin(rsm)
+          ..registerPlugin(form),
       )
       ..registerStanza(Presence())
-      ..registerStanza(Message(includeNamespace: true))
+      ..registerStanza(Message(includeNamespace: true)..registerPlugin(form))
       ..registerStanza(StreamError())
       ..registerHandler(
         CallbackHandler(
@@ -211,6 +218,7 @@ abstract class WhixpBase {
     _clientRoster = _roster[boundJID.toString()] as roster.RosterNode;
 
     transport
+      ..addEventHandler('disconnected', (_) => _handleDisconnected())
       ..addEventHandler<Presence>(
         'presenceDnd',
         (presence) => _handleAvailable(presence!),
@@ -418,6 +426,11 @@ abstract class WhixpBase {
   P? getPluginInstance<P>(String name, {bool enableIfRegistered = true}) =>
       _pluginManager.getPluginInstance<P>(name);
 
+  /// Close the XML stream and wait for ack from the server.
+  ///
+  /// Calls the primary method from [transport].
+  Future<void> disconnect() => transport.disconnect();
+
   /// Process incoming message stanzas.
   void _handleMessage(StanzaBase message) {
     final to = message['to'] as String;
@@ -454,6 +467,11 @@ abstract class WhixpBase {
     } else if (!{'available', 'unavailable'}.contains(presence['type'])) {
       return;
     }
+  }
+
+  void _handleDisconnected() {
+    _roster.reset();
+    transport.sessionBind = false;
   }
 
   void _handleAvailable(Presence presence) {
