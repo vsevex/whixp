@@ -4,13 +4,17 @@
 [![License: MIT][license_badge]][license_link]
 ![GitHub Repo stars][star_count]
 
-![whixp](https://raw.githubusercontent.com/vsevex/whixp/a783cc09e24212dc302e06ade13b2f9d5c1eb955/assets/whixp_light.svg)
+<div align="center">
+    <img alt="whixp" src="https://raw.githubusercontent.com/vsevex/whixp/a783cc09e24212dc302e06ade13b2f9d5c1eb955/assets/whixp_light.svg">
+</div>
 
 Whixp is a lightweight and pure Dart library that allows you to connect to XMPP (Extensible Messaging and Presence Protocol) servers. This package provides a range of fundamental functionalities for XMPP communication.
 
 ## XMPP
 
-XMPP is an open source standart protocol widely used for real-time communication, enabling features such as instant messaging, presence information, and contact list management. With this package, you can easily integrate XMPP capabilities into your Dart & Flutter applications, facilitating secure communication between users.
+XMPP is an open source standart protocol widely used for real-time communication, enabling features such as instant messaging, presence information, and contact list management.
+
+With this package, you can easily integrate XMPP capabilities into your Dart & Flutter applications, facilitating secure communication between users.
 
 ## Features
 
