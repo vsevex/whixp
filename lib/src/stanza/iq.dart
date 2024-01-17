@@ -3,8 +3,13 @@ import 'dart:async';
 import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/handler/handler.dart';
 import 'package:whixp/src/log/log.dart';
+import 'package:whixp/src/plugins/disco/disco.dart';
+import 'package:whixp/src/plugins/form/dataforms.dart';
+import 'package:whixp/src/plugins/ping/ping.dart';
+import 'package:whixp/src/plugins/rsm/stanza.dart';
 import 'package:whixp/src/stanza/error.dart';
 import 'package:whixp/src/stanza/root.dart';
+import 'package:whixp/src/stanza/roster.dart';
 import 'package:whixp/src/stream/base.dart';
 import 'package:whixp/src/stream/matcher/matcher.dart';
 import 'package:whixp/src/transport.dart';
@@ -129,6 +134,19 @@ class IQ extends RootStanza {
         },
       },
     );
+
+    /// Register all required stanzas beforehand, so we won't need to declare
+    /// them one by one whenever there is a need to specific stanza.
+    ///
+    /// If you have not used the specified stanza, then you have to enable the
+    /// stanza through the usage of `pluginAttribute` parameter.
+    registerPlugin(StanzaError());
+    registerPlugin(Roster());
+    registerPlugin(FormAbstract());
+    registerPlugin(PingStanza());
+    registerPlugin(DiscoItemsAbstract());
+    registerPlugin(DiscoInformationAbstract());
+    registerPlugin(RSMStanza());
   }
 
   /// The id of the attached [Handler].
@@ -166,8 +184,8 @@ class IQ extends RootStanza {
 
     /// The length of time (in seconds) to wait for a response before the
     /// [timeoutCallback] is called, instead of the sync callback. Defaults to
-    /// `2` seconds.
-    int timeout = 2,
+    /// `10` seconds.
+    int timeout = 10,
   }) async {
     final completer = Completer<StanzaBase>();
 
@@ -195,21 +213,17 @@ class IQ extends RootStanza {
         }
       } else if (type == 'error') {
         if (!completer.isCompleted) {
-          await runZonedGuarded(
-            () async {
-              completer.complete(stanza);
+          try {
+            completer.complete(stanza);
 
-              if (failureCallback != null) {
-                await failureCallback.call(stanza);
-              }
+            if (failureCallback != null) {
+              await failureCallback.call(stanza);
+            }
 
-              throw StanzaException.iq(
-                StanzaError()
-                    .copy(element: stanza.element!.getElement('error')),
-              );
-            },
-            (error, trace) => Log.instance.error(error.toString()),
-          );
+            throw StanzaException.iq(stanza['error'] as StanzaError);
+          } catch (error) {
+            Log.instance.error(error.toString());
+          }
         }
       } else {
         if (callback is Future) {
@@ -220,14 +234,17 @@ class IQ extends RootStanza {
             matcher: matcher!,
           );
         } else {
-          handler =
-              CallbackHandler(_handlerID!, successCallback, matcher: matcher!);
+          handler = CallbackHandler(
+            _handlerID!,
+            (stanza) => successCallback(stanza),
+            matcher: matcher!,
+          );
         }
 
-        transport!.registerHandler(handler!);
+        transport?.registerHandler(handler!);
       }
 
-      transport!.cancelSchedule(_handlerID!);
+      transport?.cancelSchedule(_handlerID!);
 
       if (callback != null) {
         await callback.call(await completer.future);
@@ -235,18 +252,19 @@ class IQ extends RootStanza {
     }
 
     void callbackTimeout() {
-      if (!completer.isCompleted) {
-        runZonedGuarded(
-          () async {
+      runZonedGuarded(
+        () {
+          if (!completer.isCompleted) {
             throw StanzaException.timeout(this);
-          },
-          (error, trace) => Log.instance.error(error.toString()),
-        );
-      }
-      transport!.removeHandler(_handlerID!);
-      if (timeoutCallback != null) {
-        timeoutCallback.call(this);
-      }
+          }
+        },
+        (error, trace) {
+          transport?.removeHandler(_handlerID!);
+          if (timeoutCallback != null) {
+            timeoutCallback.call(this);
+          }
+        },
+      );
     }
 
     if (<String>{'get', 'set'}.contains(this['type'] as String)) {
@@ -259,8 +277,11 @@ class IQ extends RootStanza {
           matcher: matcher,
         );
       } else {
-        handler =
-            CallbackHandler(_handlerID!, successCallback, matcher: matcher);
+        handler = CallbackHandler(
+          _handlerID!,
+          (stanza) => successCallback(stanza),
+          matcher: matcher,
+        );
       }
 
       transport!
