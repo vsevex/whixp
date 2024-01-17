@@ -123,10 +123,6 @@ class DiscoveryInformation extends StanzaConcrete {
 
   /// Removes all features.
   void deleteFeatures() => concrete.deleteFeatures();
-
-  /// Returns the serialized format of the concrete [XMLBase] stanza.
-  @override
-  String toString() => concrete.toString();
 }
 
 @internal

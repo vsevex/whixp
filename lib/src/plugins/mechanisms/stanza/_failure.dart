@@ -13,7 +13,7 @@ class _Failure extends StanzaBase {
       <Symbol, dynamic Function(dynamic args, XMLBase base)>{
         const Symbol('condition'): (args, base) {
           for (final child in base.element!.childElements) {
-            final condition = child.qualifiedName;
+            final condition = child.localName;
             if (_conditions.contains(condition)) {
               return condition;
             }

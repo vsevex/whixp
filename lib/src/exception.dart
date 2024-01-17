@@ -1,3 +1,4 @@
+import 'package:whixp/src/stanza/error.dart';
 import 'package:whixp/src/stream/base.dart';
 
 /// The given given class is a custom written [Exception] class for [Whixp].
@@ -80,23 +81,32 @@ class StanzaException extends WhixpException {
       StanzaException(
         'Received service unavailable stanza',
         stanza: stanza,
-        condition: stanza['condition'] as String,
+        condition: (stanza['error'] as StanzaError)['condition'] as String,
       );
 
   /// Creates a [StanzaException] for an IQ error with additional details.
   factory StanzaException.iq(XMLBase iq) => StanzaException(
         'IQ error has occured',
         stanza: iq,
-        text: iq['text'] as String,
-        condition: iq['condition'] as String,
-        errorType: iq['type'] as String,
+        text: (iq['error'] as StanzaError)['text'] as String,
+        condition: (iq['error'] as StanzaError)['condition'] as String,
+        errorType: (iq['error'] as StanzaError)['type'] as String,
       );
 
   /// Creates a [StanzaException] for an IQ timeout.
-  factory StanzaException.iqTimeout(XMLBase iq) => StanzaException(
+  factory StanzaException.iqTimeout(StanzaBase iq) => StanzaException(
         'IQ timeout has occured',
         stanza: iq,
         condition: 'remote-server-timeout',
+      );
+
+  /// Creates a [StanzaException] for an Presence error.
+  factory StanzaException.presence(StanzaBase presence) => StanzaException(
+        'Presence error has occured',
+        stanza: presence,
+        condition: (presence['error'] as StanzaError)['condition'] as String,
+        text: (presence['error'] as StanzaError)['text'] as String,
+        errorType: (presence['error'] as StanzaError)['type'] as String,
       );
 
   /// Formats the exception details.

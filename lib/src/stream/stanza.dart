@@ -11,15 +11,15 @@ class StanzaBase extends XMLBase {
   /// All parameters are extended from [XMLBase]. For more information please
   /// take a look at [XMLBase].
   StanzaBase({
+    /// A [JabberID] representing the receipient's JID
+    JabberID? stanzaTo,
+
+    /// A [JabberID] representing the sender's JID
+    JabberID? stanzaFrom,
+
     /// The type of stanza, typically will be `normal`, `error`, `get` or `set`,
     /// etc.
     String? stanzaType,
-
-    /// A [String] representing the receipient's JID
-    String? stanzaTo,
-
-    /// A [String] representing the sender's JID
-    String? stanzaFrom,
 
     ///An optional unique identifier that can be used to associate stanzas
     String? stanzaID,
@@ -55,10 +55,10 @@ class StanzaBase extends XMLBase {
       this['type'] = stanzaType;
     }
     if (stanzaTo != null) {
-      this['to'] = JabberID(stanzaTo);
+      this['to'] = stanzaTo;
     }
     if (stanzaFrom != null) {
-      this['from'] = JabberID(stanzaFrom);
+      this['from'] = stanzaFrom;
     }
     if (stanzaID != null) {
       this['id'] = stanzaID;

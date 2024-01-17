@@ -123,10 +123,6 @@ class ServiceDiscovery extends PluginBase {
       }
     }
 
-    final info = DiscoInformationAbstract();
-
-    _iq.registerPlugin(info);
-
     _iq['from'] = iqFrom;
     _iq['to'] = jid;
     _iq['type'] = 'get';
@@ -156,7 +152,6 @@ class ServiceDiscovery extends PluginBase {
     }
 
     final iq = IQ(transport: base.transport);
-    iq.registerPlugin(DiscoItemsAbstract());
     iq['from'] = iqFrom != null ? iqFrom.toString() : '';
     iq['to'] = jid;
     iq['type'] = 'get';

@@ -61,7 +61,7 @@ class Ping extends PluginBase {
 
   @override
   void pluginInitialize() {
-    _iq = IQ(transport: base.transport)..registerPlugin(PingStanza());
+    _iq = IQ(transport: base.transport);
 
     _pendingTasks = <Completer<void>>[];
 

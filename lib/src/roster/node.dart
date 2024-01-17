@@ -13,7 +13,7 @@ class RosterNode {
   final String jid;
 
   /// The last sent [Presence] status that was broadcast to all contact JIDs.
-  Presence? lastStatus;
+  PresenceAbstract? lastStatus;
 
   /// The [RosterItem] items that this roster includes.
   final _jids = <String, RosterItem>{};
@@ -204,9 +204,9 @@ class RosterNode {
   /// If no recipient is specified, send the presence immediately. Otherwise,
   /// forward the send request to the recipient's roster entry for processing.
   void sendPresence() {
-    String? presenceFrom;
+    JabberID? presenceFrom;
     if (whixp.transport.isComponent) {
-      presenceFrom = jid;
+      presenceFrom = JabberID(jid);
     }
     whixp.sendPresence(presenceFrom: presenceFrom);
   }

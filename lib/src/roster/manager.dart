@@ -45,7 +45,7 @@ class RosterManager {
   final _rosters = <String, RosterNode>{};
 
   StanzaBase _saveLastStatus(dynamic stanza) {
-    if (stanza is Presence) {
+    if (stanza is PresenceAbstract) {
       String subscribeFrom = (stanza['from'] as String).isEmpty
           ? _whixp.transport.boundJID.toString()
           : JabberID(stanza['from'] as String).full;
@@ -110,9 +110,9 @@ class RosterManager {
   /// If no recipient is specified, send the presence immediately. Otherwise,
   /// forward the send request to the recipient's roster entry for processing.
   void sendPresence() {
-    String? presenceFrom;
+    JabberID? presenceFrom;
     if (_whixp.transport.isComponent) {
-      presenceFrom = _whixp.transport.boundJID.toString();
+      presenceFrom = _whixp.transport.boundJID;
     }
     _whixp.sendPresence(presenceFrom: presenceFrom);
   }

@@ -39,10 +39,7 @@ class _StaticDisco {
     if (!nodes.containsKey(Tuple3(nodeJID, node, nodeIQFrom))) {
       final info = DiscoInformationAbstract();
       final items = DiscoItemsAbstract();
-      final item = DiscoItem();
-
-      items.registerPlugin(item, iterable: true);
-      items.enable(item.name);
+      
       info['node'] = node;
       items['node'] = node;
 

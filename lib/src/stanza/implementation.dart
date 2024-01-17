@@ -5,9 +5,9 @@ import 'package:whixp/src/stream/base.dart';
 abstract class StanzaConcrete {
   /// Constructs a [StanzaConcrete] instance with the provided concrete
   /// [XMLBase] class.
-  /// 
+  ///
   /// This class wraps primary methods, properties and other stuff to make the
-  /// implementation of the feature precise and minimal. Hides all 
+  /// implementation of the feature precise and minimal. Hides all
   const StanzaConcrete(this._concrete);
 
   final XMLBase _concrete;
@@ -23,4 +23,8 @@ abstract class StanzaConcrete {
 
   @override
   int get hashCode => _concrete.hashCode;
+
+  /// Returns the serialized format of the concrete [XMLBase] stanza.
+  @override
+  String toString() => concrete.toString();
 }

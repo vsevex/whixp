@@ -3,6 +3,10 @@ part of 'dataforms.dart';
 class Form extends StanzaConcrete {
   Form(super.concrete);
 
+  /// Whenever there is a need to send form without any additional data, this
+  /// static variable can be used.
+  static Form defaultConfig = Form(FormAbstract());
+
   @override
   FormAbstract get concrete => super.concrete as FormAbstract;
 
@@ -19,8 +23,8 @@ class Form extends StanzaConcrete {
     String? formType,
     String? label,
     String? description,
-    bool? required = false,
     String? value,
+    bool? required = false,
     List<Map<String, String>>? options,
   }) =>
       Form(
@@ -97,7 +101,8 @@ class FormAbstract extends XMLBase {
     if (_title != null) {
       this['title'] = _title;
     }
-    addGetters(<Symbol, void Function(dynamic args, XMLBase base)>{
+
+    addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
       const Symbol('instructions'): (args, base) => instructions,
       const Symbol('fields'): (args, base) => fields,
     });
@@ -113,6 +118,8 @@ class FormAbstract extends XMLBase {
       const Symbol('instructions'): (args, base) => deleteInstructions(),
       const Symbol('fields'): (args, base) => deleteFields(),
     });
+
+    registerPlugin(FormFieldAbstract(), iterable: true);
   }
 
   String? _title;

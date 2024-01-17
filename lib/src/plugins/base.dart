@@ -150,6 +150,7 @@ abstract class PluginBase {
   late final Set<String> _dependencies;
 
   /// [WhixpBase] instance to use accross the plugin implementation.
+  @internal
   late final WhixpBase base;
 
   /// Initializes the plugin. Concrete implementations should override this

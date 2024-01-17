@@ -16,7 +16,7 @@ class MatcherID extends BaseMatcher {
 /// set of approved entities that can respond to a request.
 class MatchIDSender extends BaseMatcher {
   MatchIDSender(super.criteria)
-      : assert(criteria.runtimeType is IDMatcherCriteria);
+      : assert(criteria.runtimeType is! IDMatcherCriteria);
 
   /// Compare the given stanza's `id` attribute to the stored `id` value, and
   /// verify the sender's JID.

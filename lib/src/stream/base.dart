@@ -412,7 +412,7 @@ class XMLBase {
     for (final child in element!.childElements.toSet()) {
       final namespace =
           child.getAttribute('xmlns') ?? element!.getAttribute('xmlns');
-      final tag = '{$namespace}${child.qualifiedName}';
+      final tag = '{$namespace}${child.localName}';
 
       if (this.pluginTagMapping.containsKey(tag) &&
           this.pluginTagMapping[tag] != null) {
@@ -1216,7 +1216,7 @@ class XMLBase {
     }
     if (item.value2 != null) {
       final base = item.value2!;
-      element!.children.add(base.element!);
+      element?.children.add(base.element!.copy());
       if (base == pluginTagMapping[base._tagName]) {
         _initPlugin(
           base.pluginAttribute,

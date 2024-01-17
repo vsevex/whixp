@@ -1,6 +1,8 @@
 import 'package:whixp/src/stream/base.dart';
 import 'package:whixp/src/utils/utils.dart';
 
+import 'package:xml/xml.dart' as xml;
+
 /// Represents an XMPP stanza error.
 ///
 /// Extends [XMLBase] and implements [Exception] interface.
@@ -25,10 +27,17 @@ class StanzaError extends XMLBase implements Exception {
   /// [super.includeNamespace] is an optional parameter from the super class
   /// that indicates to whether include the namespace or not. Deafults to
   /// `false`.
-  StanzaError({String? conditionNamespace, super.includeNamespace = false})
-      : super(
+  StanzaError({
+    super.getters,
+    super.setters,
+    super.deleters,
+    String? conditionNamespace,
+    super.element,
+    super.parent,
+  }) : super(
           name: 'error',
           namespace: WhixpUtils.getNamespace('CLIENT'),
+          includeNamespace: false,
           pluginAttribute: 'error',
           interfaces: {
             'code',
@@ -56,28 +65,84 @@ class StanzaError extends XMLBase implements Exception {
 
     addGetters(
       <Symbol, dynamic Function(dynamic args, XMLBase base)>{
-        /// Return the condition element's name.
+        const Symbol('condition'): (args, base) => condition,
+
+        /// Retrieves the contents of the <text> element.
+        const Symbol('text'): (args, base) => base.getSubText('text'),
+        const Symbol('gone'): (args, base) => base.getSubText('gone'),
+      },
+    );
+
+    addSetters(
+      <Symbol, void Function(dynamic value, dynamic args, XMLBase base)>{
+        const Symbol('condition'): (value, args, base) {
+          if (_conditions.contains(value as String)) {
+            base.delete('condition');
+          }
+        },
+      },
+    );
+
+    addDeleters(
+      <Symbol, dynamic Function(dynamic args, XMLBase base)>{
+        /// Removes the condition element.
         const Symbol('condition'): (args, base) {
           for (final child in base.element!.childElements) {
             if (child.getAttribute('xmlns') == _conditionNamespace) {
               final condition = child.localName;
               if (_conditions.contains(condition)) {
-                return condition;
+                base.element!.children.remove(child);
               }
             }
           }
-          return '';
         },
-
-        /// Retrieve the contents of the <text> element.
-        const Symbol('text'): (args, base) => base.getSubText('text'),
-        const Symbol('gone'): (args, base) => base.getSubText('gone'),
       },
     );
   }
 
   /// The namespace for the condition element.
   late final String _conditionNamespace;
+
+  @override
+  bool setup([xml.XmlElement? element]) {
+    final setup = super.setup(element);
+    if (setup) {
+      this['type'] = 'cancel';
+      this['condition'] = 'feature-not-implemented';
+    }
+    if (parent != null) {
+      parent!['type'] = 'error';
+    }
+    return setup;
+  }
+
+  /// Returns the condition element's name.
+  String get condition {
+    for (final child in element!.childElements) {
+      if (child.getAttribute('xmlns') == _conditionNamespace) {
+        final condition = child.localName;
+        if (_conditions.contains(condition)) {
+          return condition;
+        }
+      }
+    }
+    return '';
+  }
+
+  @override
+  StanzaError copy({
+    xml.XmlElement? element,
+    XMLBase? parent,
+    bool receive = false,
+  }) =>
+      StanzaError(
+        getters: getters,
+        setters: setters,
+        deleters: deleters,
+        element: element,
+        parent: parent,
+        conditionNamespace: _conditionNamespace,
+      );
 }
 
 /// Represents an XMPP stream error.
@@ -106,10 +171,17 @@ class StreamError extends StanzaBase implements Exception {
   /// [super.includeNamespace] is an optional parameter from the super class
   /// that indicates to whether include the namespace or not. Deafults to
   /// `false`.
-  StreamError({String? conditionNamespace, super.includeNamespace = false})
-      : super(
+  StreamError({
+    super.getters,
+    super.setters,
+    super.deleters,
+    super.element,
+    super.parent,
+    String? conditionNamespace,
+  }) : super(
           name: 'error',
           namespace: WhixpUtils.getNamespace('JABBER_STREAM'),
+          includeNamespace: false,
           pluginAttribute: 'error',
           interfaces: {'condition', 'text', 'see_other_host'},
         ) {
@@ -121,7 +193,7 @@ class StreamError extends StanzaBase implements Exception {
         const Symbol('see_other_host'): (args, base) {
           final namespace = _conditionNamespace;
 
-          return base.getSubText('<see-other-host xmlns="$namespace"/>');
+          return base.getSubText('{$namespace}see-other-host');
         },
       },
     );
@@ -134,7 +206,7 @@ class StreamError extends StanzaBase implements Exception {
 
             final namespace = _conditionNamespace;
 
-            return base.getSubText('<see-other-host xmlns="$namespace"/>');
+            return base.getSubText('{$namespace}see-other-host');
           }
         },
       },
@@ -145,7 +217,7 @@ class StreamError extends StanzaBase implements Exception {
         const Symbol('see_other_host'): (args, base) {
           final namespace = _conditionNamespace;
 
-          return base.deleteSub('<see-other-host xmlns="$namespace"/>');
+          return base.getSubText('{$namespace}see-other-host');
         },
       },
     );
@@ -153,6 +225,21 @@ class StreamError extends StanzaBase implements Exception {
 
   /// The namespace for the condition element.
   late final String _conditionNamespace;
+
+  @override
+  StreamError copy({
+    xml.XmlElement? element,
+    XMLBase? parent,
+    bool receive = false,
+  }) =>
+      StreamError(
+        getters: getters,
+        setters: setters,
+        deleters: deleters,
+        element: element,
+        parent: parent,
+        conditionNamespace: _conditionNamespace,
+      );
 }
 
 const _conditions = {

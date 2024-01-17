@@ -125,6 +125,8 @@ class DiscoItemsAbstract extends XMLBase {
         const Symbol('items'): (args, base) => removeItems(),
       },
     );
+
+    registerPlugin(DiscoItem(), iterable: true);
   }
 
   final _items = <Tuple2<String, String?>>{};

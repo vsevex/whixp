@@ -51,6 +51,7 @@ class FormFieldAbstract extends XMLBase {
           namespace: WhixpUtils.getNamespace('FORMS'),
           includeNamespace: false,
           pluginAttribute: 'field',
+          pluginMultiAttribute: 'fields',
           interfaces: {
             'answer',
             'desc',
@@ -62,7 +63,7 @@ class FormFieldAbstract extends XMLBase {
           },
           subInterfaces: {'desc'},
         ) {
-    addGetters(<Symbol, void Function(dynamic args, XMLBase base)>{
+    addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
       const Symbol('answer'): (args, base) => answer,
       const Symbol('options'): (args, base) => options,
       const Symbol('required'): (args, base) => required,
@@ -88,6 +89,8 @@ class FormFieldAbstract extends XMLBase {
       const Symbol('required'): (args, base) => removeRequired(),
       const Symbol('value'): (args, base) => removeValue(),
     });
+
+    registerPlugin(FieldOption(), iterable: true);
   }
 
   String? _type;
@@ -288,9 +291,9 @@ class FieldOption extends XMLBase {
           namespace: WhixpUtils.getNamespace('FORMS'),
           includeNamespace: false,
           pluginAttribute: 'option',
+          pluginMultiAttribute: 'options',
           interfaces: {'label', 'value'},
           subInterfaces: {'value'},
-          pluginMultiAttribute: 'options',
         );
 
   @override
