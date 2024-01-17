@@ -1,6 +1,8 @@
 # JID
 
-This package provides a efficient way to work with Jabber (XMPP) IDs. Jabber IDs consist of three main components: the local part, the domain part, and an optional resource part. This package offers a convenient set of methods for creating, parsing, and manipulating Jabber IDs while ensuring proper formatting and escaping.
+This package provides a efficient way to work with Jabber (XMPP) IDs. Jabber IDs consist of three main components: the local part, the domain part, and an optional resource part.
+
+This package offers a convenient set of methods for creating, parsing, and manipulating Jabber IDs while ensuring proper formatting and escaping.
 
 ## Features
 
