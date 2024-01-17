@@ -6,5 +6,6 @@ export 'src/exception.dart';
 export 'src/jid/jid.dart';
 export 'src/log/log.dart';
 export 'src/plugins/plugins.dart';
+export 'src/stanza/presence.dart' hide PresenceAbstract;
 export 'src/utils/utils.dart';
 export 'src/whixp.dart';
