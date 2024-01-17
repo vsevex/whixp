@@ -3,12 +3,16 @@
 ## Breaking
 
 - **Event System Overhaul**
-  The main eventing system has undergone a significant change. Previously, it used a static approach, but now it utilizes the 'EventsEmitter' class for event handling. This change may require updates to your event handling code. Please refer to the updated documentation for guidance on using the new event system.
+  The main eventing system has undergone a significant change. Previously, it used a static approach, but now it utilizes the 'EventsEmitter' class for event handling. This change may require updates to your event handling code.
+
+  Please refer to the updated documentation for guidance on using the new event system.
 
 ## Deprecated
 
 - **Extension Systems and Extensions Removal**
-  The previously created extension systems and extensions have been deprecated in this release and will be entirely removed in the next release. It is recommended to prepare for this change by migrating your extensions to the new system that will be introduced in the upcoming version. Detailed instructions will be provided in the next release's documentation.
+  The previously created extension systems and extensions have been deprecated in this release and will be entirely removed in the next release.
+
+  It is recommended to prepare for this change by migrating your extensions to the new system that will be introduced in the upcoming version. Detailed instructions will be provided in the next release's documentation.
 
 ## 0.0.7 - 2023-08-08
 
