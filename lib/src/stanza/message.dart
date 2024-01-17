@@ -1,9 +1,21 @@
 import 'package:whixp/src/jid/jid.dart';
+import 'package:whixp/src/plugins/delay/delay.dart';
+import 'package:whixp/src/plugins/form/dataforms.dart';
 import 'package:whixp/src/stanza/root.dart';
 import 'package:whixp/src/stream/base.dart';
 import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
+
+/// The [MessageType] enum defines various types of messages that can be
+/// associated with a [Message] stanza. Each message type has a distinct
+/// meaning and can be used to categorize different kinds of messages.
+///
+/// ### Example:
+/// ```dart
+/// final messageType = MessageType.chat;
+/// ```
+enum MessageType { chat, error, groupchat, headline, normal }
 
 /// XMPP's <message> stanza are a "push" mechanism to send information to
 /// other XMPP entities without requiring a response.
@@ -28,6 +40,9 @@ class Message extends RootStanza {
   /// All parameters are extended from [RootStanza]. For more information please
   /// take a look at [RootStanza].
   Message({
+    super.stanzaTo,
+    super.stanzaFrom,
+    super.stanzaType,
     super.transport,
     super.includeNamespace = false,
     super.getters,
@@ -69,30 +84,6 @@ class Message extends RootStanza {
       }
     }
 
-    addSetters(
-      <Symbol, void Function(dynamic value, dynamic args, XMLBase base)>{
-        const Symbol('id'): (value, args, base) => _setIDs(value, base),
-        const Symbol('origin-id'): (value, args, base) => _setIDs(value, base),
-        const Symbol('parent_thread'): (value, args, base) {
-          var element = base.element;
-          if (element != null) {
-            element = base.element!.getElement('thread', namespace: namespace);
-          }
-          if (value != null) {
-            if (element == null) {
-              final thread =
-                  WhixpUtils.xmlElement('thread', namespace: namespace);
-              base.element!.children.add(thread);
-            }
-          } else {
-            if (element != null && element.getAttribute('parent') != null) {
-              element.removeAttribute('parent');
-            }
-          }
-        },
-      },
-    );
-
     addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
       const Symbol('type'): (args, base) => base.getAttribute('type', 'normal'),
       const Symbol('id'): (args, base) => base.getAttribute('id'),
@@ -120,6 +111,30 @@ class Message extends RootStanza {
       },
     });
 
+    addSetters(
+      <Symbol, void Function(dynamic value, dynamic args, XMLBase base)>{
+        const Symbol('id'): (value, args, base) => _setIDs(value, base),
+        const Symbol('origin-id'): (value, args, base) => _setIDs(value, base),
+        const Symbol('parent_thread'): (value, args, base) {
+          var element = base.element;
+          if (element != null) {
+            element = base.element!.getElement('thread', namespace: namespace);
+          }
+          if (value != null) {
+            if (element == null) {
+              final thread =
+                  WhixpUtils.xmlElement('thread', namespace: namespace);
+              base.element!.children.add(thread);
+            }
+          } else {
+            if (element != null && element.getAttribute('parent') != null) {
+              element.removeAttribute('parent');
+            }
+          }
+        },
+      },
+    );
+
     addDeleters(
       <Symbol, void Function(dynamic args, XMLBase base)>{
         const Symbol('origin-id'): (args, base) {
@@ -144,6 +159,14 @@ class Message extends RootStanza {
         },
       },
     );
+
+    /// Register all required stanzas beforehand, so we won't need to declare
+    /// them one by one whenever there is a need to specific stanza.
+    ///
+    /// If you have not used the specified stanza, then you have to enable the
+    /// stanza through the usage of `pluginAttribute` parameter.
+    registerPlugin(FormAbstract());
+    registerPlugin(DelayStanza());
   }
 
   /// Set the message type to "chat".
