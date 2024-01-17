@@ -104,7 +104,7 @@ class Transport {
     this.whitespaceKeepAlive = true,
 
     /// The default interval between keepalive signals when [whitespaceKeepAlive]
-    /// is enabled. Represents in seconds. Defaults to 300
+    /// is enabled. Represents in seconds. Defaults to `300`
     this.whitespaceKeepAliveInterval = 300,
 
     /// The maximum number of reconnection attempts that the [Transport] will
@@ -229,9 +229,6 @@ class Transport {
   /// server TLS certificate. Uses [Tuple2], the first side is for path to the
   /// cert file and the second to the password file.
   late List<Tuple2<String, String?>> _caCerts;
-
-  /// [Stream] variable that holds stanzas that are waiting to be sent.
-  late Stream<Tuple2<StanzaBase, bool>> _waitingQueue;
 
   /// [StreamController] for [_waitingQueue].
   final _waitingQueueController =
@@ -378,7 +375,6 @@ class Transport {
     _connectionTask = null;
 
     _scheduledEvents = <String, Timer>{};
-    _waitingQueue = _waitingQueueController.stream;
   }
 
   /// Begin sending whitespace periodically to keep the connection alive.
@@ -402,7 +398,7 @@ class Transport {
       _runOutFilters!.complete(runFilters());
     }
 
-    _cancelConnectionAttempt();
+    _cancelConnectionAttempt(exit: false);
     _connectFutureWait = 0;
 
     _defaultDomain = _address.value1;
@@ -594,9 +590,9 @@ class Transport {
         if (substring.isEmpty) return;
         final element = xml.XmlDocument.parse(substring).rootElement;
         if (element.getAttribute('xmlns') == null) {
-          if (element.qualifiedName == 'message' ||
-              element.qualifiedName == 'presence' ||
-              element.qualifiedName == 'iq') {
+          if (element.localName == 'message' ||
+              element.localName == 'presence' ||
+              element.localName == 'iq') {
             element.setAttribute('xmlns', WhixpUtils.getNamespace('CLIENT'));
           } else {
             element.setAttribute(
@@ -681,7 +677,7 @@ class Transport {
   StanzaBase _buildStanza(xml.XmlElement element) {
     StanzaBase stanzaClass = StanzaBase(element: element, receive: true);
 
-    final tag = '{${element.getAttribute('xmlns')}}${element.qualifiedName}';
+    final tag = '{${element.getAttribute('xmlns')}}${element.localName}';
 
     for (final stanza in _rootStanza) {
       if (tag == stanza.tag) {
@@ -773,8 +769,8 @@ class Transport {
       _abortCompleter!.complete(_connecta!.socket.flush());
       if (_abortCompleter!.isCompleted) {
         _connecta!.destroy();
-        _cancelConnectionAttempt();
         emit('killed');
+        _cancelConnectionAttempt();
       }
     }
   }
@@ -793,7 +789,7 @@ class Transport {
   }
 
   /// Close the XML stream and wait for ack from the server for at most
-  /// [timeout] seconds. After the given number of seconds has passed
+  /// [timeout] milliseconds. After the given number of milliseconds have passed
   /// without a response from the server, or when the server successfully
   /// responds with a closure of its own stream, abort() is called.
   Future<void> disconnect({String? reason, int timeout = 2000}) async {
@@ -820,12 +816,9 @@ class Transport {
     emit('sessionEnd');
 
     if (_connecta != null) {
-      if (await _waitingQueue.isEmpty) {
-        _cancelConnectionAttempt();
-        return endStreamWait();
-      } else {
-        return consumeSend();
-      }
+      await consumeSend();
+
+      return _cancelConnectionAttempt();
     } else {
       emit<String>('disconnected', data: reason);
       return;
@@ -948,13 +941,16 @@ class Transport {
   }
 
   /// Immediately cancel the current connect() [Future].
-  void _cancelConnectionAttempt() {
+  void _cancelConnectionAttempt({bool exit = true}) {
     _currentConnectionAttempt = null;
     if (_connectionTask != null) {
       _connectionTask!.cancel();
     }
     _currentConnectionAttemptCount = 0;
     _connecta = null;
+    if (exit) {
+      io.exit(0);
+    }
   }
 
   bool _rescheduleConnectionAttempt() {
