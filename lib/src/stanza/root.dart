@@ -1,5 +1,4 @@
 import 'package:whixp/src/exception.dart';
-import 'package:whixp/src/stanza/error.dart';
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stream/base.dart';
 
@@ -51,8 +50,6 @@ abstract class RootStanza extends StanzaBase {
       if (excp.message == 'IQ error has occured') {
         final stanza = (this as IQ).replyIQ();
         stanza.transport = transport;
-        stanza.registerPlugin(StanzaError());
-        stanza.enable('error');
         final error = stanza['error'] as XMLBase;
         error['condition'] = 'undefined-condition';
         error['text'] = 'External error';
