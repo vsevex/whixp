@@ -65,11 +65,11 @@ class RosterItem {
   late final JabberID _owner;
 
   /// The last [Presence] sent to this JID.
-  Presence? lastStatus;
+  PresenceAbstract? lastStatus;
 
   /// Send a subscription request to the JID.
   void subscribe() {
-    final presence = Presence();
+    final presence = PresenceAbstract();
     presence['to'] = jid;
     presence['type'] = 'subscribe';
     if (_transport.isComponent) {
@@ -93,7 +93,7 @@ class RosterItem {
     this['pending_in'] = false;
     _unsubscribed();
 
-    final presence = Presence();
+    final presence = PresenceAbstract();
     presence['to'] = jid;
     presence['type'] = 'unavailable';
     if (_transport.isComponent) {
@@ -104,7 +104,7 @@ class RosterItem {
 
   /// Handle ack a subscription.
   void _subscribed() {
-    final presence = Presence();
+    final presence = PresenceAbstract();
     presence['to'] = jid;
     presence['type'] = 'subscribed';
     if (_transport.isComponent) {
@@ -115,7 +115,7 @@ class RosterItem {
 
   /// Unsubscribe from the JID.
   void unsubscribe() {
-    final presence = Presence();
+    final presence = PresenceAbstract();
     presence['to'] = jid;
     presence['type'] = 'unsubscribe';
     if (_transport.isComponent) {
@@ -126,7 +126,7 @@ class RosterItem {
 
   /// Handle ack an unsubscribe request.
   void _unsubscribed() {
-    final presence = Presence();
+    final presence = PresenceAbstract();
     presence['to'] = jid;
     presence['type'] = 'unsubscribed';
     if (_transport.isComponent) {
@@ -140,13 +140,13 @@ class RosterItem {
   /// If no recipient is specified, send the presence immediately. Otherwise,
   /// forward the send request to the recipient's roster entry for processing.
   void sendPresence() {
-    String? presenceFrom;
-    String? presenceTo;
+    JabberID? presenceFrom;
+    JabberID? presenceTo;
     if (_transport.isComponent) {
-      presenceFrom = _owner.toString();
+      presenceFrom = _owner;
     }
-    presenceTo = jid;
-    whixp.sendPresence(presenceFrom: presenceFrom, prsenceTo: presenceTo);
+    presenceTo = JabberID(jid);
+    whixp.sendPresence(presenceFrom: presenceFrom, presenceTo: presenceTo);
   }
 
   void sendLastPresence() {
@@ -168,7 +168,7 @@ class RosterItem {
     }
   }
 
-  void handleAvailable(Presence presence) {
+  void handleAvailable(PresenceAbstract presence) {
     final resource = JabberID(presence['from'] as String).resource;
     final data = {
       'status': presence['status'],
@@ -183,14 +183,14 @@ class RosterItem {
     final oldShow = (resources[resource] as Map?)?['show'];
     resources[resource] = data;
     if (gotOnline) {
-      whixp.transport.emit<Presence>('gotOnline', data: presence);
+      whixp.transport.emit<Presence>('gotOnline', data: Presence(presence));
     }
     if (oldShow != presence['show'] || oldStatus != presence['status']) {
-      whixp.transport.emit<Presence>('changedStatus', data: presence);
+      whixp.transport.emit<Presence>('changedStatus', data: Presence(presence));
     }
   }
 
-  void handleUnavailable(Presence presence) {
+  void handleUnavailable(PresenceAbstract presence) {
     final resource = JabberID(presence['from'] as String).resource;
     if (resources.isEmpty) {
       return;
@@ -198,44 +198,52 @@ class RosterItem {
     if (resources.containsKey(resource)) {
       resources.remove(resource);
     }
-    whixp.transport.emit<Presence>('changedStatus', data: presence);
+    whixp.transport.emit<Presence>('changedStatus', data: Presence(presence));
     if (resources.isEmpty) {
-      whixp.transport.emit<Presence>('gotOffline', data: presence);
+      whixp.transport.emit<Presence>('gotOffline', data: Presence(presence));
     }
   }
 
-  void handleSubscribe(Presence presence) {
+  void handleSubscribe(PresenceAbstract presence) {
     if (whixp.transport.isComponent) {
       if (this['from'] == null && !(this['pending_in'] as bool)) {
         this['pending_in'] = true;
-        whixp.transport
-            .emit<Presence>('rosterSubscriptionRequest', data: presence);
+        whixp.transport.emit<Presence>(
+          'rosterSubscriptionRequest',
+          data: Presence(presence),
+        );
       } else if (this['from'] != null) {
         _subscribed();
       }
     } else {
-      whixp.transport
-          .emit<Presence>('rosterSubscriptionRequest', data: presence);
+      whixp.transport.emit<Presence>(
+        'rosterSubscriptionRequest',
+        data: Presence(presence),
+      );
     }
   }
 
-  void handleSubscribed(Presence presence) {
+  void handleSubscribed(PresenceAbstract presence) {
     if (whixp.transport.isComponent) {
       if (this['to'] == null && this['pending_out'] as bool) {
         this['pending_out'] = false;
         this['to'] = true;
-        whixp.transport
-            .emit<Presence>('rosterSubscriptionAuthorized', data: presence);
+        whixp.transport.emit<Presence>(
+          'rosterSubscriptionAuthorized',
+          data: Presence(presence),
+        );
       } else if (this['from'] != null) {
         _subscribed();
       }
     } else {
-      whixp.transport
-          .emit<Presence>('rosterSubscriptionAuthorized', data: presence);
+      whixp.transport.emit<Presence>(
+        'rosterSubscriptionAuthorized',
+        data: Presence(presence),
+      );
     }
   }
 
-  void handleUnsubscribe(Presence presence) {
+  void handleUnsubscribe(PresenceAbstract presence) {
     if (whixp.transport.isComponent) {
       if (this['from'] == null && this['pending_in'] as bool) {
         this['pending_in'] = false;
@@ -243,27 +251,33 @@ class RosterItem {
       } else if (this['from'] != null) {
         this['from'] = false;
         _unsubscribed();
-        whixp.transport
-            .emit<Presence>('rosterSubscriptionRemove', data: presence);
+        whixp.transport.emit<Presence>(
+          'rosterSubscriptionRemove',
+          data: Presence(presence),
+        );
       }
     } else {
       whixp.transport
-          .emit<Presence>('rosterSubscriptionRemove', data: presence);
+          .emit<Presence>('rosterSubscriptionRemove', data: Presence(presence));
     }
   }
 
-  void handleUnsubscribed(Presence presence) {
+  void handleUnsubscribed(PresenceAbstract presence) {
     if (whixp.transport.isComponent) {
       if (this['to'] == null && this['pending_out'] as bool) {
         this['pending_out'] = false;
       } else if (this['to'] != null && this['pending_out'] as bool) {
         this['to'] = false;
-        whixp.transport
-            .emit<Presence>('rosterSubscriptionRemoved', data: presence);
+        whixp.transport.emit<Presence>(
+          'rosterSubscriptionRemoved',
+          data: Presence(presence),
+        );
       }
     } else {
-      whixp.transport
-          .emit<Presence>('rosterSubscriptionRemoved', data: presence);
+      whixp.transport.emit<Presence>(
+        'rosterSubscriptionRemoved',
+        data: Presence(presence),
+      );
     }
   }
 
@@ -317,7 +331,7 @@ class RosterItem {
   /// exists.
   void remove() {
     if (this['to'] != null) {
-      final presence = Presence();
+      final presence = PresenceAbstract();
       presence['to'] = this['to'];
       presence['type'] = 'unsubscribe';
       if (_transport.isComponent) {

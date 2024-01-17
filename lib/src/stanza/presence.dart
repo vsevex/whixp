@@ -1,10 +1,15 @@
+import 'package:meta/meta.dart';
+
+import 'package:whixp/src/plugins/delay/delay.dart';
+import 'package:whixp/src/stanza/error.dart';
+import 'package:whixp/src/stanza/implementation.dart';
 import 'package:whixp/src/stanza/root.dart';
 import 'package:whixp/src/stream/base.dart';
 import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
 
-/// XMPP's <presence> stanza allows entities to konw the status of other clients
+/// XMPP's <presence> stanza allows entities to know the status of other clients
 /// and components. Since it is currently the only multi-cast stanza in XMPP,
 /// many extensions and more information to [Presence] stanzas to broadcast
 /// to every entry in the roster, such as capabilities, music choices, or
@@ -24,13 +29,28 @@ import 'package:xml/xml.dart' as xml;
 ///   <priority>1</priority>
 /// </presence>
 /// ```
-class Presence extends RootStanza {
+class Presence extends StanzaConcrete {
   /// [showtypes] may be one of: dnd, chat, xa, away.
   /// [types] may be one of: available, unavailable, error or probe.
   ///
   /// All parameters are extended from [RootStanza]. For more information please
   /// take a look at [RootStanza].
-  Presence({
+  Presence(super.concrete);
+
+  /// Creates a new reply [Presence] from the current stanza.
+  Presence reply({bool clear = true}) =>
+      Presence((concrete as PresenceAbstract).replyPresence(clear: clear));
+
+  /// Get the [Presence] [type].
+  String get type => concrete['type'] as String;
+
+  /// Get the [Presence] [priority].
+  String? get priority => concrete['priority'] as String;
+}
+
+@internal
+class PresenceAbstract extends RootStanza {
+  PresenceAbstract({
     this.showtypes = const {'dnd', 'chat', 'xa', 'away'},
     super.transport,
     super.stanzaType,
@@ -82,6 +102,26 @@ class Presence extends RootStanza {
       }
     }
 
+    addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
+      const Symbol('type'): (args, base) {
+        String out = base.getAttribute('type');
+        if (out.isEmpty && showtypes.contains(base['show'])) {
+          out = this['show'] as String;
+        }
+        if (out.isEmpty) {
+          out = 'available';
+        }
+        return out;
+      },
+      const Symbol('priority'): (args, base) {
+        String presence = base.getSubText('priority') as String;
+        if (presence.isEmpty) {
+          presence = '0';
+        }
+        return presence;
+      },
+    });
+
     addSetters(
       <Symbol, void Function(dynamic value, dynamic args, XMLBase base)>{
         const Symbol('type'): (value, args, base) {
@@ -95,28 +135,17 @@ class Presence extends RootStanza {
             base['show'] = value;
           }
         },
+        const Symbol('priority'): (value, args, base) => base.setSubText(name),
+        const Symbol('show'): (value, args, base) {
+          final show = value as String?;
+          if (show == null || show.isEmpty) {
+            deleteSub('show');
+          } else if (showtypes.contains(show)) {
+            setSubText('show', text: show);
+          }
+        },
       },
     );
-
-    addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
-      const Symbol('type'): (args, base) {
-        String out = base.getAttribute('type');
-        if (out.isEmpty && showtypes.contains(base['show'])) {
-          out = this['show'] as String;
-        }
-        if (out.isEmpty) {
-          out = 'available';
-        }
-        return out;
-      },
-      const Symbol('priority'): (args, base) {
-        int? priority;
-        if ((base.getSubText('priority') as String).isNotEmpty) {
-          priority = int.parse(base.getSubText('priority') as String);
-        }
-        return priority;
-      },
-    });
 
     addDeleters(
       <Symbol, void Function(dynamic args, XMLBase base)>{
@@ -126,13 +155,19 @@ class Presence extends RootStanza {
         },
       },
     );
+
+    /// Register all required stanzas beforehand, so we won't need to declare
+    /// them one by one whenever there is a need to specific stanza.
+    ///
+    /// If you have not used the specified stanza, then you have to enable the
+    /// stanza through the usage of `pluginAttribute` parameter.
+    registerPlugin(StanzaError());
+    registerPlugin(DelayStanza());
   }
 
-  /// Overrides [reply].
-  ///
-  /// Creates a new reply [Presence] from [this].
-  Presence replyPresence({bool clear = true}) {
-    final presence = super.reply<Presence>(copiedStanza: copy(), clear: clear);
+  PresenceAbstract replyPresence({bool clear = true}) {
+    final presence =
+        super.reply<PresenceAbstract>(copiedStanza: copy(), clear: clear);
 
     if (this['type'] == 'unsubscribe') {
       presence['type'] = 'unsubscribed';
@@ -144,12 +179,12 @@ class Presence extends RootStanza {
   }
 
   @override
-  Presence copy({
+  PresenceAbstract copy({
     xml.XmlElement? element,
     XMLBase? parent,
     bool receive = false,
   }) =>
-      Presence(
+      PresenceAbstract(
         transport: transport,
         receive: receive,
         includeNamespace: includeNamespace,
