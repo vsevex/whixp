@@ -3,22 +3,15 @@ import 'package:test/test.dart';
 
 import 'package:whixp/src/plugins/disco/disco.dart';
 import 'package:whixp/src/stanza/iq.dart';
-import 'package:whixp/src/stream/base.dart';
 
 import 'test_base.dart';
 
 void main() {
   late IQ iq;
-  final information = DiscoInformationAbstract();
-  final items = DiscoItemsAbstract();
 
   IQ copyIQ(IQ iq) => IQ(generateID: false, element: iq.element);
 
-  setUp(() {
-    iq = IQ(generateID: false)
-      ..registerPlugin(information)
-      ..registerPlugin(items);
-  });
+  setUp(() => iq = IQ(generateID: false));
 
   group('disco extension stanza creating and manipulating test cases', () {
     test('disco#info query without node', () {

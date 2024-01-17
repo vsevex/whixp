@@ -2,17 +2,13 @@ import 'package:test/test.dart';
 
 import 'package:whixp/src/plugins/form/dataforms.dart';
 import 'package:whixp/src/stanza/message.dart';
-import 'package:whixp/src/stream/base.dart';
 
 import 'test_base.dart';
 
 void main() {
   late Message message;
 
-  setUp(() {
-    message = Message()
-      ..registerPlugin(FormAbstract()..registerPlugin(FormFieldAbstract()));
-  });
+  setUp(() => message = Message());
 
   group('data forms extension stanza manipulation test cases', () {
     test(
