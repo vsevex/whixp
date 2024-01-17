@@ -23,6 +23,12 @@ class Whixp extends WhixpBase {
   /// Timeout for establishing the connection (in milliseconds) is represented
   /// by the [connectionTimeout] parameter. Defaults to `2000`.
   ///
+  /// If [whitespaceKeepAlive] is true, then socket periodically send a
+  /// whitespace character over the wire to keep the connection alive.
+  ///
+  /// The default interval between keepalive signals when [whitespaceKeepAlive]
+  /// is enabled. Represents in seconds. Defaults to `300`.
+  ///
   /// [maxReconnectionAttempt] is the maximum number of reconnection attempts.
   /// This parameter is optional and defaults to `3`.
   ///
@@ -47,10 +53,12 @@ class Whixp extends WhixpBase {
     String language = 'en',
     super.port,
     super.connectionTimeout,
+    super.whitespaceKeepAliveInterval,
     super.maxReconnectionAttempt,
     super.useIPv6,
     super.useTLS,
     super.disableStartTLS,
+    super.whitespaceKeepAlive,
     super.logger,
     super.certs,
   }) : super(jabberID: jabberID) {
@@ -132,10 +140,9 @@ class Whixp extends WhixpBase {
   }
 
   void _handleSessionBind(String jid) =>
-      _clientRoster = _roster[jid] as roster.RosterNode;
+      _clientRoster = roster[jid] as rost.RosterNode;
 
   void _handleRoster(StanzaBase iq) {
-    iq.registerPlugin(Roster());
     iq.enable('roster');
     final stanza = iq['roster'] as XMLBase;
     if (iq['type'] == 'set') {
@@ -169,11 +176,10 @@ class Whixp extends WhixpBase {
 
     if (iq['type'] == 'set') {
       final response = IQ(
-        stanzaTo: iq['from'] as String?,
+        stanzaTo: iq['from'] != null ? JabberID(iq['from'] as String) : null,
         stanzaID: iq['id'] as String?,
         stanzaType: 'result',
       );
-      response.registerPlugin(Roster());
       response.enable('roster');
       response.sendIQ();
     }
