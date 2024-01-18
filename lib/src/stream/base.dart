@@ -1216,7 +1216,7 @@ class XMLBase {
     }
     if (item.value2 != null) {
       final base = item.value2!;
-      element?.children.add(base.element!.copy());
+      element?.children.add(base.element!);
       if (base == pluginTagMapping[base._tagName]) {
         _initPlugin(
           base.pluginAttribute,
