@@ -128,14 +128,15 @@ void main() {
         ],
       };
 
-      form.setFields(fields);
-      form.setType('submit');
-      form.setValues({
-        'v1': 'username',
-        'v2': 'passwd',
-        'v3': 'Message\nagain',
-        'v4': 'helemi',
-      });
+      form
+        ..setFields(fields)
+        ..setType('submit')
+        ..setValues({
+          'v1': 'username',
+          'v2': 'passwd',
+          'v3': 'Message\nagain',
+          'v4': 'helemi',
+        });
 
       check(
         message,

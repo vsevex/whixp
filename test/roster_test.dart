@@ -2,27 +2,20 @@ import 'package:test/test.dart';
 
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stanza/roster.dart';
-import 'package:whixp/src/stream/base.dart';
 
 import 'test_base.dart';
 
 void main() {
-  late final IQ iq;
-  late final Roster roster;
-  late final RosterItem item;
+  late IQ iq;
 
-  setUpAll(() {
+  setUp(() {
     iq = IQ(generateID: false);
-    roster = Roster();
-    item = RosterItem();
-
-    registerStanzaPlugin(iq, roster);
-    registerStanzaPlugin(roster, item, iterable: true);
+    iq.enable('roster');
   });
 
   group('iq roster test cases', () {
     test('must properly add items to a roster stanza', () {
-      (iq['roster'] as XMLBase)['items'] = {
+      (iq['roster'] as Roster)['items'] = {
         'vsevex@example.com': {
           'name': 'Vsevolod',
           'subscription': 'both',
@@ -36,8 +29,8 @@ void main() {
       };
 
       check(
-        iq['roster'] as XMLBase,
-        '<query xmlns="jabber:iq:roster"><item jid="vsevex@example.com" name="Vsevolod" subscription="both"><group>cart</group><group>hella</group></item><item jid="alyosha@example.com" name="Alyosha" subscription="both"><group>gup</group></item></query>',
+        iq,
+        '<iq><query xmlns="jabber:iq:roster"><item jid="vsevex@example.com" name="Vsevolod" subscription="both"><group>cart</group><group>hella</group></item><item jid="alyosha@example.com" name="Alyosha" subscription="both"><group>gup</group></item></query></iq>',
       );
     });
 
@@ -63,7 +56,7 @@ void main() {
         },
       };
 
-      (iq['roster'] as XMLBase)['items'] = {
+      (iq['roster'] as Roster)['items'] = {
         'vsevex@example.com': {
           'name': 'Vsevolod',
           'subscription': 'both',
@@ -76,11 +69,11 @@ void main() {
         },
       };
 
-      expect((iq['roster'] as XMLBase)['items'], items);
+      expect((iq['roster'] as Roster)['items'], items);
     });
 
     test('must properly delete roster items', () {
-      (iq['roster'] as XMLBase)['items'] = {
+      (iq['roster'] as Roster)['items'] = {
         'vsevex@example.com': {
           'name': 'Vsevolod',
           'subscription': 'both',
@@ -93,11 +86,10 @@ void main() {
         },
       };
 
-      (iq['roster'] as XMLBase).delete('items');
-
+      (iq['roster'] as Roster).delete('items');
       check(
-        iq['roster'] as XMLBase,
-        '<query xmlns="jabber:iq:roster"/>"',
+        iq,
+        '<iq><query xmlns="jabber:iq:roster"/></iq>',
       );
     });
   });

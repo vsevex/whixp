@@ -38,13 +38,35 @@ class Roster extends XMLBase {
   ///   },
   /// }; /// ...sets items of the [Roster] stanza in the IQ stanza
   /// ```
-  Roster()
-      : super(
+  Roster({
+    super.pluginTagMapping,
+    super.pluginAttributeMapping,
+    super.getters,
+    super.setters,
+    super.deleters,
+    super.element,
+    super.parent,
+  }) : super(
           name: 'query',
           namespace: WhixpUtils.getNamespace('ROSTER'),
           pluginAttribute: 'roster',
           interfaces: {'items', 'ver'},
         ) {
+    addGetters(
+      <Symbol, dynamic Function(dynamic args, XMLBase base)>{
+        const Symbol('ver'): (args, base) => base.getAttribute('ver'),
+        const Symbol('items'): (args, base) {
+          final items = <String, Map<String, dynamic>>{};
+          for (final item in base['substanzas'] as List<XMLBase>) {
+            if (item is RosterItem) {
+              items[item['jid'] as String] = item.values;
+            }
+          }
+          return items;
+        },
+      },
+    );
+
     addSetters(<Symbol,
         void Function(dynamic value, dynamic args, XMLBase base)>{
       const Symbol('ver'): (value, args, base) {
@@ -64,25 +86,10 @@ class Roster extends XMLBase {
       },
     });
 
-    addGetters(
-      <Symbol, dynamic Function(dynamic args, XMLBase base)>{
-        const Symbol('ver'): (args, base) => base.getAttribute('ver'),
-        const Symbol('items'): (args, base) {
-          final items = <String, Map<String, dynamic>>{};
-          for (final item in base['substanzas'] as List) {
-            if (item is RosterItem) {
-              items[item['jid'] as String] = item.values;
-            }
-          }
-          return items;
-        },
-      },
-    );
-
     addDeleters(
       <Symbol, void Function(dynamic args, XMLBase base)>{
         const Symbol('items'): (args, base) {
-          for (final item in base['substanzas'] as List) {
+          for (final item in base['substanzas'] as List<XMLBase>) {
             if (item is RosterItem) {
               base.element!.children.remove(item.element);
             }
@@ -90,7 +97,20 @@ class Roster extends XMLBase {
         },
       },
     );
+
+    registerPlugin(RosterItem(), iterable: true);
   }
+
+  @override
+  Roster copy({xml.XmlElement? element, XMLBase? parent}) => Roster(
+        pluginTagMapping: pluginTagMapping,
+        pluginAttributeMapping: pluginAttributeMapping,
+        getters: getters,
+        setters: setters,
+        deleters: deleters,
+        element: element,
+        parent: parent,
+      );
 }
 
 /// Represents an individual roster item within the roster query.
@@ -101,10 +121,16 @@ class RosterItem extends XMLBase {
   /// final item = RosterItem();
   /// roster.registerPlugin(item);
   /// ```
-  RosterItem({super.includeNamespace = false})
-      : super(
+  RosterItem({
+    super.getters,
+    super.setters,
+    super.deleters,
+    super.element,
+    super.parent,
+  }) : super(
           name: 'item',
           namespace: WhixpUtils.getNamespace('ROSTER'),
+          includeNamespace: false,
           pluginAttribute: 'item',
           interfaces: {
             'jid',
@@ -119,8 +145,7 @@ class RosterItem extends XMLBase {
       const Symbol('jid'): (args, base) => base.getAttribute('jid'),
       const Symbol('groups'): (args, base) {
         final groups = <String>[];
-        for (final group
-            in base.element!.findAllElements('group', namespace: namespace)) {
+        for (final group in base.element!.findAllElements('group')) {
           if (group.innerText.isNotEmpty) {
             groups.add(group.innerText);
           }
@@ -156,4 +181,13 @@ class RosterItem extends XMLBase {
       },
     );
   }
+
+  @override
+  RosterItem copy({xml.XmlElement? element, XMLBase? parent}) => RosterItem(
+        getters: getters,
+        setters: setters,
+        deleters: deleters,
+        element: element,
+        parent: parent,
+      );
 }

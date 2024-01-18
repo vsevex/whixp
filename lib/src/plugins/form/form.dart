@@ -101,7 +101,6 @@ class FormAbstract extends XMLBase {
     if (_title != null) {
       this['title'] = _title;
     }
-
     addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
       const Symbol('instructions'): (args, base) => instructions,
       const Symbol('fields'): (args, base) => fields,
@@ -172,7 +171,7 @@ class FormAbstract extends XMLBase {
       if (!this.fields.containsKey(field.key)) {
         fields[field.key] = addField(variable: field.key);
       }
-      this.fields[field.key]!['value'] = values[field.key];
+      this.fields[field.key]?['value'] = values[field.key];
     }
   }
 
