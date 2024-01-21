@@ -1,7 +1,7 @@
 part of 'utils.dart';
 
 /// ### Common namespace constants from the XMPP RFCs and XEPs
-///
+/// * _[ATOM] - Atom Syndication Format namespae from RFC 4287.
 /// * _[HTTPBIND]_ - HTTP BIND namespace from XEP-0124.
 /// * _[CLIENT]_ - Main XMPP client namespace.
 /// * _[AUTH]_ - Legacy authentication namespace.
@@ -24,6 +24,7 @@ part of 'utils.dart';
 /// * _[VERSION]_ - XMPP Version namespace.
 /// * _[STANZAS]_ - XMPP Stanzas namespace.
 final _namespace = <String, String>{
+  'ATOM': "http://www.w3.org/2005/Atom",
   'HTTPBIND': "http://jabber.org/protocol/httpbind",
   'CLIENT': "jabber:client",
   'AUTH': "jabber:iq:auth",
@@ -38,6 +39,7 @@ final _namespace = <String, String>{
   'SASL': "urn:ietf:params:xml:ns:xmpp-sasl",
   'STREAM': "urn:ietf:params:xml:ns:xmpp-streams",
   'FORMS': "jabber:x:data",
+  'PUBSUB': "http://jabber.org/protocol/pubsub",
   'JABBER_STREAM': "http://etherx.jabber.org/streams",
   'FRAMING': "urn:ietf:params:xml:ns:xmpp-framing",
   'BIND': "urn:ietf:params:xml:ns:xmpp-bind",
