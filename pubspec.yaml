@@ -9,7 +9,6 @@ environment:
   sdk: ">=3.2.3"
 
 dependencies:
-  args: ^2.4.2
   connecta: ^1.0.1
   crypto: ^3.0.3
   dartz: ^0.10.1
