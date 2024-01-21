@@ -1,4 +1,4 @@
-# 2.0.0+beta1 - 2024-01-22
+# 2.0.0-beta1 - 2024-01-22
 
 Everything is changed. I mean, literally everything. Can not even put it all into words, especially in here. So, go ahead and give it a try.
 
