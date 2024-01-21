@@ -4,7 +4,6 @@ part of 'ping.dart';
 /// be canceled without the application's knowledge. For identifying broken
 /// connections, ping stanzas are an alternative to whitespace-based keepalive
 /// approaches.
-@internal
 class PingStanza extends XMLBase {
   /// ```xml
   /// ping

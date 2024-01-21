@@ -21,7 +21,7 @@ abstract class RootStanza extends StanzaBase {
     super.subInterfaces,
     super.languageInterfaces,
     super.receive,
-    super.includeNamespace = true,
+    super.includeNamespace,
     super.types,
     super.getters,
     super.setters,

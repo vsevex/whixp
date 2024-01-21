@@ -380,8 +380,8 @@ void main() {
         namespace: 'test',
         pluginAttribute: 'extended',
         interfaces: {'extended'},
-        isExtension: true,
         includeNamespace: false,
+        isExtension: true,
         setters: {
           const Symbol('extended'): (value, args, base) =>
               base.element!.innerText = value as String,
@@ -435,7 +435,7 @@ void main() {
       stanza['bar'] = 'a';
       (stanza['foo2'] as XMLBase)['baz'] = 'b';
       substanza['bar'] = 'c';
-      stanza.add(Tuple2(null, substanza));
+      stanza.add(substanza);
 
       expect(
         stanza.values,
@@ -484,7 +484,7 @@ void main() {
       registerStanzaPlugin(stanza, plugin);
 
       final substanza = stanza.copy();
-      stanza.add(Tuple2(null, substanza));
+      stanza.add(substanza);
       stanza.values = {
         'bar': 'a',
         'baz': 'b',
@@ -580,10 +580,10 @@ void main() {
         registerStanzaPlugin(stanza, multistanzaFirst, iterable: true);
         registerStanzaPlugin(stanza, multistanzaSecond, iterable: true);
 
-        stanza.add(Tuple2(null, multistanzaFirst));
-        stanza.add(Tuple2(null, multistanzaSecond));
-        stanza.add(Tuple2(null, multistanzaThird));
-        stanza.add(Tuple2(null, multistanzaFourth));
+        stanza.add(multistanzaFirst);
+        stanza.add(multistanzaSecond);
+        stanza.add(multistanzaThird);
+        stanza.add(multistanzaFourth);
 
         tester.check(
           stanza,

@@ -180,7 +180,7 @@ class _Multi extends XMLBase {
     final parent = failWithoutParent(base);
     _deleters[Symbol(pluginAttribute)]?.call(language, base);
     for (final sub in value) {
-      parent.add(Tuple2(null, sub as XMLBase));
+      parent.add(sub as XMLBase);
     }
   }
 
@@ -423,7 +423,7 @@ class XMLBase {
 
     /// Growable iterable fix
     for (final child in children) {
-      _initPlugin(
+      initPlugin(
         child.value2!.pluginAttribute,
         existingXML: child.value1,
         reuse: false,
@@ -435,6 +435,7 @@ class XMLBase {
   int _index = 0;
 
   /// The XML tag name of the element, not including any namespace prefixes.
+  @internal
   final String name;
 
   /// The XML namespace for the element. Given `<foo xmlns="bar" />`, then
@@ -442,14 +443,17 @@ class XMLBase {
   ///
   /// Defaults namespace in the constructor scope to `jabber:client` since this
   /// is being used in an XMPP library.
+  @internal
   late String namespace;
 
   /// Unique identifiers of plugins across [XMLBase] classes.
+  @internal
   final String pluginAttribute;
 
   /// [XMLBase] subclasses that are intended to be an iterable group of items,
   /// the `pluginMultiAttribute` value defines an interface for the parent
   /// stanza which returns the entire group of matching `substanzas`.
+  @internal
   final String? pluginMultiAttribute;
 
   /// In some cases you may wish to override the behaviour of one of the
@@ -462,15 +466,18 @@ class XMLBase {
   /// ```
   ///
   /// Getting and deleting the `condition` interface would not be affected.
+  @internal
   final List<String> overrides;
 
   /// A mapping of root element tag names
   /// (in `<$name xmlns="$namespace"/>` format) to the plugin classes
   /// responsible for them.
+  @internal
   late final Map<String, XMLBase> pluginTagMapping;
 
   /// When there is a need to indicate initialize plugin or get plugin we will
   /// use [pluginAttributeMapping] keeper for this.
+  @internal
   late final Map<String, XMLBase> pluginAttributeMapping;
 
   /// The set of keys that the stanza provides for accessing and manipulating
@@ -482,15 +489,18 @@ class XMLBase {
   /// the underlaying XML object. Using this [Set], the text of these
   /// subelements may be set, retrieved, or removed without needing to define
   /// custom methods.
+  @internal
   final Set<String> subInterfaces;
 
   /// A subset of [interfaces] which maps to the presence of subelements to
   /// boolean values. Using this [Set] allows for quickly checking for the
   /// existence of empty subelements.
+  @internal
   final Set<String> boolInterfaces;
 
   /// A subset of [interfaces] which maps to the presence of subelements to
   /// language values.
+  @internal
   final Set<String> languageInterfaces;
 
   /// A [Map] of interface operations to the overriding functions.
@@ -501,13 +511,16 @@ class XMLBase {
   /// ```dart
   /// log(pluginOverrides); /// outputs {'body': Function()}
   /// ```
+  @internal
   late final Map<String, String> pluginOverrides;
 
   /// The set of stanza classes that can be iterated over using the `substanzas`
   /// interface.
+  @internal
   late final Set<XMLBase> pluginIterables;
 
   /// Declares if stanza is incoming or outgoing stanza. Defaults to false.
+  @internal
   final bool receive;
 
   /// If you need to add a new interface to an existing stanza, you can create
@@ -515,11 +528,13 @@ class XMLBase {
   /// [pluginAttribute] value to the desired interface name, and that it is the
   /// only interface listed in [interfaces]. Requests for the new interface
   /// from the parent stanza will be passed to the plugin directly.
+  @internal
   final bool isExtension;
 
   /// Indicates that this stanza or stanza plugin should include [namespace].
   /// You need to specify this value in order to add namespace to your stanza,
   /// 'cause defaults to `false`.
+  @internal
   final bool includeNamespace;
 
   /// The helper [Map] contains all the required `setter` methods when there is
@@ -536,6 +551,7 @@ class XMLBase {
   late final Map<Symbol, _GetterOrDeleter> _deleters =
       <Symbol, _GetterOrDeleter>{};
 
+  @internal
   final iterables = <XMLBase>[];
 
   /// Keeps all initialized plugins across stanza.
@@ -545,9 +561,11 @@ class XMLBase {
   final _loadedPlugins = <String>{};
 
   /// The underlying [element] for the stanza.
+  @internal
   xml.XmlElement? element;
 
   /// The parent [XMLBase] element for the stanza.
+  @internal
   final XMLBase? parent;
 
   /// Underlying [Transport] for this stanza class. Helps to interact with
@@ -564,6 +582,7 @@ class XMLBase {
   /// Will return `true` if XML was generated according to the stanza's
   /// definition instead of building a stanza object from an existing XML
   /// object.
+  @internal
   bool setup([xml.XmlElement? element]) {
     if (this.element != null) {
       return false;
@@ -596,14 +615,16 @@ class XMLBase {
   }
 
   /// Enables and initializes a stanza plugin.
+  @internal
   XMLBase enable(String attribute, [String? language]) =>
-      _initPlugin(attribute, language: language);
+      initPlugin(attribute, language: language);
 
   /// Responsible to retrieve a stanza plugin through the passed [name] and
   /// [language].
   ///
   /// If [check] is true, then the method returns null instead of creating the
   /// object.
+  @internal
   XMLBase? getPlugin(String name, {String? language, bool check = false}) {
     /// If passed `language` is null, then try to retrieve it through built-in
     /// method.
@@ -621,19 +642,20 @@ class XMLBase {
       if (_plugins[Tuple2(name, '')] != null) {
         return _plugins[Tuple2(name, '')];
       } else {
-        return check ? null : _initPlugin(name, language: lang);
+        return check ? null : initPlugin(name, language: lang);
       }
     } else {
       if (_plugins[Tuple2(name, lang)] != null) {
         return _plugins[Tuple2(name, lang)];
       } else {
-        return check ? null : _initPlugin(name, language: lang);
+        return check ? null : initPlugin(name, language: lang);
       }
     }
   }
 
   /// Responsible to enable and initialize a stanza plugin.
-  XMLBase _initPlugin(
+  @internal
+  XMLBase initPlugin(
     String attribute, {
     String? language,
     xml.XmlElement? existingXML,
@@ -672,7 +694,7 @@ class XMLBase {
     if (pluginIterables.contains(pluginClass)) {
       iterables.add(plugin);
       if (pluginClass.pluginMultiAttribute != null) {
-        _initPlugin(pluginClass.pluginMultiAttribute!);
+        initPlugin(pluginClass.pluginMultiAttribute!);
       }
     }
 
@@ -691,6 +713,7 @@ class XMLBase {
   ///
   /// [String] or [Map] of String should be returned. If language is not defined
   /// then all sub texts will be returned.
+  @internal
   dynamic getSubText(
     String name, {
     String def = '',
@@ -769,6 +792,7 @@ class XMLBase {
   ///
   /// If the [text] is set to an empty string, or null, then the element will be
   /// removed, unless [keep] is set to `true`.
+  @internal
   xml.XmlNode? setSubText(
     String name, {
     String? text,
@@ -860,6 +884,7 @@ class XMLBase {
   /// If the element is in a path, then any parent elements that become empty
   /// after deleting the element may also be deleted if requested by setting
   /// [all] to `true`.
+  @internal
   void deleteSub(String name, {bool all = false, String? language}) {
     final path = _fixNamespace(name, split: true).value2!;
     final originalTarget = path.last;
@@ -934,6 +959,7 @@ class XMLBase {
   ///
   /// In case the attribute has not been set, a [def] value can be returned
   /// instead. An empty string is returned if not other default is supplied.
+  @internal
   String getAttribute(String name, [String def = '']) {
     if (element == null) return def;
     return element!.getAttribute(name == 'lang' ? 'xml:lang' : name) ?? def;
@@ -943,6 +969,7 @@ class XMLBase {
   ///
   /// If the new [value] is null or an empty string, then the attribute will be
   /// removed.
+  @internal
   void setAttribute(
     String attribute, [
     String? value,
@@ -955,6 +982,7 @@ class XMLBase {
 
   /// Deletes attribute under [name] If there is not [element] associated,
   /// returns from the function.
+  @internal
   void deleteAttribute(String name) {
     if (element == null) return;
     if (element!.getAttribute(name) != null) element!.removeAttribute(name);
@@ -1140,6 +1168,7 @@ class XMLBase {
   /// Stanza interfaces are typically mapped directly to the underlying XML
   /// object, but can be overridden by the presence of [noSuchMethod] by adding
   /// [Function] with [Symbol] key under [gettersAndSetters] [Map].
+  @internal
   void delete(String attribute) {
     final fullAttribute = attribute;
     final attributeLanguage = '$attribute|'.split('|');
@@ -1206,19 +1235,33 @@ class XMLBase {
   /// iterable stanzas.
   ///
   /// Allows stanza objects to be used like lists.
-  XMLBase add(Tuple2<xml.XmlElement?, XMLBase?> item) {
-    if (item.value1 != null) {
-      if (item.value1!.nodeType == xml.XmlNodeType.ELEMENT) {
-        return _addXML(item.value1!);
+  XMLBase add(dynamic item) {
+    late Tuple2<xml.XmlElement?, XMLBase?> tuple;
+    if (item is xml.XmlElement) {
+      tuple = Tuple2(item, null);
+    } else {
+      try {
+        tuple = Tuple2(null, item as XMLBase);
+      } on Exception {
+        if (dynamic is! XMLBase || dynamic is! xml.XmlElement) {
+          throw ArgumentError(
+            'The item that is going to be added should be either XMLBase or Xml Element',
+          );
+        }
+      }
+    }
+    if (tuple.value1 != null) {
+      if (tuple.value1!.nodeType == xml.XmlNodeType.ELEMENT) {
+        return _addXML(tuple.value1!);
       } else {
         throw ArgumentError('The provided element is not in type of XmlNode');
       }
     }
-    if (item.value2 != null) {
-      final base = item.value2!;
+    if (tuple.value2 != null) {
+      final base = tuple.value2!;
       element?.children.add(base.element!);
       if (base == pluginTagMapping[base._tagName]) {
-        _initPlugin(
+        initPlugin(
           base.pluginAttribute,
           existingXML: base.element,
           element: base,
@@ -1228,7 +1271,7 @@ class XMLBase {
         iterables.add(base);
         if (base.pluginMultiAttribute != null &&
             base.pluginMultiAttribute!.isNotEmpty) {
-          _initPlugin(base.pluginMultiAttribute!);
+          initPlugin(base.pluginMultiAttribute!);
         }
       } else {
         iterables.add(base);
@@ -1272,6 +1315,7 @@ class XMLBase {
   }
 
   /// Getter for stanza plugins list.
+  @internal
   Map<Tuple2<String, String>, XMLBase> get plugins => _plugins;
 
   /// Compares a stanza object with an XPath-like expression.
@@ -1280,6 +1324,7 @@ class XMLBase {
   /// succesfull.
   ///
   /// The XPath expression may include checks for stanza attributes.
+  @internal
   bool match(Tuple2<String?, List<String>?> xPath) {
     late List<String> xpath;
     if (xPath.value1 != null) {
@@ -1356,6 +1401,7 @@ class XMLBase {
   /// Returns the names of all stanza interfaces provided by the stanza object.
   ///
   /// Allows stanza objects to be used as [Map].
+  @internal
   List<String> get keys {
     final buffer = <String>[];
     for (final x in interfaces) {
@@ -1465,6 +1511,7 @@ class XMLBase {
   }
 
   /// Remove all XML element contents and plugins.
+  @internal
   void clear() {
     element!.children.clear();
 
@@ -1475,6 +1522,7 @@ class XMLBase {
 
   /// Returns a JSON/Map version of the XML content exposed through the stanza's
   /// interfaces.
+  @internal
   Map<String, dynamic> get values => _values;
 
   /// Set multiple stanza interface [values] using [Map].
@@ -1483,12 +1531,15 @@ class XMLBase {
   set values(Map<String, dynamic> values) => _values = values;
 
   /// Getter for private [Map] [_getters].
+  @internal
   Map<Symbol, _GetterOrDeleter> get getters => _getters;
 
   /// Getter for private [Map] [_setters].
+  @internal
   Map<Symbol, _Setter> get setters => _setters;
 
   /// Getter for private [Map] [_deleters].
+  @internal
   Map<Symbol, _GetterOrDeleter> get deleters => _deleters;
 
   /// You need to override this method in order to create a copy from an
@@ -1504,6 +1555,7 @@ class XMLBase {
   ///     SimpleStanza(element: element, parent: parent);
   /// }
   /// ```
+  @internal
   XMLBase copy({xml.XmlElement? element, XMLBase? parent}) => XMLBase(
         name: name,
         namespace: namespace,
@@ -1537,6 +1589,7 @@ class XMLBase {
   ///   base.element.children!.remove(someChild); /// calling "value" getter will remove child
   /// }});
   /// ```
+  @internal
   void addGetters(Map<Symbol, _GetterOrDeleter> getters) =>
       _getters.addAll(getters);
 
@@ -1550,6 +1603,7 @@ class XMLBase {
   ///   base.element.children!.remove(someChild); /// calling "value" setter will remove child
   /// }});
   /// ```
+  @internal
   void addSetters(Map<Symbol, _Setter> setters) => _setters.addAll(setters);
 
   /// Adds custom deleter functions to the [XMLBase] class, allowing users to
@@ -1563,6 +1617,7 @@ class XMLBase {
   ///   base.element.children!.remove(someChild); /// calling "value" setter will remove child
   /// }});
   /// ```
+  @internal
   void addDeleters(Map<Symbol, _GetterOrDeleter> deleters) =>
       _deleters.addAll(deleters);
 
@@ -1586,6 +1641,7 @@ extension RegisterStanza on XMLBase {
   /// [overrides] flag indicates if the plugin should be allowed to override the
   /// interface handlers for the parent stanza, based on the plugin's
   /// [overrides] field.
+  @internal
   void registerPlugin(
     XMLBase plugin, {
     bool iterable = false,

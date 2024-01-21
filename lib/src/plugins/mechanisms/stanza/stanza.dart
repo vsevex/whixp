@@ -1,4 +1,3 @@
-import 'package:dartz/dartz.dart';
 import 'package:meta/meta.dart';
 
 import 'package:whixp/src/stream/base.dart';
@@ -35,7 +34,7 @@ class Mechanisms extends XMLBase {
               for (final value in values as List<String>) {
                 final mech = xml.XmlElement(xml.XmlName('mechanism'));
                 mech.innerText = value;
-                base.add(Tuple2(mech, null));
+                base.add(mech);
               }
             },
           },

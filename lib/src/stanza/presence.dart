@@ -1,8 +1,5 @@
-import 'package:meta/meta.dart';
-
 import 'package:whixp/src/plugins/delay/delay.dart';
 import 'package:whixp/src/stanza/error.dart';
-import 'package:whixp/src/stanza/implementation.dart';
 import 'package:whixp/src/stanza/root.dart';
 import 'package:whixp/src/stream/base.dart';
 import 'package:whixp/src/utils/utils.dart';
@@ -29,28 +26,9 @@ import 'package:xml/xml.dart' as xml;
 ///   <priority>1</priority>
 /// </presence>
 /// ```
-class Presence extends StanzaConcrete {
-  /// [showtypes] may be one of: dnd, chat, xa, away.
-  /// [types] may be one of: available, unavailable, error or probe.
-  ///
-  /// All parameters are extended from [RootStanza]. For more information please
-  /// take a look at [RootStanza].
-  Presence(super.concrete);
-
-  /// Creates a new reply [Presence] from the current stanza.
-  Presence reply({bool clear = true}) =>
-      Presence((concrete as PresenceAbstract).replyPresence(clear: clear));
-
-  /// Get the [Presence] [type].
-  String get type => concrete['type'] as String;
-
-  /// Get the [Presence] [priority].
-  String? get priority => concrete['priority'] as String;
-}
-
-@internal
-class PresenceAbstract extends RootStanza {
-  PresenceAbstract({
+class Presence extends RootStanza {
+  Presence({
+    /// [showtypes] may be one of: dnd, chat, xa, away.
     this.showtypes = const {'dnd', 'chat', 'xa', 'away'},
     super.transport,
     super.stanzaType,
@@ -165,9 +143,9 @@ class PresenceAbstract extends RootStanza {
     registerPlugin(DelayStanza());
   }
 
-  PresenceAbstract replyPresence({bool clear = true}) {
-    final presence =
-        super.reply<PresenceAbstract>(copiedStanza: copy(), clear: clear);
+  /// Creates a new reply [Presence] from the current stanza.
+  Presence replyPresence({bool clear = true}) {
+    final presence = super.reply<Presence>(copiedStanza: copy(), clear: clear);
 
     if (this['type'] == 'unsubscribe') {
       presence['type'] = 'unsubscribed';
@@ -179,12 +157,12 @@ class PresenceAbstract extends RootStanza {
   }
 
   @override
-  PresenceAbstract copy({
+  Presence copy({
     xml.XmlElement? element,
     XMLBase? parent,
     bool receive = false,
   }) =>
-      PresenceAbstract(
+      Presence(
         transport: transport,
         receive: receive,
         includeNamespace: includeNamespace,
@@ -202,5 +180,6 @@ class PresenceAbstract extends RootStanza {
         parent: parent,
       );
 
+  /// [showtypes] may be one of: dnd, chat, xa, away.
   final Set<String> showtypes;
 }

@@ -1,5 +1,3 @@
-import 'package:dartz/dartz.dart';
-
 import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/stream/base.dart';
 import 'package:whixp/src/utils/utils.dart';
@@ -80,7 +78,7 @@ class Roster extends XMLBase {
           final item = RosterItem();
           item.values = value[jid.key] as Map<String, dynamic>;
           item['jid'] = jid.key;
-          base.add(Tuple2(null, item));
+          base.add(item);
         }
         return;
       },

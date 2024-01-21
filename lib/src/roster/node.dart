@@ -4,16 +4,16 @@ part of 'manager.dart';
 class RosterNode {
   /// Creates an instance of [RosterNode] with the specified [Whixp] instance
   /// and [JabberID] which owns the Roster.
-  RosterNode(this.whixp, {required this.jid});
+  RosterNode(this._whixp, {required this.jid});
 
   /// The main [WhixpBase] instance. Can be client or component.
-  final WhixpBase whixp;
+  final WhixpBase _whixp;
 
   /// The JID associated and owns the roster.
   final String jid;
 
   /// The last sent [Presence] status that was broadcast to all contact JIDs.
-  PresenceAbstract? lastStatus;
+  Presence? lastStatus;
 
   /// The [RosterItem] items that this roster includes.
   final _jids = <String, RosterItem>{};
@@ -25,6 +25,7 @@ class RosterNode {
   /// authorizing a subscription request.
   bool autoSubscribe = true;
 
+  @internal
   bool ignoreUpdates = false;
 
   /// Roster's version ID.
@@ -124,7 +125,7 @@ class RosterNode {
     };
 
     _jids[bare] = RosterItem(
-      whixp,
+      _whixp,
       jid: jid,
       state: state,
       roster: this,
@@ -140,7 +141,7 @@ class RosterNode {
   /// Removes a [JabberID] from the roster (remote).
   void remove(String jid) {
     (this[jid] as RosterItem).remove();
-    if (!whixp.transport.isComponent) {
+    if (!_whixp.transport.isComponent) {
       return update(jid, subscription: 'remove');
     }
   }
@@ -155,7 +156,7 @@ class RosterNode {
     (this[jid] as RosterItem)['item'] = name;
     (this[jid] as RosterItem)['groups'] = groups ?? [];
 
-    if (!whixp.transport.isComponent) {
+    if (!_whixp.transport.isComponent) {
       final iq = IQ();
       iq.registerPlugin(roster.Roster());
       iq['type'] = 'set';
@@ -205,10 +206,10 @@ class RosterNode {
   /// forward the send request to the recipient's roster entry for processing.
   void sendPresence() {
     JabberID? presenceFrom;
-    if (whixp.transport.isComponent) {
+    if (_whixp.transport.isComponent) {
       presenceFrom = JabberID(jid);
     }
-    whixp.sendPresence(presenceFrom: presenceFrom);
+    _whixp.sendPresence(presenceFrom: presenceFrom);
   }
 
   void sendLastPresence() {
@@ -216,7 +217,7 @@ class RosterNode {
       sendPresence();
     } else {
       final presence = lastStatus;
-      if (whixp.transport.isComponent) {
+      if (_whixp.transport.isComponent) {
         presence!['from'] = jid;
       } else {
         presence!.delete('from');

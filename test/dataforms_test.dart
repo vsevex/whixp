@@ -14,7 +14,7 @@ void main() {
     test(
       'must properly set multiple instructions elements in a data form',
       () {
-        (message['form'] as FormAbstract)['instructions'] =
+        (message['form'] as Form)['instructions'] =
             'Instructions\nSecond batch';
 
         check(
@@ -25,7 +25,7 @@ void main() {
     );
 
     test('add field to a data form', () {
-      final form = message['form'] as FormAbstract;
+      final form = message['form'] as Form;
       form.addField(
         variable: 'aa',
         formType: 'text-single',
@@ -82,7 +82,7 @@ void main() {
     });
 
     test('must properly set form values', () {
-      final form = message['form'] as FormAbstract;
+      final form = message['form'] as Form;
 
       form
         ..addField(variable: 'foo', formType: 'text-single')
@@ -99,7 +99,7 @@ void main() {
     });
 
     test('setting type to "submit" must clear extra details', () {
-      final form = message['form'] as FormAbstract;
+      final form = message['form'] as Form;
       final fields = <String, Map<String, dynamic>>{};
       fields['v1'] = {
         'type': 'text-single',
@@ -145,7 +145,7 @@ void main() {
     });
 
     test('cancel type test', () {
-      final form = message['form'] as FormAbstract;
+      final form = message['form'] as Form;
       final fields = <String, Map<String, dynamic>>{};
       fields['v1'] = {
         'type': 'text-single',
@@ -184,7 +184,7 @@ void main() {
     });
 
     test('must properly assign <reported>', () {
-      final form = message['form'] as FormAbstract;
+      final form = message['form'] as Form;
       form
         ..setType('result')
         ..addReported(
@@ -202,7 +202,7 @@ void main() {
     });
 
     test('must properly set all the defined reported', () {
-      final form = message['form'] as FormAbstract;
+      final form = message['form'] as Form;
       form.setType('result');
 
       final reported = <String, Map<String, dynamic>>{

@@ -1,82 +1,10 @@
 part of 'dataforms.dart';
 
-class Form extends StanzaConcrete {
-  Form(super.concrete);
-
-  /// Whenever there is a need to send form without any additional data, this
-  /// static variable can be used.
-  static Form defaultConfig = Form(FormAbstract());
-
-  @override
-  FormAbstract get concrete => super.concrete as FormAbstract;
-
-  void addItem(Map<String, dynamic> values) => concrete.addItem(values);
-
-  void setType(String formType) => concrete.setType(formType);
-
-  void setValues(Map<String, dynamic> values) => concrete.setValues(values);
-
-  Map<String, FormFieldAbstract> get fields => concrete.fields;
-
-  Form addField({
-    String variable = '',
-    String? formType,
-    String? label,
-    String? description,
-    String? value,
-    bool? required = false,
-    List<Map<String, String>>? options,
-  }) =>
-      Form(
-        concrete.addField(
-          variable: variable,
-          formType: formType,
-          label: label,
-          description: description,
-          required: required,
-          value: value,
-          options: options,
-        ),
-      );
-
-  void setFields(Map<String, Map<String, dynamic>> fields) =>
-      concrete.setFields(fields);
-
-  void deleteFields() => concrete.deleteFields();
-
-  String get instructions => concrete.instructions;
-
-  void setInstructions(dynamic instructions) =>
-      concrete.setInstructions(instructions);
-
-  void deleteInstructions() => concrete.deleteInstructions();
-
-  Map<String, Form> get reported =>
-      concrete.reported.map((key, value) => MapEntry(key, Form(value)));
-
-  Form addReported(
-    String variable, {
-    String? formType,
-    String label = '',
-    String description = '',
-  }) =>
-      Form(
-        concrete.addReported(
-          variable,
-          formType: formType,
-          label: label,
-          description: description,
-        ),
-      );
-
-  void setReported(Map<String, Map<String, dynamic>> reported) =>
-      concrete.setReported(reported);
-}
-
-@internal
-class FormAbstract extends XMLBase {
-  FormAbstract({
+class Form extends XMLBase {
+  Form({
     String? title,
+    super.pluginTagMapping,
+    super.pluginAttributeMapping,
     super.getters,
     super.setters,
     super.deleters,
@@ -118,10 +46,14 @@ class FormAbstract extends XMLBase {
       const Symbol('fields'): (args, base) => deleteFields(),
     });
 
-    registerPlugin(FormFieldAbstract(), iterable: true);
+    registerPlugin(FormField(), iterable: true);
   }
 
   String? _title;
+
+  /// Whenever there is a need to send form without any additional data, this
+  /// static variable can be used.
+  static Form defaultConfig = Form();
 
   @override
   bool setup([xml.XmlElement? element]) {
@@ -138,7 +70,7 @@ class FormAbstract extends XMLBase {
     element!.children.add(itemElement);
     final reportedVariables = reported.keys;
     for (final variable in reportedVariables) {
-      final field = FormFieldAbstract();
+      final field = FormField();
       field._type = reported[variable]?['type'] as String;
       field['var'] = variable;
       field['value'] = values[variable];
@@ -175,10 +107,10 @@ class FormAbstract extends XMLBase {
     }
   }
 
-  Map<String, FormFieldAbstract> get fields {
-    final fields = <String, FormFieldAbstract>{};
+  Map<String, FormField> get fields {
+    final fields = <String, FormField>{};
     for (final stanza in this['substanzas'] as List<XMLBase>) {
-      if (stanza is FormFieldAbstract) {
+      if (stanza is FormField) {
         fields[stanza['var'] as String] = stanza;
       }
     }
@@ -186,16 +118,16 @@ class FormAbstract extends XMLBase {
     return fields;
   }
 
-  FormFieldAbstract addField({
+  FormField addField({
     String variable = '',
     String? formType,
     String? label,
     String? description,
     bool? required = false,
-    String? value,
+    dynamic value,
     List<Map<String, String>>? options,
   }) {
-    final field = FormFieldAbstract();
+    final field = FormField();
     field['var'] = variable;
     field['type'] = formType;
     field['value'] = value;
@@ -216,7 +148,7 @@ class FormAbstract extends XMLBase {
         field.delete('type');
       }
     }
-    add(Tuple2(null, field));
+    add(field);
     return field;
   }
 
@@ -228,7 +160,7 @@ class FormAbstract extends XMLBase {
         label: field.value['label'] as String?,
         description: field.value['desc'] as String?,
         required: field.value['required'] as bool?,
-        value: field.value['value'] as String?,
+        value: field.value['value'],
         options: field.value['options'] as List<Map<String, String>>?,
         formType: field.value['type'] as String?,
       );
@@ -277,8 +209,8 @@ class FormAbstract extends XMLBase {
     }
   }
 
-  Map<String, FormFieldAbstract> get reported {
-    final fields = <String, FormFieldAbstract>{};
+  Map<String, FormField> get reported {
+    final fields = <String, FormField>{};
     final fieldElement =
         element!.findAllElements('reported', namespace: namespace);
     final reporteds = <xml.XmlElement>[];
@@ -286,7 +218,7 @@ class FormAbstract extends XMLBase {
     for (final element in fieldElement) {
       final elements = element.findAllElements(
         'field',
-        namespace: FormFieldAbstract().namespace,
+        namespace: FormField().namespace,
       );
       for (final element in elements) {
         reporteds.add(element);
@@ -294,14 +226,14 @@ class FormAbstract extends XMLBase {
     }
 
     for (final reported in reporteds) {
-      final field = FormFieldAbstract(element: reported);
+      final field = FormField(element: reported);
       fields[field['var'] as String] = field;
     }
 
     return fields;
   }
 
-  FormFieldAbstract addReported(
+  FormField addReported(
     String variable, {
     String? formType,
     String label = '',
@@ -315,7 +247,7 @@ class FormAbstract extends XMLBase {
     }
     final fieldElement = WhixpUtils.xmlElement('field');
     reported.children.add(fieldElement);
-    final field = FormFieldAbstract(element: fieldElement);
+    final field = FormField(element: fieldElement);
     field['var'] = variable;
     field['type'] = formType;
     field['label'] = label;
@@ -335,7 +267,9 @@ class FormAbstract extends XMLBase {
   }
 
   @override
-  FormAbstract copy({xml.XmlElement? element, XMLBase? parent}) => FormAbstract(
+  Form copy({xml.XmlElement? element, XMLBase? parent}) => Form(
+        pluginTagMapping: pluginTagMapping,
+        pluginAttributeMapping: pluginAttributeMapping,
         title: _title,
         getters: getters,
         setters: setters,

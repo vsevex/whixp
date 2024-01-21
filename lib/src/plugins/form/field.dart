@@ -1,46 +1,9 @@
 part of 'dataforms.dart';
 
-class FormField extends StanzaConcrete {
-  FormField(super.concrete);
-
-  @override
-  FormFieldAbstract get concrete => super.concrete as FormFieldAbstract;
-
-  void setType(String value) => concrete.setType(value);
-
-  List<Map<String, String>> get options => concrete.options;
-
-  void addOption({String label = '', String value = ''}) =>
-      concrete.addOption(label: label, value: value);
-
-  void setOptions(List<dynamic> options) => concrete.setOptions(options);
-
-  void deleteOptions() => concrete.deleteOptions();
-
-  bool get required => concrete.required;
-
-  void setRequired(bool required) => concrete.setRequired(required);
-
-  void removeRequired() => concrete.removeRequired();
-
-  String get answer => concrete.answer;
-
-  void setAnswer(String answer) => concrete.setAnswer(answer);
-
-  void setFalse() => concrete.setFalse();
-
-  void setTrue() => concrete.setTrue();
-
-  dynamic value({bool convert = true}) => concrete.value(convert: convert);
-
-  void setValue(dynamic value) => concrete.setValue(value);
-
-  void removeValue() => concrete.removeValue();
-}
-
-@internal
-class FormFieldAbstract extends XMLBase {
-  FormFieldAbstract({
+class FormField extends XMLBase {
+  FormField({
+    super.pluginTagMapping,
+    super.pluginAttributeMapping,
     super.getters,
     super.setters,
     super.deleters,
@@ -142,7 +105,7 @@ class FormFieldAbstract extends XMLBase {
       final option = FieldOption();
       option['label'] = label;
       option['value'] = value;
-      add(Tuple2(null, option));
+      add(option);
     } else {
       Log.instance.warning('Cannot add options to ${this['type']} field.');
     }
@@ -273,8 +236,9 @@ class FormFieldAbstract extends XMLBase {
   }
 
   @override
-  FormFieldAbstract copy({xml.XmlElement? element, XMLBase? parent}) =>
-      FormFieldAbstract(
+  FormField copy({xml.XmlElement? element, XMLBase? parent}) => FormField(
+        pluginTagMapping: pluginTagMapping,
+        pluginAttributeMapping: pluginAttributeMapping,
         getters: getters,
         setters: setters,
         deleters: deleters,
@@ -283,7 +247,6 @@ class FormFieldAbstract extends XMLBase {
       );
 }
 
-@internal
 class FieldOption extends XMLBase {
   FieldOption({super.element, super.parent})
       : super(

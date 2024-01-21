@@ -1,11 +1,7 @@
-import 'package:dartz/dartz.dart';
-import 'package:meta/meta.dart';
-
 import 'package:whixp/src/handler/handler.dart';
 import 'package:whixp/src/log/log.dart';
 import 'package:whixp/src/plugins/base.dart';
 import 'package:whixp/src/plugins/disco/disco.dart';
-import 'package:whixp/src/stanza/implementation.dart';
 import 'package:whixp/src/stream/base.dart';
 import 'package:whixp/src/stream/matcher/matcher.dart';
 import 'package:whixp/src/utils/utils.dart';
@@ -46,10 +42,8 @@ class DataForm extends PluginBase {
     base.transport.registerHandler(
       CallbackHandler(
         'Data Form',
-        (stanza) => base.transport.emit<Form>(
-          'messageForm',
-          data: Form(stanza['form'] as FormAbstract),
-        ),
+        (stanza) => base.transport
+            .emit<Form>('messageForm', data: stanza['form'] as Form),
         matcher: StanzaPathMatcher('message/form'),
       ),
     );
@@ -61,18 +55,16 @@ class DataForm extends PluginBase {
     String title = '',
     String instructions = '',
   }) =>
-      Form(
-        FormAbstract()
-          ..setType(formType)
-          ..['title'] = title
-          ..['instructions'] = instructions,
-      );
+      Form()
+        ..setType(formType)
+        ..['title'] = title
+        ..['instructions'] = instructions;
 
   @override
   void sessionBind(String? jid) {
     final disco = base.getPluginInstance<ServiceDiscovery>('disco');
     if (disco != null) {
-      disco.addFeature(FormAbstract().namespace);
+      disco.addFeature(Form().namespace);
     }
   }
 
@@ -83,7 +75,7 @@ class DataForm extends PluginBase {
       enableIfRegistered: false,
     );
     if (disco != null) {
-      disco.removeFeature(FormAbstract().namespace);
+      disco.removeFeature(Form().namespace);
     }
     base.transport.removeHandler('Data Form');
   }

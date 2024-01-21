@@ -1,9 +1,4 @@
-import 'package:meta/meta.dart';
-
-import 'package:whixp/src/stream/base.dart';
-import 'package:whixp/src/utils/utils.dart';
-
-import 'package:xml/xml.dart' as xml;
+part of 'rsm.dart';
 
 /// XEP-0059 (Result Set Management) can be used to handle query results.
 ///
@@ -43,7 +38,6 @@ import 'package:xml/xml.dart' as xml;
 /// ```
 ///
 /// see <https://xmpp.org/extensions/xep-0059.html>
-@internal
 class RSMStanza extends XMLBase {
   /// Creates [RSMStanza] stanza with optional parameters.
   ///
@@ -62,6 +56,7 @@ class RSMStanza extends XMLBase {
       : super(
           name: 'set',
           namespace: WhixpUtils.getNamespace('RSM'),
+          includeNamespace: true,
           pluginAttribute: 'rsm',
           interfaces: {
             'first_index',

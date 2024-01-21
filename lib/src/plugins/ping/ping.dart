@@ -1,12 +1,11 @@
 import 'dart:async';
 
-import 'package:meta/meta.dart';
-
 import 'package:whixp/src/handler/handler.dart';
 import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/log/log.dart';
 import 'package:whixp/src/plugins/base.dart';
 import 'package:whixp/src/plugins/disco/disco.dart';
+import 'package:whixp/src/stanza/error.dart';
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stream/base.dart';
 import 'package:whixp/src/stream/matcher/matcher.dart';
@@ -142,9 +141,9 @@ class Ping extends PluginBase {
   FutureOr<void> sendPing(
     JabberID jid, {
     JabberID? iqFrom,
-    FutureOr<void> Function(StanzaBase stanza)? callback,
-    FutureOr<void> Function(StanzaBase stanza)? failureCallback,
-    FutureOr<void> Function(StanzaBase stanza)? timeoutCallback,
+    FutureOr<void> Function(IQ stanza)? callback,
+    FutureOr<void> Function(StanzaError stanza)? failureCallback,
+    FutureOr<void> Function()? timeoutCallback,
     int? timeout,
   }) {
     _iq['type'] = 'get';

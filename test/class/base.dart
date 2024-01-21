@@ -58,6 +58,7 @@ class MultiTestStanza2 extends XMLBase {
     super.namespace,
     super.pluginAttribute,
     super.pluginMultiAttribute,
+    super.includeNamespace = true,
     super.element,
     super.parent,
   });

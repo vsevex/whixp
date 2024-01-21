@@ -1,3 +1,4 @@
+import 'package:meta/meta.dart';
 import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stanza/presence.dart';
@@ -45,7 +46,7 @@ class RosterManager {
   final _rosters = <String, RosterNode>{};
 
   StanzaBase _saveLastStatus(dynamic stanza) {
-    if (stanza is PresenceAbstract) {
+    if (stanza is Presence) {
       String subscribeFrom = (stanza['from'] as String).isEmpty
           ? _whixp.transport.boundJID.toString()
           : JabberID(stanza['from'] as String).full;

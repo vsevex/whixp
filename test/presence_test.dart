@@ -7,13 +7,13 @@ import 'test_base.dart';
 void main() {
   group('Presence stanza test cases', () {
     test('regression check presence["type"] = "dnd" show value working', () {
-      final presence = PresenceAbstract();
+      final presence = Presence();
       presence['type'] = 'dnd';
       check(presence, '<presence><show>dnd</show></presence>');
     });
 
     test('properly manipulate presence type', () {
-      final presence = PresenceAbstract();
+      final presence = Presence();
       presence['type'] = 'available';
       check(presence, '<presence/>');
       expect(presence['type'], 'available');

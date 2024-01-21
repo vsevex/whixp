@@ -1,4 +1,6 @@
 import 'package:whixp/src/stanza/error.dart';
+import 'package:whixp/src/stanza/iq.dart';
+import 'package:whixp/src/stanza/presence.dart';
 import 'package:whixp/src/stream/base.dart';
 
 /// The given given class is a custom written [Exception] class for [Whixp].
@@ -85,7 +87,7 @@ class StanzaException extends WhixpException {
       );
 
   /// Creates a [StanzaException] for an IQ error with additional details.
-  factory StanzaException.iq(XMLBase iq) => StanzaException(
+  factory StanzaException.iq(IQ iq) => StanzaException(
         'IQ error has occured',
         stanza: iq,
         text: (iq['error'] as StanzaError)['text'] as String,
@@ -94,14 +96,14 @@ class StanzaException extends WhixpException {
       );
 
   /// Creates a [StanzaException] for an IQ timeout.
-  factory StanzaException.iqTimeout(StanzaBase iq) => StanzaException(
+  factory StanzaException.iqTimeout(IQ iq) => StanzaException(
         'IQ timeout has occured',
         stanza: iq,
         condition: 'remote-server-timeout',
       );
 
   /// Creates a [StanzaException] for an Presence error.
-  factory StanzaException.presence(StanzaBase presence) => StanzaException(
+  factory StanzaException.presence(Presence presence) => StanzaException(
         'Presence error has occured',
         stanza: presence,
         condition: (presence['error'] as StanzaError)['condition'] as String,

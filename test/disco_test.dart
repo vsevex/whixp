@@ -1,4 +1,3 @@
-import 'package:dartz/dartz.dart';
 import 'package:test/test.dart';
 
 import 'package:whixp/src/plugins/disco/disco.dart';
@@ -9,35 +8,33 @@ import 'test_base.dart';
 void main() {
   late IQ iq;
 
-  IQ copyIQ(IQ iq) => IQ(generateID: false, element: iq.element);
-
   setUp(() => iq = IQ(generateID: false));
 
   group('disco extension stanza creating and manipulating test cases', () {
     test('disco#info query without node', () {
-      (iq['disco_info'] as DiscoInformationAbstract)['node'] = '';
+      (iq['disco_info'] as DiscoveryInformation)['node'] = '';
 
       check(
-        copyIQ(iq),
+        iq,
         '<iq><query xmlns="http://jabber.org/protocol/disco#info"/></iq>',
       );
     });
 
     test('disco#info query with a node', () {
-      (iq['disco_info'] as DiscoInformationAbstract)['node'] = 'cart';
+      (iq['disco_info'] as DiscoveryInformation)['node'] = 'cart';
 
       check(
-        copyIQ(iq),
+        iq,
         '<iq><query xmlns="http://jabber.org/protocol/disco#info" node="cart"/></iq>',
       );
     });
 
     test('must properly add identity to disco#info', () {
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
           .addIdentity('conference', 'text', name: 'room', language: 'en');
 
       check(
-        copyIQ(iq),
+        iq,
         '<iq><query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" type="text" name="room" xml:lang="en"/></query></iq>',
       );
     });
@@ -45,75 +42,75 @@ void main() {
     test(
       'must keep first identity when adding multiple copies of the same category and type combination',
       () {
-        (iq['disco_info'] as DiscoInformationAbstract)
+        (iq['disco_info'] as DiscoveryInformation)
             .addIdentity('conference', 'text', name: 'MUC');
-        (iq['disco_info'] as DiscoInformationAbstract)
+        (iq['disco_info'] as DiscoveryInformation)
             .addIdentity('conference', 'text', name: 'room');
 
         check(
-          copyIQ(iq),
+          iq,
           '<iq><query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" name="MUC" type="text"/></query></iq>',
         );
       },
     );
 
     test('previous test, but language property added', () {
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
           .addIdentity('conference', 'text', name: 'MUC', language: 'en');
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
           .addIdentity('conference', 'text', name: 'room', language: 'en');
 
       check(
-        copyIQ(iq),
+        iq,
         '<iq><query xmlns="http://jabber.org/protocol/disco#info"><identity category="conference" name="MUC" type="text" xml:lang="en"/></query></iq>',
       );
     });
 
     test('remove identites from a disco#info stanza', () {
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
         ..addIdentity('client', 'pc')
         ..addIdentity('client', 'bot')
         ..deleteIdentity('client', 'bot');
 
       check(
-        copyIQ(iq),
+        iq,
         '<iq><query xmlns="http://jabber.org/protocol/disco#info"><identity category="client" type="pc"/></query></iq>',
       );
     });
 
     test('remove identities from a disco#info stanza with language', () {
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
         ..addIdentity('client', 'pc')
         ..addIdentity('client', 'bot', language: 'az')
         ..deleteIdentity('client', 'bot');
 
       check(
-        copyIQ(iq),
+        iq,
         '<iq><query xmlns="http://jabber.org/protocol/disco#info"><identity category="client" type="bot" xml:lang="az"/><identity category="client" type="pc"/></query></iq>',
       );
     });
 
     test('remove all identities from a disco#info stanza', () {
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
         ..addIdentity('client', 'pc', name: 'PC')
         ..addIdentity('client', 'pc', language: 'az')
         ..addIdentity('client', 'bot');
 
-      (iq['disco_info'] as DiscoInformationAbstract).delete('identities');
+      (iq['disco_info'] as DiscoveryInformation).delete('identities');
       check(
-        copyIQ(iq),
+        iq,
         '<iq><query xmlns="http://jabber.org/protocol/disco#info"/></iq>',
       );
     });
 
     test('remove all identities with provided language from disco#info stanza',
         () {
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
         ..addIdentity('client', 'pc', name: 'PC')
         ..addIdentity('client', 'pc', language: 'az')
         ..addIdentity('client', 'bot');
 
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
           .deleteIdentities(language: 'az');
     });
 
@@ -123,16 +120,16 @@ void main() {
         DiscoveryIdentity('client', 'bot', name: 'Bot'),
       ];
 
-      (iq['disco_info'] as DiscoInformationAbstract).setIdentities(identities);
+      (iq['disco_info'] as DiscoveryInformation).setIdentities(identities);
 
       check(
-        copyIQ(iq),
+        iq,
         '<iq><query xmlns="http://jabber.org/protocol/disco#info"><identity category="client" name="Bot" type="bot"/><identity category="client" name="PC" type="pc" xml:lang="az"/></query></iq>',
       );
     });
 
     test('selectively replace identities based on language', () {
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
         ..addIdentity('client', 'pc', language: 'en')
         ..addIdentity('client', 'pc', language: 'az')
         ..addIdentity('client', 'bot', language: 'ru');
@@ -142,24 +139,24 @@ void main() {
         DiscoveryIdentity('client', 'bot', name: 'Bot', language: 'en'),
       ];
 
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
           .setIdentities(identities, language: 'ru');
 
       check(
-        copyIQ(iq),
+        iq,
         '<iq><query xmlns="http://jabber.org/protocol/disco#info"><identity category="client" name="Bot" type="bot" xml:lang="en"/><identity category="client" name="Bot" type="bot" xml:lang="ru"/><identity category="client" type="pc" xml:lang="az"/><identity category="client" type="pc" xml:lang="en"/></query></iq>',
       );
     });
 
     test('getting all identities from a disco#info stanza', () {
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
         ..addIdentity('client', 'pc')
         ..addIdentity('client', 'pc', language: 'az')
         ..addIdentity('client', 'pc', language: 'ru')
         ..addIdentity('client', 'pc', language: 'en');
 
       expect(
-        (iq['disco_info'] as DiscoInformationAbstract)['identities'],
+        (iq['disco_info'] as DiscoveryInformation).getIdentities(),
         equals(<DiscoveryIdentity>{
           const DiscoveryIdentity('client', 'pc', language: 'en'),
           const DiscoveryIdentity('client', 'pc', language: 'ru'),
@@ -171,76 +168,75 @@ void main() {
 
     test('getting all identities of a given language from a disco#info stanza',
         () {
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
         ..addIdentity('client', 'pc')
         ..addIdentity('client', 'pc', language: 'az')
         ..addIdentity('client', 'pc', language: 'ru')
         ..addIdentity('client', 'pc', language: 'en');
 
       expect(
-        (iq['disco_info'] as DiscoInformationAbstract)
+        (iq['disco_info'] as DiscoveryInformation)
             .getIdentities(language: 'en'),
         equals({const DiscoveryIdentity('client', 'pc', language: 'en')}),
       );
     });
 
     test('must correctly add feature to disco#info', () {
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
         ..addFeature('foo')
         ..addFeature('bar');
 
       check(
-        copyIQ(iq),
+        iq,
         '<iq><query xmlns="http://jabber.org/protocol/disco#info"><feature var="foo"/><feature var="bar"/></query></iq>',
       );
     });
 
     test('must correctly handle adding duplicate feature to disco#info', () {
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
         ..addFeature('foo')
         ..addFeature('bar')
         ..addFeature('foo');
 
       check(
-        copyIQ(iq),
+        iq,
         '<iq><query xmlns="http://jabber.org/protocol/disco#info"><feature var="foo"/><feature var="bar"/></query></iq>',
       );
     });
 
     test('must properly remove feature from disco', () {
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
         ..addFeature('foo')
         ..addFeature('bar')
         ..addFeature('foo');
 
-      (iq['disco_info'] as DiscoInformationAbstract).deleteFeature('foo');
+      (iq['disco_info'] as DiscoveryInformation).deleteFeature('foo');
 
       check(
-        copyIQ(iq),
+        iq,
         '<iq><query xmlns="http://jabber.org/protocol/disco#info"><feature var="bar"/></query></iq>',
       );
     });
 
     test('get all features from disco#info', () {
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
         ..addFeature('foo')
         ..addFeature('bar')
         ..addFeature('foo');
 
-      final features =
-          (iq['disco_info'] as DiscoInformationAbstract)['features'];
+      final features = (iq['disco_info'] as DiscoveryInformation)['features'];
       expect(features, equals({'foo', 'bar'}));
     });
 
     test('must properly remove all features from a disco#info', () {
-      (iq['disco_info'] as DiscoInformationAbstract)
+      (iq['disco_info'] as DiscoveryInformation)
         ..addFeature('foo')
         ..addFeature('bar')
         ..addFeature('baz');
 
-      (iq['disco_info'] as DiscoInformationAbstract).delete('features');
+      (iq['disco_info'] as DiscoveryInformation).delete('features');
       check(
-        copyIQ(iq),
+        iq,
         '<iq><query xmlns="http://jabber.org/protocol/disco#info"/></iq>',
       );
     });
@@ -248,10 +244,10 @@ void main() {
     test('add multiple features at once', () {
       final features = <String>{'foo', 'bar', 'baz'};
 
-      (iq['disco_info'] as DiscoInformationAbstract)['features'] = features;
+      (iq['disco_info'] as DiscoveryInformation)['features'] = features;
 
       check(
-        copyIQ(iq),
+        iq,
         '<iq><query xmlns="http://jabber.org/protocol/disco#info"><feature var="foo"/><feature var="bar"/><feature var="baz"/></query></iq>',
       );
     });
@@ -259,7 +255,7 @@ void main() {
 
   group('discovery items test cases', () {
     test('must properly add features to disco#info', () {
-      (iq['disco_items'] as DiscoItemsAbstract)
+      (iq['disco_items'] as DiscoveryItems)
         ..addItem('vsevex@example.com')
         ..addItem('vsevex@example.com', node: 'foo')
         ..addItem('vsevex@example.com', node: 'bar', name: 'cart');
@@ -272,7 +268,7 @@ void main() {
     });
 
     test('add items with the same JID without any nodes', () {
-      (iq['disco_items'] as DiscoItemsAbstract)
+      (iq['disco_items'] as DiscoveryItems)
         ..addItem('vsevex@example.com', name: 'cart')
         ..addItem('vsevex@example.com', name: 'hert');
 
@@ -284,7 +280,7 @@ void main() {
     });
 
     test('add items with the same JID nodes', () {
-      (iq['disco_items'] as DiscoItemsAbstract)
+      (iq['disco_items'] as DiscoveryItems)
         ..addItem('vsevex@example.com', name: 'cart', node: 'foo')
         ..addItem('vsevex@example.com', name: 'hert', node: 'foo');
 
@@ -296,7 +292,7 @@ void main() {
     });
 
     test('remove items without nodes from stanza', () {
-      (iq['disco_items'] as DiscoItemsAbstract)
+      (iq['disco_items'] as DiscoveryItems)
         ..addItem('vsevex@example.com')
         ..addItem('vsevex@example.com', node: 'foo')
         ..addItem('alyosha@example.com')
@@ -310,7 +306,7 @@ void main() {
     });
 
     test('remove items with nodes from stanza', () {
-      (iq['disco_items'] as DiscoItemsAbstract)
+      (iq['disco_items'] as DiscoveryItems)
         ..addItem('vsevex@example.com')
         ..addItem('vsevex@example.com', node: 'foo')
         ..addItem('alyosha@example.com')
@@ -324,28 +320,36 @@ void main() {
     });
 
     test('must properly get all items', () {
-      (iq['disco_items'] as DiscoItemsAbstract)
+      (iq['disco_items'] as DiscoveryItems)
         ..addItem('vsevex@example.com')
         ..addItem('vsevex@example.com', node: 'foo')
         ..addItem('alyosha@example.com', node: 'bar', name: 'cart');
 
       expect(
-        ((iq['disco_items']) as DiscoItemsAbstract)['items'],
-        equals(<Tuple3<String, String, String>>{
-          const Tuple3('vsevex@example.com', '', ''),
-          const Tuple3('vsevex@example.com', 'foo', ''),
-          const Tuple3('alyosha@example.com', 'bar', 'cart'),
+        ((iq['disco_items']) as DiscoveryItems)['items'],
+        equals(<SingleDiscoveryItem>{
+          const SingleDiscoveryItem('vsevex@example.com', node: '', name: ''),
+          const SingleDiscoveryItem(
+            'vsevex@example.com',
+            node: 'foo',
+            name: '',
+          ),
+          const SingleDiscoveryItem(
+            'alyosha@example.com',
+            node: 'bar',
+            name: 'cart',
+          ),
         }),
       );
     });
 
     test('must properly remove all items', () {
-      (iq['disco_items'] as DiscoItemsAbstract)
+      (iq['disco_items'] as DiscoveryItems)
         ..addItem('vsevex@example.com')
         ..addItem('vsevex@example.com', node: 'foo')
         ..addItem('alyosha@example.com', node: 'bar', name: 'cart');
 
-      (iq['disco_items'] as DiscoItemsAbstract).removeItems();
+      (iq['disco_items'] as DiscoveryItems).removeItems();
 
       check(
         iq,
@@ -365,7 +369,7 @@ void main() {
         ),
       };
 
-      (iq['disco_items'] as DiscoItemsAbstract)['items'] = items;
+      (iq['disco_items'] as DiscoveryItems)['items'] = items;
 
       check(
         iq,

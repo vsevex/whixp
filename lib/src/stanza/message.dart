@@ -1,6 +1,7 @@
 import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/plugins/delay/delay.dart';
 import 'package:whixp/src/plugins/form/dataforms.dart';
+import 'package:whixp/src/plugins/pubsub/pubsub.dart';
 import 'package:whixp/src/stanza/root.dart';
 import 'package:whixp/src/stream/base.dart';
 import 'package:whixp/src/utils/utils.dart';
@@ -165,8 +166,9 @@ class Message extends RootStanza {
     ///
     /// If you have not used the specified stanza, then you have to enable the
     /// stanza through the usage of `pluginAttribute` parameter.
-    registerPlugin(FormAbstract());
+    registerPlugin(Form());
     registerPlugin(DelayStanza());
+    registerPlugin(PubSubEvent());
   }
 
   /// Set the message type to "chat".
