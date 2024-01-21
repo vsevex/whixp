@@ -27,7 +27,7 @@ dev_dependencies:
   test: ^1.21.0
 
 screenshots:
-  - description: "Whixp Logo"
+  - description: "The Whixp package logo."
     path: "assets/whixp_logo.svg"
 
 platforms:
