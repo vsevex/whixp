@@ -23,10 +23,6 @@ class StanzaError extends XMLBase implements Exception {
   /// Creates a new instance of [StanzaError] with optional parameters.
   ///
   /// [conditionNamespace] represents the XML namespace for conditions.
-  ///
-  /// [super.includeNamespace] is an optional parameter from the super class
-  /// that indicates to whether include the namespace or not. Deafults to
-  /// `false`.
   StanzaError({
     super.getters,
     super.setters,
@@ -37,7 +33,6 @@ class StanzaError extends XMLBase implements Exception {
   }) : super(
           name: 'error',
           namespace: WhixpUtils.getNamespace('CLIENT'),
-          includeNamespace: false,
           pluginAttribute: 'error',
           interfaces: {
             'code',
@@ -57,12 +52,6 @@ class StanzaError extends XMLBase implements Exception {
       parent!['type'] = 'error';
     }
 
-    /// Sets a default type for this stanza.
-    this['type'] = 'cancel';
-
-    /// Sets a default condition for this stanza.
-    this['condition'] = 'feature-not-implemented';
-
     addGetters(
       <Symbol, dynamic Function(dynamic args, XMLBase base)>{
         const Symbol('condition'): (args, base) => condition,
@@ -78,6 +67,7 @@ class StanzaError extends XMLBase implements Exception {
         const Symbol('condition'): (value, args, base) {
           if (_conditions.contains(value as String)) {
             base.delete('condition');
+            base.element!.children.add(WhixpUtils.xmlElement(value));
           }
         },
       },
@@ -87,13 +77,18 @@ class StanzaError extends XMLBase implements Exception {
       <Symbol, dynamic Function(dynamic args, XMLBase base)>{
         /// Removes the condition element.
         const Symbol('condition'): (args, base) {
+          final elements = <xml.XmlElement>[];
           for (final child in base.element!.childElements) {
             if (child.getAttribute('xmlns') == _conditionNamespace) {
               final condition = child.localName;
               if (_conditions.contains(condition)) {
-                base.element!.children.remove(child);
+                elements.add(child);
               }
             }
+          }
+
+          for (final element in elements) {
+            base.element!.children.remove(element);
           }
         },
       },
@@ -167,10 +162,6 @@ class StreamError extends StanzaBase implements Exception {
   /// stanza.
   ///
   /// [conditionNamespace] represents the XML namespace for conditions.
-  ///
-  /// [super.includeNamespace] is an optional parameter from the super class
-  /// that indicates to whether include the namespace or not. Deafults to
-  /// `false`.
   StreamError({
     super.getters,
     super.setters,
@@ -181,7 +172,6 @@ class StreamError extends StanzaBase implements Exception {
   }) : super(
           name: 'error',
           namespace: WhixpUtils.getNamespace('JABBER_STREAM'),
-          includeNamespace: false,
           pluginAttribute: 'error',
           interfaces: {'condition', 'text', 'see_other_host'},
         ) {
@@ -243,29 +233,26 @@ class StreamError extends StanzaBase implements Exception {
 }
 
 const _conditions = {
-  'bad-format',
-  'bad-namespace-prefix',
+  'bad-request',
   'conflict',
-  'connection-timeout',
-  'host-gone',
-  'host-unknown',
-  'improper-addressing',
+  'feature-not-implemented',
+  'forbidden',
+  'gone',
   'internal-server-error',
-  'invalid-from',
-  'invalid-namespace',
-  'invalid-xml',
+  'item-not-found',
+  'jid-malformed',
+  'not-acceptable',
+  'not-allowed',
   'not-authorized',
-  'not-well-formed',
-  'policy-violation',
-  'remote-connection-failed',
-  'reset',
+  'payment-required',
+  'recipient-unavailable',
+  'redirect',
+  'registration-required',
+  'remote-server-not-found',
+  'remote-server-timeout',
   'resource-constraint',
-  'restricted-xml',
-  'see-other-host',
-  'system-shutdown',
+  'service-unavailable',
+  'subscription-required',
   'undefined-condition',
-  'unsupported-encoding',
-  'unsupported-feature',
-  'unsupported-stanza-type',
-  'unsupported-version',
+  'unexpected-request',
 };
