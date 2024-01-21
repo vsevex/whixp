@@ -162,6 +162,11 @@ class WhixpUtils {
     throw ArgumentError('Invalid node type: ${element.nodeType}');
   }
 
+  /// Unescapes invalid xml charachters.
+  ///
+  /// For more information refer to [xmlUnescape] method in [Escaper] class.
+  static String xmlUnescape(String text) => Escaper().xmlUnescape(text);
+
   /// This method takes an XML [element] and seralizes it into string
   /// representation of the XML. It uses the `serialize` function to recusively
   /// iterate through all child elements of the input [element] and construct
