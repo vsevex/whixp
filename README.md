@@ -40,7 +40,7 @@ With this package, you can easily integrate XMPP capabilities into your Dart & F
 
 **DataForms**: Providing a mechanism for exchanging complex data.
 
-**DISCO**: Discovers information about entities and services.
+**Disco**: Discovers information about entities and services.
 
 **Result Set Management**: Provides reliable stanza delivery.
 
