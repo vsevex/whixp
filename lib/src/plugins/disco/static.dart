@@ -17,14 +17,14 @@ class _StaticDisco {
   /// The [WhixpBase] instance. Mostly used to access the current transport
   /// instance.
   final WhixpBase whixp;
-  final nodes = <Tuple3<String, String, String>, Map<String, XMLBase?>>{};
+  final nodes = <Tuple3<JabberID, String, String>, Map<String, XMLBase?>>{};
 
-  Map<String, XMLBase?> addNode({String? jid, String? node, String? iqFrom}) {
-    late String nodeJID;
+  Map<String, XMLBase?> addNode({JabberID? jid, String? node, String? iqFrom}) {
+    late JabberID nodeJID;
     late String nodeIQFrom;
 
     if (jid == null) {
-      nodeJID = whixp.transport.boundJID.toString();
+      nodeJID = whixp.transport.boundJID;
     } else {
       nodeJID = jid;
     }
@@ -37,9 +37,9 @@ class _StaticDisco {
     node ??= '';
 
     if (!nodes.containsKey(Tuple3(nodeJID, node, nodeIQFrom))) {
-      final info = DiscoInformationAbstract();
-      final items = DiscoItemsAbstract();
-      
+      final info = DiscoveryInformation();
+      final items = DiscoveryItems();
+
       info['node'] = node;
       items['node'] = node;
 
@@ -52,12 +52,12 @@ class _StaticDisco {
     return nodes[Tuple3(nodeJID, node, nodeIQFrom)]!;
   }
 
-  Map<String, XMLBase?> getNode({String? jid, String? node, String? iqFrom}) {
-    late String nodeJID;
+  Map<String, XMLBase?> getNode({JabberID? jid, String? node, String? iqFrom}) {
+    late JabberID nodeJID;
     late String nodeIQFrom;
 
     if (jid == null) {
-      nodeJID = whixp.transport.boundJID.toString();
+      nodeJID = whixp.transport.boundJID;
     } else {
       nodeJID = jid;
     }
@@ -78,13 +78,13 @@ class _StaticDisco {
   }
 
   DiscoveryInformation getInformation({
-    String? jid,
+    JabberID? jid,
     String? node,
     JabberID? iqFrom,
   }) {
     if (!nodeExists(jid: jid, node: node)) {
       if (node == null || node.isEmpty) {
-        return DiscoveryInformation(DiscoInformationAbstract());
+        return DiscoveryInformation();
       } else {
         throw StanzaException(
           'Missing item exception occured on disco information retrieval',
@@ -92,22 +92,18 @@ class _StaticDisco {
         );
       }
     } else {
-      return DiscoveryInformation(
-        DiscoInformationAbstract(
-          element: getNode(jid: jid, node: node)['info']!.element,
-        ),
-      );
+      return getNode(jid: jid, node: node)['info']! as DiscoveryInformation;
     }
   }
 
-  DiscoItemsAbstract? getItems({
-    String? jid,
+  DiscoveryItems? getItems({
+    JabberID? jid,
     String? node,
     JabberID? iqFrom,
   }) {
     if (!nodeExists(jid: jid, node: node)) {
       if (node == null || node.isEmpty) {
-        return DiscoItemsAbstract();
+        return DiscoveryItems();
       } else {
         throw StanzaException(
           'Missing item exception occured on disco information retrieval',
@@ -115,13 +111,13 @@ class _StaticDisco {
         );
       }
     } else {
-      return getNode(jid: jid, node: node)['items'] as DiscoItemsAbstract?;
+      return getNode(jid: jid, node: node)['items'] as DiscoveryItems?;
     }
   }
 
   /// Caches discovery information for an external jabber ID.
   void cacheInformation({
-    String? jid,
+    JabberID? jid,
     String? node,
     String? iqFrom,
     XMLBase? stanza,
@@ -139,7 +135,7 @@ class _StaticDisco {
 
   /// Retrieves cached discovery information data.
   DiscoveryInformation? getCachedInformation({
-    String? jid,
+    JabberID? jid,
     String? node,
     String? iqFrom,
   }) {
@@ -147,21 +143,19 @@ class _StaticDisco {
       return null;
     }
 
-    return DiscoveryInformation(
-      nodes[Tuple3(jid, node, iqFrom)]!['information']!
-          as DiscoInformationAbstract,
-    );
+    return nodes[Tuple3(jid, node, iqFrom)]!['information']!
+        as DiscoveryInformation;
   }
 
   bool nodeExists({
-    String? jid,
+    JabberID? jid,
     String? node,
     String? iqFrom,
   }) {
-    late String nodeJID;
+    late JabberID nodeJID;
     late String nodeIQFrom;
     if (jid == null) {
-      nodeJID = whixp.transport.boundJID.full;
+      nodeJID = whixp.transport.boundJID;
     } else {
       nodeJID = jid;
     }
@@ -176,19 +170,18 @@ class _StaticDisco {
   }
 
   /// Adds a feature to a JID/node combination.
-  void addFeature(String feature, {String? jid, String? node}) {
+  void addFeature(String feature, {JabberID? jid, String? node}) {
     final newNode = addNode(jid: jid, node: node);
     if (newNode['information'] != null) {
-      (newNode['information']! as DiscoInformationAbstract).addFeature(feature);
+      (newNode['information']! as DiscoveryInformation).addFeature(feature);
     }
   }
 
   /// Removes a feature from a JID/node combination.
-  void removeFeature(String feature, {String? jid, String? node}) {
+  void removeFeature(String feature, {JabberID? jid, String? node}) {
     if (nodeExists(jid: jid, node: node)) {
       if (getNode(jid: jid, node: node)['information'] != null) {
-        (getNode(jid: jid, node: node)['information']!
-                as DiscoInformationAbstract)
+        (getNode(jid: jid, node: node)['information']! as DiscoveryInformation)
             .deleteFeature(feature);
       }
     }
