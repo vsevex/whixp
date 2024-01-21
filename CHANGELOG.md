@@ -1,4 +1,10 @@
-# 0.1.0 - 2023-09-14
+# 2.0.0+beta1 - 2024-01-22
+
+Everything is changed. I mean, literally everything. Can not even put it all into words, especially in here. So, go ahead and give it a try.
+
+But remember, the package is still in beta and not quite ready for stable usage. Please consider this while exploring the new features and improvements. Your feedbacks and bug reports are highly appreciated to help me refine the package for a stable release.
+
+## 0.1.0 - 2023-09-14
 
 ## Breaking
 
