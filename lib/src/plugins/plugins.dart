@@ -1,5 +1,7 @@
-export 'delay/delay.dart' hide DelayStanza;
-export 'disco/disco.dart'
-    hide DiscoInformationAbstract, DiscoItem, DiscoItemsAbstract;
-export 'form/dataforms.dart' hide FieldOption, FormAbstract, FormFieldAbstract;
-export 'ping/ping.dart' hide PingStanza;
+export 'delay/delay.dart';
+export 'disco/disco.dart';
+export 'form/dataforms.dart';
+export 'ping/ping.dart';
+export 'pubsub/pubsub.dart';
+export 'rsm/rsm.dart';
+export 'time/time.dart';
