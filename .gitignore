@@ -12,3 +12,6 @@ pubspec.lock
 
 # VsCode related folder
 .vscode/
+
+# Ejabberd configuration files
+.ejabberd/
