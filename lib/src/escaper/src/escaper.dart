@@ -41,6 +41,30 @@ class Escaper {
       .replaceAll("'", '&apos;')
       .replaceAll('"', '&quot;');
 
+  /// The anti-method of the [xmlEscape] method.
+  ///
+  /// Replaces the escaped chars with the corresponding chars.
+  ///
+  /// This method performs the following replacements:
+  /// - '&amp;' is replaced with '&'
+  /// - '&lt;' is replaced with '<'
+  /// - '&gt;' is replaced with '>'
+  /// - '&apos;' is replaced with "'"
+  /// - '&quot;' is replaced with '"'
+  ///
+  /// ### Example:
+  /// ```dart
+  /// const inputText = 'This &amp; that &lt;';
+  /// final result = Escaper().xmlUnescape(inputText);
+  /// log(result); /// ...outputs: "This & that <"
+  /// ```
+  String xmlUnescape(String text) => text
+    ..replaceAll('&amp;', '&')
+    ..replaceAll('&lt;', '<')
+    ..replaceAll('&gt;', '>')
+    ..replaceAll('&apos;', "'")
+    ..replaceAll('&quot;', '"');
+
   /// Escapes characters in the given text that are not allowed in JIDs
   /// according to the rules of the XMPP nodeprep profile. Returns the escaped
   /// string.
