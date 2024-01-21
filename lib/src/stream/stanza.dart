@@ -38,9 +38,9 @@ class StanzaBase extends XMLBase {
     super.languageInterfaces,
     super.pluginOverrides,
     super.pluginIterables,
-    super.receive = false,
-    super.isExtension = false,
-    super.includeNamespace = true,
+    super.receive,
+    super.isExtension,
+    super.includeNamespace,
     super.getters,
     super.setters,
     super.deleters,
@@ -101,7 +101,7 @@ class StanzaBase extends XMLBase {
   /// Add [xml.XmlElement] content to the stanza.
   void setPayload(List<xml.XmlElement> values) {
     for (final value in values) {
-      add(Tuple2(value, null));
+      add(value);
     }
   }
 
