@@ -90,7 +90,7 @@ abstract class WhixpBase {
     /// [Log] instance to print out various log messages properly
     Log? logger,
   }) {
-    streamNamespace = WhixpUtils.getNamespace('JABBER_STREAM');
+    _streamNamespace = WhixpUtils.getNamespace('JABBER_STREAM');
 
     /// If no default namespace is provided, then client "jabber:client" will
     /// be used.
@@ -166,7 +166,7 @@ abstract class WhixpBase {
     /// Set up the transport with XMPP's root stanzas & handlers.
     transport
       ..registerStanza(IQ(generateID: false))
-      ..registerStanza(PresenceAbstract())
+      ..registerStanza(Presence())
       ..registerStanza(Message(includeNamespace: true))
       ..registerStanza(StreamError())
       ..registerHandler(
@@ -194,7 +194,7 @@ abstract class WhixpBase {
         CallbackHandler(
           'Stream Error',
           _handleStreamError,
-          matcher: XPathMatcher('{$streamNamespace}error'),
+          matcher: XPathMatcher('{$_streamNamespace}error'),
         ),
       );
 
@@ -205,65 +205,60 @@ abstract class WhixpBase {
     roster.add(boundJID.toString());
 
     /// Get current user's roster from the roster manager.
-    _clientRoster = roster[boundJID.toString()] as rost.RosterNode;
+    clientRoster = roster[boundJID.toString()] as rost.RosterNode;
 
     transport
       ..addEventHandler('disconnected', (_) => _handleDisconnected())
       ..addEventHandler<Presence>(
         'presenceDnd',
-        (presence) => _handleAvailable(presence!.concrete as PresenceAbstract),
+        (presence) => _handleAvailable(presence!),
       )
       ..addEventHandler<Presence>(
         'presenceXa',
-        (presence) => _handleAvailable(presence!.concrete as PresenceAbstract),
+        (presence) => _handleAvailable(presence!),
       )
       ..addEventHandler<Presence>(
         'presenceChat',
-        (presence) => _handleAvailable(presence!.concrete as PresenceAbstract),
+        (presence) => _handleAvailable(presence!),
       )
       ..addEventHandler<Presence>(
         'presenceAway',
-        (presence) => _handleAvailable(presence!.concrete as PresenceAbstract),
+        (presence) => _handleAvailable(presence!),
       )
       ..addEventHandler<Presence>(
         'presenceAvailable',
-        (presence) => _handleAvailable(presence!.concrete as PresenceAbstract),
+        (presence) => _handleAvailable(presence!),
       )
       ..addEventHandler<Presence>(
         'presenceUnavailable',
-        (presence) =>
-            _handleUnavailable(presence!.concrete as PresenceAbstract),
+        (presence) => _handleUnavailable(presence!),
       )
       ..addEventHandler<Presence>(
         'presenceSubscribe',
-        (presence) => _handleSubscribe(presence!.concrete as PresenceAbstract),
+        (presence) => _handleSubscribe(presence!),
       )
       ..addEventHandler<Presence>(
         'presenceSubscribed',
-        (presence) => _handleSubscribed(presence!.concrete as PresenceAbstract),
+        (presence) => _handleSubscribed(presence!),
       )
       ..addEventHandler<Presence>(
         'presenceUnsubscribe',
-        (presence) =>
-            _handleUnsubscribe(presence!.concrete as PresenceAbstract),
+        (presence) => _handleUnsubscribe(presence!),
       )
       ..addEventHandler<Presence>(
         'presenceUnsubscribed',
-        (presence) =>
-            _handleUnsubscribed(presence!.concrete as PresenceAbstract),
+        (presence) => _handleUnsubscribed(presence!),
       )
       ..addEventHandler<Presence>(
         'rosterSubscriptionRequest',
-        (presence) =>
-            _handleNewSubscription(presence!.concrete as PresenceAbstract),
+        (presence) => _handleNewSubscription(presence!),
       );
   }
   @internal
   late final Transport transport;
 
   /// Late final initialization of stream namespace.
-  @internal
-  late final String streamNamespace;
+  late final String _streamNamespace;
 
   /// Late final initialization of default namespace.
   late final String _defaultNamespace;
@@ -295,15 +290,14 @@ abstract class WhixpBase {
 
   /// [rost.RosterManager] instance to make communication with roster easier.
   late final rost.RosterManager roster;
-  late rost.RosterNode _clientRoster;
+  late rost.RosterNode clientRoster;
 
   final features = <String>{};
 
   final _streamFeatureHandlers =
       <String, Tuple2<FutureOr<dynamic> Function(StanzaBase stanza), bool>>{};
 
-  @internal
-  final streamFeatureOrder = <Tuple2<int, String>>[];
+  final _streamFeatureOrder = <Tuple2<int, String>>[];
 
   /// Register a stream feature handler.
   void registerFeature(
@@ -313,8 +307,8 @@ abstract class WhixpBase {
     int order = 5000,
   }) {
     _streamFeatureHandlers[name] = Tuple2(handler, restart);
-    streamFeatureOrder.add(Tuple2(order, name));
-    streamFeatureOrder.sort((a, b) => a.value1.compareTo(b.value1));
+    _streamFeatureOrder.add(Tuple2(order, name));
+    _streamFeatureOrder.sort((a, b) => a.value1.compareTo(b.value1));
   }
 
   /// Create, initialize, and send a new [Presence].
@@ -343,7 +337,7 @@ abstract class WhixpBase {
     final presence = makePresence(
       presenceFrom: presenceFrom,
       presenceTo: presenceTo,
-    ).concrete as PresenceAbstract;
+    );
     return presence.send();
   }
 
@@ -384,11 +378,11 @@ abstract class WhixpBase {
     presence['priority'] = presencePriority;
     presence['status'] = presenceStatus;
     presence['nick'] = presenceNick;
-    return Presence(presence);
+    return presence;
   }
 
   /// Create a presence stanza associated with this stream.
-  PresenceAbstract _presence({
+  Presence _presence({
     JabberID? presenceTo,
     JabberID? presenceFrom,
     String? presenceType,
@@ -397,7 +391,7 @@ abstract class WhixpBase {
     String? presencePriority,
     String? presenceNick,
   }) {
-    final presence = PresenceAbstract(
+    final presence = Presence(
       transport: transport,
       stanzaType: presenceType,
       stanzaTo: presenceTo,
@@ -451,7 +445,7 @@ abstract class WhixpBase {
     JabberID? iqTo,
     JabberID? iqFrom,
   }) {
-    iq ??= IQ();
+    iq ??= IQ(transport: transport);
     iq['type'] = 'get';
     iq['query'] = queryXMLNS;
     if (iqTo != null) {
@@ -473,7 +467,7 @@ abstract class WhixpBase {
     JabberID? iqFrom,
     Tuple2<xml.XmlElement?, XMLBase?>? sub,
   }) {
-    iq ??= IQ();
+    iq ??= IQ(transport: transport);
     iq['type'] = 'set';
     if (sub != null) {
       iq.add(sub);
@@ -496,7 +490,7 @@ abstract class WhixpBase {
     iq.enable('roster');
 
     if (features.contains('rosterver')) {
-      (iq['roster'] as XMLBase)['ver'] = _clientRoster.version;
+      (iq['roster'] as XMLBase)['ver'] = clientRoster.version;
     }
 
     iq.sendIQ(
@@ -541,7 +535,7 @@ abstract class WhixpBase {
   }
 
   void _handlePresence(StanzaBase stanza) {
-    final presence = PresenceAbstract(element: stanza.element);
+    final presence = Presence(element: stanza.element);
 
     if (((roster[presence['from'] as String]) as rost.RosterNode)
         .ignoreUpdates) {
@@ -552,15 +546,15 @@ abstract class WhixpBase {
       presence['to'] = transport.boundJID.toString();
     }
 
-    transport.emit<Presence>('presence', data: Presence(presence));
+    transport.emit<Presence>('presence', data: presence);
     transport.emit<Presence>(
       'presence${(presence['type'] as String).capitalize()}',
-      data: Presence(presence),
+      data: presence,
     );
 
     if ({'subscribe', 'subscribed', 'unsubscribe', 'unsubscribed'}
         .contains(presence['type'])) {
-      transport.emit<Presence>('changedSubscription', data: Presence(presence));
+      transport.emit<Presence>('changedSubscription', data: presence);
       return;
     } else if (!{'available', 'unavailable'}.contains(presence['type'])) {
       return;
@@ -572,37 +566,37 @@ abstract class WhixpBase {
     transport.sessionBind = false;
   }
 
-  void _handleAvailable(PresenceAbstract presence) {
+  void _handleAvailable(Presence presence) {
     ((roster[presence['to'] as String]
             as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
         .handleAvailable(presence);
   }
 
-  void _handleUnavailable(PresenceAbstract presence) {
+  void _handleUnavailable(Presence presence) {
     ((roster[presence['to'] as String]
             as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
         .handleUnavailable(presence);
   }
 
-  void _handleSubscribe(PresenceAbstract presence) {
+  void _handleSubscribe(Presence presence) {
     ((roster[presence['to'] as String]
             as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
         .handleSubscribe(presence);
   }
 
-  void _handleSubscribed(PresenceAbstract presence) {
+  void _handleSubscribed(Presence presence) {
     ((roster[presence['to'] as String]
             as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
         .handleSubscribed(presence);
   }
 
-  void _handleUnsubscribe(PresenceAbstract presence) {
+  void _handleUnsubscribe(Presence presence) {
     ((roster[presence['to'] as String]
             as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
         .handleUnsubscribe(presence);
   }
 
-  void _handleUnsubscribed(PresenceAbstract presence) {
+  void _handleUnsubscribed(Presence presence) {
     ((roster[presence['to'] as String]
             as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
         .handleUnsubscribed(presence);
@@ -612,7 +606,7 @@ abstract class WhixpBase {
   ///
   /// Subscriptions will be approved if the request is from a whitelisted JID,
   /// of `autoAuthorize` is true.
-  void _handleNewSubscription(PresenceAbstract presence) {
+  void _handleNewSubscription(Presence presence) {
     final roster = this.roster[presence['to'] as String] as rost.RosterNode;
     final rosterItem = roster[presence['from'] as String] as rost.RosterItem;
     if (rosterItem['whitelisted'] as bool) {

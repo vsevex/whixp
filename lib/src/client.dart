@@ -76,7 +76,7 @@ class Whixp extends WhixpBase {
     /// Set [streamHeader] of declared transport for initial send.
     transport
       ..streamHeader =
-          "<stream:stream to='${transport.boundJID.host}' xmlns:stream='$streamNamespace' xmlns='$_defaultNamespace' xml:lang='$_language' version='1.0'>"
+          "<stream:stream to='${transport.boundJID.host}' xmlns:stream='$_streamNamespace' xmlns='$_defaultNamespace' xml:lang='$_language' version='1.0'>"
       ..streamFooter = "</stream:stream>";
 
     StanzaBase features = StreamFeatures();
@@ -99,7 +99,7 @@ class Whixp extends WhixpBase {
             _handleStreamFeatures(features);
             return;
           },
-          matcher: XPathMatcher('{$streamNamespace}features'),
+          matcher: XPathMatcher('{$_streamNamespace}features'),
         ),
       )
       ..addEventHandler<String>(
@@ -120,7 +120,7 @@ class Whixp extends WhixpBase {
   late final String _language;
 
   Future<bool> _handleStreamFeatures(StanzaBase features) async {
-    for (final feature in streamFeatureOrder) {
+    for (final feature in _streamFeatureOrder) {
       final name = feature.value2;
 
       if ((features['features'] as Map<String, XMLBase>).containsKey(name) &&
@@ -140,7 +140,7 @@ class Whixp extends WhixpBase {
   }
 
   void _handleSessionBind(String jid) =>
-      _clientRoster = roster[jid] as rost.RosterNode;
+      clientRoster = roster[jid] as rost.RosterNode;
 
   void _handleRoster(StanzaBase iq) {
     iq.enable('roster');
@@ -152,7 +152,7 @@ class Whixp extends WhixpBase {
       }
     }
 
-    final roster = _clientRoster;
+    final roster = clientRoster;
     if (stanza['ver'] != null) {
       roster.version = stanza['ver'] as String;
     }
