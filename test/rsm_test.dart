@@ -1,6 +1,6 @@
 import 'package:test/test.dart';
 
-import 'package:whixp/src/plugins/rsm/stanza.dart';
+import 'package:whixp/src/plugins/rsm/rsm.dart';
 
 import 'package:xml/xml.dart' as xml;
 
