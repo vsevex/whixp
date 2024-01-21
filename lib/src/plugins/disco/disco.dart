@@ -1,5 +1,6 @@
+import 'dart:async';
+
 import 'package:dartz/dartz.dart';
-import 'package:meta/meta.dart';
 
 import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/handler/handler.dart';
@@ -7,7 +8,7 @@ import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/log/log.dart';
 import 'package:whixp/src/plugins/base.dart';
 import 'package:whixp/src/plugins/rsm/rsm.dart';
-import 'package:whixp/src/stanza/implementation.dart';
+import 'package:whixp/src/stanza/error.dart';
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stream/base.dart';
 import 'package:whixp/src/stream/matcher/matcher.dart';
@@ -48,11 +49,13 @@ class ServiceDiscovery extends PluginBase {
   late final bool _useCache;
   late final bool _wrapResults;
   late final _StaticDisco _static;
+  Iterator<Future<StanzaBase?>>? _iterator;
 
   @override
   void pluginInitialize() {
     _iq = IQ(transport: base.transport);
     _static = _StaticDisco(base);
+    _iterator = null;
 
     base.transport.registerHandler(
       CallbackHandler(
@@ -72,28 +75,38 @@ class ServiceDiscovery extends PluginBase {
   }
 
   /// Retrieve the disco#info results from a given JID/node combination.
-  void getInformation({
-    String? jid,
+  ///
+  /// The return type is in [Future] type. This is because, if method tries to
+  /// get discovery information from local, then it returns by the proper
+  /// [XMLBase]. When method goes remote discovery, it will return `null` at the
+  /// end. But the result can be used using provided [callback] method. If there
+  /// is an error or timeout occured, then [failureCallback] or
+  /// [timeoutCallback] can be used respectively.
+  Future<XMLBase?> getInformation<T>({
+    JabberID? jid,
     String node = '',
     JabberID? iqFrom,
     bool local = false,
     bool cached = false,
-  }) {
+    FutureOr<T> Function(IQ iq)? callback,
+    FutureOr<void> Function(StanzaError error)? failureCallback,
+    FutureOr<void> Function()? timeoutCallback,
+    int timeout = 10,
+  }) async {
     bool localTemp = local;
 
     if (!local) {
       if (jid != null) {
         if (base.isComponent) {
-          if (JabberID(jid).domain == base.transport.boundJID.domain) {
+          if (jid.domain == base.transport.boundJID.domain) {
             localTemp = true;
           }
         } else {
-          if (JabberID(jid) == base.transport.boundJID) {
+          if (jid == base.transport.boundJID) {
             localTemp = true;
           }
         }
-        jid = JabberID(jid).full;
-      } else if (jid == null || jid.isEmpty) {
+      } else if (jid == null) {
         localTemp = true;
       }
     }
@@ -106,20 +119,20 @@ class ServiceDiscovery extends PluginBase {
       Log.instance
           .debug('Looking up local disco#info data for $jid, node $node');
 
-      DiscoInformationAbstract? information =
-          _static.getInformation(jid: jid, node: node, iqFrom: iqFrom).concrete;
+      DiscoveryInformation? information =
+          _static.getInformation(jid: jid, node: node, iqFrom: iqFrom);
 
       information = _fixDefaultInformation(information);
-      _wrap(iqTo: iqFrom, iqFrom: jid, payload: information);
+      return _wrap(iqTo: iqFrom, iqFrom: jid, payload: information);
     }
 
     if (cached) {
       Log.instance
           .debug('Looking up cached disco#info data for $jid, node $node');
-      final information = _static.getCachedInformation()?.concrete;
+      final information = _static.getCachedInformation();
 
       if (information != null) {
-        _wrap(iqTo: iqFrom, iqFrom: jid, payload: information);
+        return _wrap(iqTo: iqFrom, iqFrom: jid, payload: information);
       }
     }
 
@@ -127,7 +140,14 @@ class ServiceDiscovery extends PluginBase {
     _iq['to'] = jid;
     _iq['type'] = 'get';
     (_iq['disco_info'] as XMLBase)['node'] = node;
-    _iq.sendIQ();
+
+    await _iq.sendIQ(
+      callback: callback,
+      failureCallback: failureCallback,
+      timeoutCallback: timeoutCallback,
+    );
+
+    return null;
   }
 
   /// Retrieves the disco#items results from a given [jid]/[node] combination.
@@ -139,41 +159,51 @@ class ServiceDiscovery extends PluginBase {
   ///
   /// If [iterator] is `true`, loads [RSM] and returns a result set iterator
   /// using the [RSM] plugin.
-  XMLBase? getItems({
-    String? jid,
+  Future<XMLBase?> getItems<T>({
+    JabberID? jid,
     String? node,
     JabberID? iqFrom,
     bool local = false,
     bool iterator = false,
-  }) {
-    if (local && (jid == null || jid.isEmpty)) {
+    FutureOr<T> Function(IQ iq)? callback,
+    FutureOr<void> Function(StanzaError error)? failureCallback,
+    FutureOr<void> Function()? timeoutCallback,
+    int timeout = 5,
+  }) async {
+    if (local && (jid == null)) {
       final items = _static.getItems(jid: jid, node: node, iqFrom: iqFrom);
-      return _wrap(iqTo: iqFrom, iqFrom: jid, payload: items);
+      return Future.value(_wrap(iqTo: iqFrom, iqFrom: jid, payload: items));
     }
 
     final iq = IQ(transport: base.transport);
     iq['from'] = iqFrom != null ? iqFrom.toString() : '';
     iq['to'] = jid;
     iq['type'] = 'get';
-    (iq['disco_items'] as DiscoItemsAbstract)['node'] = node ?? '';
-    final rsm = RSM(this);
-    base.registerPlugin(rsm);
-    if (iterator) {
-      final iterator = rsm.iterate(iq, 'disco_items').iterator.iterator;
-      if (iterator.moveNext()) {
-        return iterator.current;
+    (iq['disco_items'] as DiscoveryItems)['node'] = node ?? '';
+
+    final rsm = base.getPluginInstance<RSM>('RSM');
+
+    if (iterator && rsm != null) {
+      _iterator ??= rsm.iterate(iq, 'disco_items').iterator;
+
+      if (_iterator != null) {
+        final current = await _iterator!.current;
+        _iterator!.moveNext();
+        return current;
       }
     }
-    iq.sendIQ();
 
-    return iq;
+    final response = Completer<IQ>();
+
+    await iq.sendIQ(callback: (stanza) => response.complete(stanza));
+    return response.future;
   }
 
   /// Ensures that results are wrapped in an [IQ] stanza if [_wrapResults] has
   /// been set to `true`.
   XMLBase? _wrap({
     JabberID? iqTo,
-    String? iqFrom,
+    JabberID? iqFrom,
     XMLBase? payload,
     bool force = false,
   }) {
@@ -184,7 +214,7 @@ class ServiceDiscovery extends PluginBase {
           iqTo != null ? iqTo.toString() : base.transport.boundJID.toString();
       iq['from'] = iqFrom ?? base.transport.boundJID.toString();
       iq['type'] = 'result';
-      iq.add(Tuple2(null, payload));
+      iq.add(payload);
       return iq;
     }
 
@@ -198,8 +228,8 @@ class ServiceDiscovery extends PluginBase {
   ///
   /// At the standart "disco#info" feature will also be added if no features
   /// are provided.
-  DiscoInformationAbstract _fixDefaultInformation(
-    DiscoInformationAbstract info,
+  DiscoveryInformation _fixDefaultInformation(
+    DiscoveryInformation info,
   ) {
     if (info['node'] == null) {
       if (info['identities'] == null) {
@@ -218,18 +248,16 @@ class ServiceDiscovery extends PluginBase {
   /// Processes an incoming "disco#info" stanza. If it is a get request, find
   /// and return the appropriate identities and features.
   ///
-  /// If it is an items result, fire the "discoInformation" event.
+  /// If it is an items result, fire the "discoveryInformation" event.
   void _handleDiscoveryInformation(IQ iq) {
     if (iq['type'] == 'get') {
       Log.instance.debug(
         'Received disco information query from ${iq['from']} to ${iq['to']}',
       );
-      DiscoInformationAbstract information = _static
-          .getInformation(
-            jid: iq['to'] as String,
-            node: (iq['disco_info'] as XMLBase)['node'] as String,
-          )
-          .concrete;
+      DiscoveryInformation information = _static.getInformation(
+        jid: JabberID(iq['to'] as String),
+        node: (iq['disco_info'] as XMLBase)['node'] as String,
+      );
 
       final node = (iq['disco_info'] as XMLBase)['node'] as String;
 
@@ -256,7 +284,7 @@ class ServiceDiscovery extends PluginBase {
         }
 
         _static.cacheInformation(
-          jid: iq['from'] as String,
+          jid: JabberID(iq['from'] as String),
           node: (iq['disco_info'] as XMLBase)['node'] as String,
           iqFrom: iqTo,
           stanza: iq,
@@ -264,10 +292,8 @@ class ServiceDiscovery extends PluginBase {
       }
 
       base.transport.emit<DiscoveryInformation>(
-        'discoInformation',
-        data: DiscoveryInformation(
-          iq['disco_info'] as DiscoInformationAbstract,
-        ),
+        'discoveryInformation',
+        data: iq['disco_info'] as DiscoveryInformation,
       );
     }
   }
@@ -275,13 +301,13 @@ class ServiceDiscovery extends PluginBase {
   /// Adds a [feature] to a [jid]/[node] combination.
   ///
   /// [node] and [jid] are node and jid to modify respectively.
-  void addFeature(String feature, {String? jid, String? node}) =>
+  void addFeature(String feature, {JabberID? jid, String? node}) =>
       _static.addFeature(feature, jid: jid, node: node);
 
   /// Removes a [feature] from [jid]/[node] combination.
   ///
   /// [node] and [jid] are node and jid to modify respectively.
-  void removeFeature(String feature, {String? jid, String? node}) =>
+  void removeFeature(String feature, {JabberID? jid, String? node}) =>
       _static.removeFeature(feature, jid: jid, node: node);
 
   /// Processes an incoming "disco#items" stanza. If it is a get request, find
@@ -297,8 +323,8 @@ class ServiceDiscovery extends PluginBase {
         'Received disco items result from ${iq['from']} to ${iq['to']}',
       );
       base.transport.emit<DiscoveryItems>(
-        'discoItems',
-        data: DiscoveryItems(iq['disco_items'] as DiscoItemsAbstract),
+        'discoveryItems',
+        data: iq['disco_items'] as DiscoveryItems,
       );
     }
   }

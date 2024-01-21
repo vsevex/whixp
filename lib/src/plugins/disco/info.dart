@@ -7,7 +7,7 @@ part of 'disco.dart';
 /// (often thought of as "children" of the "parent" entity).
 ///
 /// see https://xmpp.org/extensions/xep-0030.html#intro
-class DiscoveryInformation extends StanzaConcrete {
+class DiscoveryInformation extends XMLBase {
   /// Allows for users and agents to find the identities and features supported
   /// by other entities in the network (XMPP) through service discovery
   /// ("disco").
@@ -33,101 +33,7 @@ class DiscoveryInformation extends StanzaConcrete {
   ///   </query>
   /// </iq>
   /// ```
-  const DiscoveryInformation(super.concrete);
-
-  @override
-  DiscoInformationAbstract get concrete =>
-      super.concrete as DiscoInformationAbstract;
-
-  /// Returns a [Set] or [List] of all identities in [DiscoveryIdentity].
-  ///
-  /// If a [language] was specified, only return identities using that language.
-  /// If [duplicate] was set to true, then use [List] as it is allowed to
-  /// duplicate items.
-  Iterable<DiscoveryIdentity> getIdentities({
-    String? language,
-    bool duplicate = false,
-  }) =>
-      concrete.getIdentities(language: language, duplicate: duplicate);
-
-  /// Adds a new identity element. Each identity must be unique in terms of all
-  /// four identity components.
-  ///
-  /// The XMPP Registrar maintains a registry of values for the [category] and
-  /// [type] attributes of the <identity/> element in the
-  /// 'http://jabber.org/protocol/disco#info' namespace.
-  ///
-  /// Multiple, identical [category]/[type] pairs allowed only if the xml:lang
-  /// values are different. Likewise, multiple [category]/[type]/xml:[language]
-  /// pairs are allowed so long as the [name]s are different.
-  ///
-  /// [category] and [type] are required.
-  ///
-  /// see: <https://xmpp.org/registrar/disco-categories.html>
-  bool addIdentity(
-    String category,
-    String type, {
-    String? name,
-    String? language,
-  }) =>
-      concrete.addIdentity(category, type, name: name, language: language);
-
-  /// Adds or replaces all entities. The [identities] must be in a
-  /// [DiscoveryIdentity] form.
-  ///
-  /// If a [language] is specified, any [identities] using that language will be
-  /// removed to be replaced with the given [identities].
-  void setIdentities(
-    Iterable<DiscoveryIdentity> identities, {
-    String? language,
-  }) =>
-      concrete.setIdentities(identities, language: language);
-
-  /// Removes a given identity.
-  bool deleteIdentity(
-    String category,
-    String type, {
-    String? name,
-    String? language,
-  }) =>
-      concrete.deleteIdentity(category, type, name: name, language: language);
-
-  /// Removes all identities. If a [language] was specified, only remove
-  /// identities using that language.
-  void deleteIdentities({String? language}) =>
-      concrete.deleteIdentities(language: language);
-
-  /// Returns a [Set] or [List] of all features as so:
-  /// __(category, type, name, language)__
-  ///
-  /// If [duplicate] was set to true, then use [List] as it is allowed to
-  /// duplicate items.
-  Iterable<String> getFeatures({bool duplicate = false}) =>
-      concrete.getFeatures(duplicate: duplicate);
-
-  /// Adds a single feature.
-  ///
-  /// The XMPP Registrar maintains a registry of features for use as values of
-  /// the 'var' attribute of the <feature/> element in the
-  /// 'http://jabber.org/protocol/disco#info' namespace;
-  ///
-  /// see <https://xmpp.org/registrar/disco-features.html>
-  bool addFeature(String feature) => concrete.addFeature(feature);
-
-  /// Adds or replaces all supported [features]. The [features]  must be in a
-  /// [Set] where each identity is a [String].
-  void setFeatures(Iterable<String> features) => concrete.setFeatures(features);
-
-  /// Deletes a single feature.
-  bool deleteFeature(String feature) => concrete.deleteFeature(feature);
-
-  /// Removes all features.
-  void deleteFeatures() => concrete.deleteFeatures();
-}
-
-@internal
-class DiscoInformationAbstract extends XMLBase {
-  DiscoInformationAbstract({
+  DiscoveryInformation({
     super.element,
     super.parent,
     super.getters,
@@ -135,6 +41,7 @@ class DiscoInformationAbstract extends XMLBase {
   }) : super(
           name: 'query',
           namespace: WhixpUtils.getNamespace('DISCO_INFO'),
+          includeNamespace: true,
           pluginAttribute: 'disco_info',
           interfaces: {'node', 'features', 'identities'},
           languageInterfaces: {'identities'},
@@ -142,26 +49,33 @@ class DiscoInformationAbstract extends XMLBase {
     _features = <String>{};
     _identities = <DiscoveryIdentity>{};
 
-    addDeleters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
-      const Symbol('identities'): (args, base) => deleteIdentities(),
-      const Symbol('features'): (args, base) => deleteFeatures(),
-    });
     addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
-      const Symbol('identities'): (args, base) => getIdentities(),
       const Symbol('features'): (args, base) => getFeatures(),
     });
+
     addSetters(
       <Symbol, void Function(dynamic value, dynamic args, XMLBase base)>{
         const Symbol('features'): (value, args, base) =>
             setFeatures(value as Iterable<String>),
       },
     );
+
+    addDeleters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
+      const Symbol('identities'): (args, base) => deleteIdentities(),
+      const Symbol('features'): (args, base) => deleteFeatures(),
+    });
   }
 
   /// [Set] of features.
   late final Set<String> _features;
 
   late final Set<DiscoveryIdentity> _identities;
+
+  /// Returns a [Set] or [List] of all identities in [DiscoveryIdentity].
+  ///
+  /// If a [language] was specified, only return identities using that language.
+  /// If [duplicate] was set to true, then use [List] as it is allowed to
+  /// duplicate items.
 
   Iterable<DiscoveryIdentity> getIdentities({
     String? language,
@@ -196,6 +110,20 @@ class DiscoInformationAbstract extends XMLBase {
     return identities;
   }
 
+  /// Adds a new identity element. Each identity must be unique in terms of all
+  /// four identity components.
+  ///
+  /// The XMPP Registrar maintains a registry of values for the [category] and
+  /// [type] attributes of the <identity/> element in the
+  /// 'http://jabber.org/protocol/disco#info' namespace.
+  ///
+  /// Multiple, identical [category]/[type] pairs allowed only if the xml:lang
+  /// values are different. Likewise, multiple [category]/[type]/xml:[language]
+  /// pairs are allowed so long as the [name]s are different.
+  ///
+  /// [category] and [type] are required.
+  ///
+  /// see: <https://xmpp.org/registrar/disco-categories.html>
   bool addIdentity(
     String category,
     String type, {
@@ -221,6 +149,11 @@ class DiscoInformationAbstract extends XMLBase {
     return false;
   }
 
+  /// Adds or replaces all entities. The [identities] must be in a
+  /// [DiscoveryIdentity] form.
+  ///
+  /// If a [language] is specified, any [identities] using that language will be
+  /// removed to be replaced with the given [identities].
   void setIdentities(
     Iterable<DiscoveryIdentity> identities, {
     String? language,
@@ -236,6 +169,7 @@ class DiscoInformationAbstract extends XMLBase {
     }
   }
 
+  /// Removes a given identity.
   bool deleteIdentity(
     String category,
     String type, {
@@ -264,6 +198,8 @@ class DiscoInformationAbstract extends XMLBase {
     return false;
   }
 
+  /// Removes all identities. If a [language] was specified, only remove
+  /// identities using that language.
   void deleteIdentities({String? language}) {
     for (final idElement
         in element!.findAllElements('identity', namespace: namespace)) {
@@ -282,6 +218,11 @@ class DiscoInformationAbstract extends XMLBase {
     }
   }
 
+  /// Returns a [Set] or [List] of all features as so:
+  /// __(category, type, name, language)__
+  ///
+  /// If [duplicate] was set to true, then use [List] as it is allowed to
+  /// duplicate items.
   Iterable<String> getFeatures({bool duplicate = false}) {
     late final Iterable<String> features;
     if (duplicate) {
@@ -302,6 +243,13 @@ class DiscoInformationAbstract extends XMLBase {
     return features;
   }
 
+  /// Adds a single feature.
+  ///
+  /// The XMPP Registrar maintains a registry of features for use as values of
+  /// the 'var' attribute of the <feature/> element in the
+  /// 'http://jabber.org/protocol/disco#info' namespace;
+  ///
+  /// see <https://xmpp.org/registrar/disco-features.html>
   bool addFeature(String feature) {
     if (!_features.contains(feature)) {
       _features.add(feature);
@@ -313,6 +261,8 @@ class DiscoInformationAbstract extends XMLBase {
     return false;
   }
 
+  /// Adds or replaces all supported [features]. The [features]  must be in a
+  /// [Set] where each identity is a [String].
   void setFeatures(Iterable<String> features) {
     deleteFeatures();
     for (final feature in features) {
@@ -320,6 +270,7 @@ class DiscoInformationAbstract extends XMLBase {
     }
   }
 
+  /// Deletes a single feature.
   bool deleteFeature(String feature) {
     if (_features.contains(feature)) {
       _features.remove(feature);
@@ -333,6 +284,7 @@ class DiscoInformationAbstract extends XMLBase {
     return false;
   }
 
+  /// Removes all features.
   void deleteFeatures() {
     for (final featureElement
         in element!.findAllElements('feature', namespace: namespace)) {
@@ -342,8 +294,8 @@ class DiscoInformationAbstract extends XMLBase {
 
   /// Overrided [copy] method with `setters` and `getters` list copied.
   @override
-  DiscoInformationAbstract copy({xml.XmlElement? element, XMLBase? parent}) =>
-      DiscoInformationAbstract(
+  DiscoveryInformation copy({xml.XmlElement? element, XMLBase? parent}) =>
+      DiscoveryInformation(
         element: element,
         parent: parent,
         getters: getters,

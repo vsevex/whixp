@@ -1,6 +1,5 @@
 part of 'disco.dart';
 
-@internal
 class DiscoItem extends XMLBase {
   DiscoItem({super.includeNamespace = false, super.element, super.parent})
       : super(
@@ -20,40 +19,6 @@ class DiscoItem extends XMLBase {
         element: element,
         parent: parent,
       );
-}
-
-class DiscoveryItems extends StanzaConcrete {
-  DiscoveryItems(super.concrete);
-
-  @override
-  DiscoItemsAbstract get concrete => super.concrete as DiscoItemsAbstract;
-
-  /// Returns all items
-  Set<SingleDiscoveryItem> get items => concrete.items
-      .map(
-        (item) => SingleDiscoveryItem(
-          item.value1,
-          node: item.value2,
-          name: item.value3,
-        ),
-      )
-      .toSet();
-
-  /// Removes all items.
-  void removeItems() => concrete.removeItems();
-
-  /// Sets or replaces all items. The given [items] ust in a [Set] where each
-  /// item is a [DiscoveryItem] form.
-  void setItems(Set<SingleDiscoveryItem> items) => concrete.setItems(items);
-
-  /// Adds a new item element. Each item is required to have Jabber ID, but may
-  /// also specify a [node] value to reference non-addressable entities.
-  bool addItem(String jid, {String? node, String? name}) =>
-      concrete.addItem(jid, node: node, name: name);
-
-  /// Removes a single item.
-  bool removeItem(String jid, {String? node}) =>
-      concrete.removeItem(jid, node: node);
 }
 
 /// Represents an item used in the context of discovery. It is designed to hold
@@ -89,9 +54,8 @@ class SingleDiscoveryItem {
       'Service Discovery Item (jid: $jid, node: $node, name: $name)';
 }
 
-@internal
-class DiscoItemsAbstract extends XMLBase {
-  DiscoItemsAbstract({
+class DiscoveryItems extends XMLBase {
+  DiscoveryItems({
     super.pluginAttributeMapping,
     super.pluginTagMapping,
     super.pluginIterables,
@@ -102,6 +66,7 @@ class DiscoItemsAbstract extends XMLBase {
   }) : super(
           name: 'query',
           namespace: WhixpUtils.getNamespace('DISCO_ITEMS'),
+          includeNamespace: true,
           pluginAttribute: 'disco_items',
           interfaces: {'node', 'items'},
         ) {
@@ -127,19 +92,21 @@ class DiscoItemsAbstract extends XMLBase {
     );
 
     registerPlugin(DiscoItem(), iterable: true);
+    registerPlugin(RSMStanza());
   }
 
   final _items = <Tuple2<String, String?>>{};
 
-  Set<Tuple3<String, String, String>> get items {
-    final items = <Tuple3<String, String, String>>{};
+  /// Returns all items.
+  Set<SingleDiscoveryItem> get items {
+    final items = <SingleDiscoveryItem>{};
     for (final item in this['substanzas'] as List<XMLBase>) {
       if (item is DiscoItem) {
         items.add(
-          Tuple3(
+          SingleDiscoveryItem(
             item['jid'] as String,
-            item['node'] as String,
-            item['name'] as String,
+            node: item['node'] as String?,
+            name: item['name'] as String?,
           ),
         );
       }
@@ -147,6 +114,7 @@ class DiscoItemsAbstract extends XMLBase {
     return items;
   }
 
+  /// Removes all items.
   void removeItems() {
     final items = <DiscoItem>{};
     for (final item in iterables) {
@@ -161,6 +129,8 @@ class DiscoItemsAbstract extends XMLBase {
     }
   }
 
+  /// Sets or replaces all items. The given [items] ust in a [Set] where each
+  /// item is a [DiscoveryItem] form.
   void setItems(Set<SingleDiscoveryItem> items) {
     removeItems();
     for (final item in items) {
@@ -168,6 +138,8 @@ class DiscoItemsAbstract extends XMLBase {
     }
   }
 
+  /// Adds a new item element. Each item is required to have Jabber ID, but may
+  /// also specify a [node] value to reference non-addressable entities.
   bool addItem(String jid, {String? node, String? name}) {
     if (!_items.contains(Tuple2(jid, node))) {
       _items.add(Tuple2(jid, node));
@@ -181,6 +153,7 @@ class DiscoItemsAbstract extends XMLBase {
     return false;
   }
 
+  /// Removes a single item.
   bool removeItem(String jid, {String? node}) {
     if (_items.contains(Tuple2(jid, node))) {
       for (final itemElement
@@ -200,8 +173,8 @@ class DiscoItemsAbstract extends XMLBase {
   }
 
   @override
-  DiscoItemsAbstract copy({xml.XmlElement? element, XMLBase? parent}) =>
-      DiscoItemsAbstract(
+  DiscoveryItems copy({xml.XmlElement? element, XMLBase? parent}) =>
+      DiscoveryItems(
         pluginAttributeMapping: pluginAttributeMapping,
         pluginTagMapping: pluginTagMapping,
         pluginIterables: pluginIterables,
