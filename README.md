@@ -36,6 +36,22 @@ With this package, you can easily integrate XMPP capabilities into your Dart & F
 
 **Lightweight**: Whixp is designed to be lightweight, providing a streamlined solution for XMPP connectivity without unnecessary dependencies or overhead.
 
+## Available Plugins
+
+**DataForms**: Providing a mechanism for exchanging complex data.
+
+**DISCO**: Discovers information about entities and services.
+
+**Result Set Management**: Provides reliable stanza delivery.
+
+**PubSub**: Enables publish-subscribe messaging.
+
+**Ping**: Checks the connection status of another entity.
+
+**Date and Time Profiles**: Negotiates the format of date and time information.
+
+**Delay**: Delays the delivery of stanzas.
+
 ## API
 
 This code snippet demonstrates how to establish a connection using the `Whixp` package.
