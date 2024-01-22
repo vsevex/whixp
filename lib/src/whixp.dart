@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' as io;
 
 import 'package:dartz/dartz.dart';
 import 'package:meta/meta.dart';
@@ -59,6 +60,10 @@ abstract class WhixpBase {
     /// a TLS connection on the client side. Defaults to `false`
     bool disableStartTLS = false,
 
+    /// Controls if the session can be considered ended if the connection is
+    /// terminated.
+    bool endSessionOnDisconnect = false,
+
     /// If `true`, periodically send a whitespace character over the wire to
     /// keep the connection alive
     bool whitespaceKeepAlive = true,
@@ -66,7 +71,13 @@ abstract class WhixpBase {
     /// [List] of paths to a file containing certificates for verifying the
     /// server TLS certificate. Uses [Tuple2], the first side is for path to the
     /// cert file and the second to the password file
-    List<Tuple2<String, String?>>? certs,
+    Map<String, String?>? certs,
+
+    /// To avoid processing on bad certification you can use this callback.
+    ///
+    /// Passes [io.X509Certificate] instance when returning boolean value which
+    /// indicates to proceed on bad certificate or not.
+    bool Function(io.X509Certificate)? onBadCertificateCallback,
 
     /// Represents the duration in milliseconds for which the system will wait
     /// for a connection to be established before raising a [TimeoutException].
@@ -137,11 +148,13 @@ abstract class WhixpBase {
       port: port,
       useIPv6: useIPv6,
       disableStartTLS: disableStartTLS,
+      endSessionOnDisconnect: endSessionOnDisconnect,
+      boundJID: boundJID,
       isComponent: isComponent,
       dnsService: dnsService,
       useTLS: useTLS,
       caCerts: certs,
-      boundJID: boundJID,
+      onBadCertificateCallback: onBadCertificateCallback,
       connectionTimeout: connectionTimeout,
       whitespaceKeepAlive: whitespaceKeepAlive,
       whitespaceKeepAliveInterval: whitespaceKeepAliveInterval,
@@ -208,7 +221,7 @@ abstract class WhixpBase {
     clientRoster = roster[boundJID.toString()] as rost.RosterNode;
 
     transport
-      ..addEventHandler('disconnected', (_) => _handleDisconnected())
+      ..addEventHandler<String>('disconnected', (_) => _handleDisconnected())
       ..addEventHandler<Presence>(
         'presenceDnd',
         (presence) => _handleAvailable(presence!),
@@ -642,12 +655,12 @@ abstract class WhixpBase {
 
   /// Adds a custom [event] [handler] which will be executed whenever its event
   /// is manually triggered.
-  void addEventHandler<B>(
+  void addEventHandler<B extends Object>(
     String event,
     FutureOr<void> Function(B? data) handler, {
     bool once = false,
   }) =>
-      transport.addEventHandler(event, handler, once: once);
+      transport.addEventHandler<B>(event, handler, once: once);
 
   /// Password from credentials.
   String get password => credentials['password']!;
