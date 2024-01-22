@@ -101,8 +101,10 @@ class RosterManager {
   /// Resets the state of the roster to forget any current [Presence]
   /// information.
   void reset() {
-    for (final node in _rosters.entries) {
-      (this[node.key] as RosterItem).reset();
+    if (_rosters.length > 1) {
+      for (final node in _rosters.entries) {
+        (this[node.key] as RosterItem).reset();
+      }
     }
   }
 
