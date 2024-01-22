@@ -227,7 +227,10 @@ class FeatureMechanisms extends PluginBase {
   bool _handleFailure(StanzaBase stanza) {
     attemptedMechanisms.add(_mech.name);
     Log.instance.info('Authentication failed: ${stanza['condition']}');
-    base.transport.emit<StanzaBase>('failedAuth', data: stanza);
+    base.transport.emit<String>(
+      'failedAuthentication',
+      data: stanza['condition'] as String,
+    );
     _sendAuthentication();
     return true;
   }
