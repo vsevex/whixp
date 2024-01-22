@@ -1,5 +1,4 @@
 import 'dart:async' as async;
-import 'dart:async';
 import 'dart:io' as io;
 import 'dart:math' as math;
 
@@ -99,6 +98,10 @@ class Transport {
     /// a TLS connection on the client side. Defaults to `false`
     bool disableStartTLS = false,
 
+    /// Controls if the session can be considered ended if the connection is
+    /// terminated.
+    bool endSessionOnDisconnect = true,
+
     /// If `true`, periodically send a whitespace character over the wire to
     /// keep the connection alive
     this.whitespaceKeepAlive = true,
@@ -115,7 +118,13 @@ class Transport {
     /// [List] of paths to a file containing certificates for verifying the
     /// server TLS certificate. Uses [Tuple2], the first side is for path to the
     /// cert file and the second to the password file
-    List<Tuple2<String, String?>>? caCerts,
+    Map<String, String?>? caCerts,
+
+    /// To avoid processing on bad certification you can use this callback.
+    ///
+    /// Passes [io.X509Certificate] instance when returning boolean value which
+    /// indicates to proceed on bad certificate or not.
+    bool Function(io.X509Certificate)? onBadCertificateCallback,
 
     /// Represents the duration in milliseconds for which the system will wait
     /// for a connection to be established before raising a [TimeoutException].
@@ -139,12 +148,15 @@ class Transport {
     _useIPv6 = useIPv6;
     _dnsService = dnsService;
 
+    _endSessionOnDisconnect = endSessionOnDisconnect;
+
     streamHeader = '<stream>';
     streamFooter = '<stream/>';
 
-    _caCerts = caCerts ?? <Tuple2<String, String?>>[];
+    _caCerts = caCerts ?? <String, String?>{};
 
     _startStreamHandlerOverrider = startStreamHandler;
+    _onBadCertificateCallback = onBadCertificateCallback;
 
     _setup();
   }
@@ -179,7 +191,7 @@ class Transport {
   late Eventius _eventius;
 
   /// Scheduled callback handler [Map] late initializer.
-  late Map<String, Timer> _scheduledEvents;
+  late Map<String, async.Timer> _scheduledEvents;
 
   /// Enable connecting to the server directly over TLS, in particular when the
   /// service provides two ports: one for non-TLS traffic and another for TLS
@@ -204,13 +216,17 @@ class Transport {
   /// the connection alive.
   final bool whitespaceKeepAlive;
 
+  /// Controls if the session can be considered ended if the connection is
+  /// terminated.
+  late final bool _endSessionOnDisconnect;
+
   /// The default interval between keepalive signals when [whitespaceKeepAlive]
   /// is enabled.
   final int whitespaceKeepAliveInterval;
 
   /// Default [Timer] for [whitespaceKeepAliveInterval]. This will be assigned
   /// when there is a [Timer] attached after connection established.
-  Timer? _whitespaceKeepAliveTimer;
+  async.Timer? _whitespaceKeepAliveTimer;
 
   /// The service name to check with DNS SRV records. For example, setting this
   /// to "xmpp-client" would query the "_xmpp-clilent._tcp" service.
@@ -228,11 +244,11 @@ class Transport {
   /// [List] of paths to a file containing certificates for verifying the
   /// server TLS certificate. Uses [Tuple2], the first side is for path to the
   /// cert file and the second to the password file.
-  late List<Tuple2<String, String?>> _caCerts;
+  late Map<String, String?> _caCerts;
 
   /// [StreamController] for [_waitingQueue].
   final _waitingQueueController =
-      StreamController<Tuple2<StanzaBase, bool>>.broadcast();
+      async.StreamController<Tuple2<StanzaBase, bool>>.broadcast();
   final _queuedStanzas = <Tuple2<StanzaBase, bool>>[];
 
   late async.Completer<dynamic>? _runOutFilters;
@@ -240,9 +256,6 @@ class Transport {
   /// [Completer] of current connection attempt. After the connection, this
   /// [Completer] should be equal to null.
   async.Completer<void>? _currentConnectionAttempt;
-
-  /// [Completer] of abortion of the current connection.
-  async.Completer<void>? _abortCompleter;
 
   /// Current connection attempt count. It works with [maxReconnectionAttempt].
   int _currentConnectionAttemptCount = 0;
@@ -311,6 +324,12 @@ class Transport {
   /// Used when wrapping incoming xml stream.
   late bool _startStreamHandlerCalled;
 
+  /// To avoid processing on bad certification you can use this callback.
+  ///
+  /// Passes [io.X509Certificate] instance when returning boolean value which
+  /// indicates to proceed on bad certificate or not.
+  bool Function(io.X509Certificate)? _onBadCertificateCallback;
+
   /// Current redirect attempt. Increases when there is an attempt occurs to
   /// the redirection (see-other-host).
   late int _redirectAttempts;
@@ -319,10 +338,13 @@ class Transport {
   /// is a need for stanza filtering.
   final _filters = <FilterMode, List<Tuple2<SyncFilter?, AsyncFilter?>>>{};
 
+  /// The reason why whixp disconnects from the server.
+  String? _disconnectReason;
+
   void _setup() {
     _reset();
 
-    addEventHandler('disconnected', (_) {
+    addEventHandler<String>('disconnected', (_) {
       if (_whitespaceKeepAliveTimer != null) {
         _whitespaceKeepAliveTimer!.cancel();
       }
@@ -345,7 +367,6 @@ class Transport {
     _startStreamHandlerCalled = false;
 
     _runOutFilters = null;
-    _abortCompleter = async.Completer<void>();
 
     _whitespaceKeepAliveTimer = null;
 
@@ -374,31 +395,31 @@ class Transport {
     _connecta = null;
     _connectionTask = null;
 
-    _scheduledEvents = <String, Timer>{};
+    _scheduledEvents = <String, async.Timer>{};
   }
 
   /// Begin sending whitespace periodically to keep the connection alive.
   void _startKeepAlive() {
     if (whitespaceKeepAlive) {
-      _whitespaceKeepAliveTimer = Timer.periodic(
+      _whitespaceKeepAliveTimer = async.Timer.periodic(
         Duration(seconds: whitespaceKeepAliveInterval),
         (_) => sendRaw(''),
       );
     }
   }
 
-  /// Create a new socket and connect to the server.
+  /// Creates a new socket and connect to the server.
   ///
-  /// The parameters needed to establish connection in order are passed
+  /// The parameters needed to establish a connection in order are passed
   /// beforehand when creating [Transport] instance.
   @internal
   void connect() {
     if (_runOutFilters == null || _runOutFilters!.isCompleted) {
-      _runOutFilters ??= async.Completer<dynamic>();
-      _runOutFilters!.complete(runFilters());
+      _runOutFilters = async.Completer<dynamic>()..complete(runFilters());
     }
 
-    _cancelConnectionAttempt(exit: false);
+    _disconnectReason = null;
+    _cancelConnectionAttempt();
     _connectFutureWait = 0;
 
     _defaultDomain = _address.value1;
@@ -408,10 +429,11 @@ class Transport {
   }
 
   Future<void> _connect() async {
+    _currentConnectionAttemptCount++;
     _eventWhenConnected = 'connected';
 
     if (_connectFutureWait > 0) {
-      await Future.delayed(Duration(milliseconds: _connectFutureWait));
+      await Future.delayed(Duration(seconds: _connectFutureWait));
     }
     final record = await _pickDNSAnswer(_defaultDomain, service: _dnsService);
 
@@ -429,12 +451,16 @@ class Transport {
     io.SecurityContext? context;
 
     if (_caCerts.isNotEmpty) {
-      context = io.SecurityContext(withTrustedRoots: true);
-      for (final caCert in _caCerts) {
-        context.setTrustedCertificates(
-          caCert.value1,
-          password: caCert.value2,
-        );
+      io.SecurityContext? context = io.SecurityContext(withTrustedRoots: true);
+      for (final caCert in _caCerts.entries) {
+        try {
+          context!.setTrustedCertificates(
+            caCert.key,
+            password: caCert.value,
+          );
+        } on Exception {
+          context = null;
+        }
       }
     }
 
@@ -445,7 +471,7 @@ class Transport {
           port: _address.value2,
           timeout: connectionTimeout,
           connectionType: ConnectionType.tls,
-          onBadCertificateCallback: (cert) => true,
+          onBadCertificateCallback: _onBadCertificateCallback,
           context: context,
         ),
       );
@@ -456,6 +482,7 @@ class Transport {
           port: _address.value2,
           timeout: connectionTimeout,
           context: _disableStartTLS ? null : context,
+          onBadCertificateCallback: _onBadCertificateCallback,
           connectionType: _disableStartTLS
               ? ConnectionType.tcp
               : ConnectionType.upgradableTcp,
@@ -479,9 +506,10 @@ class Transport {
             );
             final result = _rescheduleConnectionAttempt();
             if (!result) {
-              await disconnect();
+              await disconnect(consume: false);
             }
           },
+          onDone: _connectionLost,
         ),
       );
 
@@ -490,13 +518,13 @@ class Transport {
       emit<Object>('connectionFailed', data: error.message);
       final result = _rescheduleConnectionAttempt();
       if (!result) {
-        await disconnect();
+        await disconnect(consume: false);
       }
     } on Exception catch (error) {
       emit<Object>('connectionFailed', data: error);
       final result = _rescheduleConnectionAttempt();
       if (!result) {
-        await disconnect();
+        await disconnect(consume: false);
       }
     }
 
@@ -514,7 +542,25 @@ class Transport {
     }
   }
 
-  /// Performs handshake for TLS.
+  /// On any kind of disconnection, initiated by us or not. This signals the
+  /// closure of connection.
+  void _connectionLost() {
+    Log.instance.info('Connection lost.');
+    _connecta = null;
+
+    if (_endSessionOnDisconnect) {
+      emit('sessionEnd');
+      Log.instance.debug('Cancelling slow send tasks.');
+      for (final task in _slowTasks) {
+        task.voided;
+      }
+      _slowTasks.clear();
+    }
+    _setDisconnected();
+    emit<String>('disconnected', data: _disconnectReason);
+  }
+
+  /// Performs a handshake for TLS.
   ///
   /// If the handshake is successful, the XML stream will need to be restarted.
   @internal
@@ -534,6 +580,7 @@ class Transport {
             error: error,
             stackTrace: trace as StackTrace,
           ),
+          onDone: _connectionLost,
         ),
       );
 
@@ -567,6 +614,7 @@ class Transport {
       if (_xmlDepth == 0) {
         /// We have received the start of the root element.
         Log.instance.info('RECEIVED: $data');
+        _disconnectReason = 'End of the stream';
         _startStreamHandler(event.attributes);
         _startStreamHandlerCalled = true;
       }
@@ -766,12 +814,9 @@ class Transport {
   /// Forcibly close the connection.
   void abort() {
     if (_connecta != null) {
-      _abortCompleter!.complete(_connecta!.socket.flush());
-      if (_abortCompleter!.isCompleted) {
-        _connecta!.destroy();
-        emit('killed');
-        _cancelConnectionAttempt();
-      }
+      _connecta!.destroy();
+      emit('killed');
+      _cancelConnectionAttempt();
     }
   }
 
@@ -792,8 +837,12 @@ class Transport {
   /// [timeout] milliseconds. After the given number of milliseconds have passed
   /// without a response from the server, or when the server successfully
   /// responds with a closure of its own stream, abort() is called.
-  Future<void> disconnect({String? reason, int timeout = 2000}) async {
-    Log.instance.warning('disconnect is called');
+  Future<void> disconnect({
+    String? reason,
+    int timeout = 2000,
+    bool consume = true,
+  }) async {
+    Log.instance.warning('Disconnect is called');
 
     /// Run abort() if we do not received the disconnected event after a
     /// waiting time.
@@ -803,19 +852,24 @@ class Transport {
       try {
         sendRaw(streamFooter);
         await _waitUntil('disconnected', timeout: timeout);
-      } on TimeoutException {
+      } on async.TimeoutException {
         abort();
       }
     }
 
     Future<void> consumeSend() async {
-      await Future.delayed(Duration(milliseconds: timeout));
+      try {
+        await _waitingQueueController.done
+            .timeout(Duration(milliseconds: timeout));
+      } on async.TimeoutException {
+        /// pass;
+      }
+      _disconnectReason = reason;
       await endStreamWait();
     }
 
-    emit('sessionEnd');
-
-    if (_connecta != null) {
+    if (_connecta != null && consume) {
+      _disconnectReason = reason;
       await consumeSend();
 
       return _cancelConnectionAttempt();
@@ -826,24 +880,24 @@ class Transport {
   }
 
   /// Utility method to wake on the next firing of an event.
-  Future<void> _waitUntil(String event, {int timeout = 15000}) async {
-    final completer = Completer();
+  Future<dynamic> _waitUntil(String event, {int timeout = 15000}) async {
+    final completer = async.Completer<dynamic>();
 
-    void handler(dynamic data) {
+    void handler(String? data) {
       if (completer.isCompleted) {
         Log.instance
-            .debug('Completer registered on event "$event" was already done');
+            .debug('Completer registered on event "$event" is already done');
       } else {
         completer.complete(data);
       }
     }
 
-    addEventHandler(event, handler, once: true);
+    addEventHandler<String>(event, handler, once: true);
 
     return completer.future.timeout(Duration(milliseconds: timeout));
   }
 
-  /// Add a stanza class as a known root stanza.
+  /// Adds a stanza class as a known root stanza.
   ///
   /// A root stanza is one that appears as a direct child of the stream's root
   /// element.
@@ -851,6 +905,15 @@ class Transport {
   /// Stanzas that appear as substanzas of a root stanza do not need to be
   /// registered here. That is done using [registerPluginStanza] from [XMLBase].
   void registerStanza(StanzaBase stanza) => _rootStanza.add(stanza);
+
+  /// Removes a stanza from being a known root stanza.
+  ///
+  /// A root stanza is one that appears as a direct child of the stream's root
+  /// element.
+  ///
+  /// Stanzas that are not registered will not be converted into stanza objects,
+  /// but may still be processed using handlers and matchers.
+  void removeStanza(StanzaBase stanza) => _rootStanza.remove(stanza);
 
   /// Add a stream event handler that will be executed when a matching stanza
   /// is received.
@@ -873,14 +936,15 @@ class Transport {
   }
 
   /// Triggers a custom [event] manually.
-  void emit<T>(String event, {T? data}) => _eventius.emit<T>(event, data);
+  void emit<T extends Object>(String event, {T? data}) =>
+      _eventius.emit<T>(event, data);
 
   /// Add a custom [event] handler that will be executed whenever its event is
   /// manually triggered. Works with [Eventius] instance.
   @internal
-  void addEventHandler<B>(
+  void addEventHandler<B extends Object>(
     String event,
-    FutureOr<void> Function(B? data) listener, {
+    async.FutureOr<void> Function(B? data) listener, {
     bool once = false,
   }) {
     if (once) {
@@ -918,14 +982,14 @@ class Transport {
     if (_scheduledEvents.containsKey(name) && _scheduledEvents[name] != null) {
       return;
     }
-    late Timer handler;
+    late async.Timer handler;
     if (repeat) {
-      handler = Timer.periodic(Duration(seconds: seconds), (_) {
+      handler = async.Timer.periodic(Duration(seconds: seconds), (_) {
         callback();
         _scheduledEvents.remove(name);
       });
     } else {
-      handler = Timer(Duration(seconds: seconds), () {
+      handler = async.Timer(Duration(seconds: seconds), () {
         callback();
       });
     }
@@ -940,27 +1004,22 @@ class Transport {
     }
   }
 
-  /// Immediately cancel the current connect() [Future].
-  void _cancelConnectionAttempt({bool exit = true}) {
+  /// Immediately cancel the current [connect] [Future].
+  void _cancelConnectionAttempt() {
     _currentConnectionAttempt = null;
     if (_connectionTask != null) {
       _connectionTask!.cancel();
     }
     _currentConnectionAttemptCount = 0;
     _connecta = null;
-    if (exit) {
-      io.exit(0);
-    }
   }
 
   bool _rescheduleConnectionAttempt() {
-    _currentConnectionAttemptCount++;
-
     if (_currentConnectionAttempt == null ||
-        (maxReconnectionAttempt < _currentConnectionAttemptCount)) {
+        (maxReconnectionAttempt <= _currentConnectionAttemptCount)) {
       return false;
     }
-    _connectFutureWait = math.min(300, _connectFutureWait * 2 + 100);
+    _connectFutureWait = math.min(300, _connectFutureWait * 2 + 1);
     _currentConnectionAttempt = async.Completer()..complete(_connect());
     return true;
   }
@@ -1042,7 +1101,7 @@ class Transport {
     if (response.answer != null && response.answer!.records != null) {
       for (final record in response.answer!.records!) {
         results.add(
-          Tuple3(domain, record.name, _port),
+          Tuple3(domain, record.name, _address.value2),
         );
       }
     }
@@ -1108,7 +1167,7 @@ class Transport {
   }
 
   /// Wraps basic send method declared in this class privately. Helps to send
-  /// stanza objects.
+  /// [StanzaBase] objects.
   void send(StanzaBase data, {bool useFilters = true}) {
     if (!sessionStarted) {
       bool passthrough = false;
@@ -1147,7 +1206,9 @@ class Transport {
     }
     Log.instance.debug('SEND: $rawData');
 
-    _connecta!.send(rawData);
+    if (_connecta != null) {
+      _connecta!.send(rawData);
+    }
   }
 
   /// On session start, queue all pending stanzas to be sent.
@@ -1172,38 +1233,4 @@ class Transport {
 
   /// Indicates that if disable startTLS is activated or not.
   bool get disableStartTLS => _disableStartTLS;
-}
-
-@visibleForTesting
-Transport testTransport({
-  String jid = 'vsevex@localhost',
-  String password = 'tester13',
-  String host = 'example.com',
-  int port = 5222,
-  bool useTLS = true,
-}) {
-  final client = Whixp(
-    jid,
-    password,
-    host: 'localhost',
-    port: port,
-    useTLS: useTLS,
-  );
-
-  client.transport.sessionBind = true;
-
-  client.transport.defaultLanguage = null;
-  client.transport.peerDefaultLanguage = null;
-
-  client.transport._dataReceived(
-    WhixpUtils.stringToArrayBuffer(client.transport.streamHeader),
-  );
-
-  return client.transport;
-}
-
-@visibleForTesting
-Future<void> receive(String data, Transport transport) async {
-  await Future.delayed(const Duration(seconds: 1));
-  await transport._dataReceived(WhixpUtils.stringToArrayBuffer(data));
 }
