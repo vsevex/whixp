@@ -73,7 +73,7 @@ class IQ extends RootStanza {
         ) {
     _generateID = generateID;
     if (_generateID) {
-      if (!this.receive && (this['id'] == '' || this['id'] == null)) {
+      if (!receive && (this['id'] == '' || this['id'] == null)) {
         if (transport != null) {
           this['id'] = WhixpUtils.getUniqueId();
         } else {
