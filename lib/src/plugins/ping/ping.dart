@@ -76,7 +76,7 @@ class Ping extends PluginBase {
       base
         ..addEventHandler('sessionStart', (_) => _enableKeepalive())
         ..addEventHandler('sessionResume', (_) => _enableKeepalive())
-        ..addEventHandler('disconnected', (_) => _disableKeepalive());
+        ..addEventHandler<String>('disconnected', (_) => _disableKeepalive());
     }
   }
 
@@ -138,7 +138,7 @@ class Ping extends PluginBase {
   /// Sends a ping request.
   ///
   /// [timeout] represents callback waiting timeout in `seconds`.
-  FutureOr<void> sendPing(
+  FutureOr<IQ> sendPing(
     JabberID jid, {
     JabberID? iqFrom,
     FutureOr<void> Function(IQ stanza)? callback,
@@ -164,7 +164,7 @@ class Ping extends PluginBase {
   }
 
   /// Sends a ping request and calculates Round Trip Time (RTT).
-  Future<void> ping({
+  Future<IQ?> ping({
     JabberID? jid,
     JabberID? iqFrom,
     FutureOr<void> Function(StanzaBase stanza)? timeoutCallback,
@@ -193,7 +193,7 @@ class Ping extends PluginBase {
     Log.instance.debug('Pinging "$rawJID"');
 
     try {
-      await sendPing(
+      return sendPing(
         JabberID(rawJID),
         iqFrom: iqFrom,
         timeout: timeout,
@@ -208,6 +208,7 @@ class Ping extends PluginBase {
     } on Exception {
       final rtt = DateTime.now().difference(start).inSeconds;
       Log.instance.debug('Pinged "$rawJID", Round Trip Time in seconds: $rtt');
+      return null;
     }
   }
 
