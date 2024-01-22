@@ -6,8 +6,6 @@ import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
 
-import 'class/property.dart';
-
 void main() {
   group('serialize method tests', () {
     test('returns null if element is null', () {
@@ -188,96 +186,96 @@ void main() {
     });
   });
 
-  group('hasAttr method test cases', () {
-    final testClass = PropertyTestClass();
+  // group('hasAttr method test cases', () {
+  //   final testClass = PropertyTestClass();
 
-    test(
-      'object must have the specified property',
-      () => expect(WhixpUtils.hasAttr(testClass, 'firstProperty'), isTrue),
-    );
+  //   test(
+  //     'object must have the specified property',
+  //     () => expect(WhixpUtils.hasAttr(testClass, 'firstProperty'), isTrue),
+  //   );
 
-    test(
-      'object must not have the specified property',
-      () => expect(
-        WhixpUtils.hasAttr(testClass, 'nonexistingproperty'),
-        isFalse,
-      ),
-    );
+  //   test(
+  //     'object must not have the specified property',
+  //     () => expect(
+  //       WhixpUtils.hasAttr(testClass, 'nonexistingproperty'),
+  //       isFalse,
+  //     ),
+  //   );
 
-    test('object is null', () {
-      const Object? object = null;
-      expect(WhixpUtils.hasAttr(object, 'someProperty'), isFalse);
-    });
+  //   test('object is null', () {
+  //     const Object? object = null;
+  //     expect(WhixpUtils.hasAttr(object, 'someProperty'), isFalse);
+  //   });
 
-    test(
-      'property name is an empty string',
-      () => expect(WhixpUtils.hasAttr(testClass, ''), isFalse),
-    );
+  //   test(
+  //     'property name is an empty string',
+  //     () => expect(WhixpUtils.hasAttr(testClass, ''), isFalse),
+  //   );
 
-    test(
-      'must return true when object has nullable property',
-      () => expect(WhixpUtils.hasAttr(testClass, 'nullProperty'), isTrue),
-    );
+  //   test(
+  //     'must return true when object has nullable property',
+  //     () => expect(WhixpUtils.hasAttr(testClass, 'nullProperty'), isTrue),
+  //   );
 
-    test(
-      'must return true when class contains specified method',
-      () => expect(WhixpUtils.hasAttr(testClass, 'intMethod'), isTrue),
-    );
-  });
+  //   test(
+  //     'must return true when class contains specified method',
+  //     () => expect(WhixpUtils.hasAttr(testClass, 'intMethod'), isTrue),
+  //   );
+  // });
 
-  group('getAttr method test cases', () {
-    final testClass = PropertyTestClass();
+  // group('getAttr method test cases', () {
+  //   final testClass = PropertyTestClass();
 
-    test('must get property value', () {
-      final property = WhixpUtils.getAttr(testClass, 'firstProperty');
-      expect(property, equals(42));
-    });
+  //   test('must get property value', () {
+  //     final property = WhixpUtils.getAttr(testClass, 'firstProperty');
+  //     expect(property, equals(42));
+  //   });
 
-    test('must get method result', () {
-      final method = WhixpUtils.getAttr(testClass, 'intMethod');
-      expect(method, isA<Function>());
+  //   test('must get method result', () {
+  //     final method = WhixpUtils.getAttr(testClass, 'intMethod');
+  //     expect(method, isA<Function>());
 
-      final result = (method as Function()).call();
-      expect(result, equals(0));
-    });
+  //     final result = (method as Function()).call();
+  //     expect(result, equals(0));
+  //   });
 
-    test(
-      'attribute does not exist',
-      () =>
-          expect(WhixpUtils.getAttr(testClass, 'nonexistentproperty'), isNull),
-    );
+  //   test(
+  //     'attribute does not exist',
+  //     () =>
+  //         expect(WhixpUtils.getAttr(testClass, 'nonexistentproperty'), isNull),
+  //   );
 
-    test(
-      'object is null',
-      () => expect(WhixpUtils.getAttr(null, 'nonexistentproperty'), isNull),
-    );
-  });
+  //   test(
+  //     'object is null',
+  //     () => expect(WhixpUtils.getAttr(null, 'nonexistentproperty'), isNull),
+  //   );
+  // });
 
-  group('setAttr method test cases', () {
-    final testClass = PropertyTestClass();
+  // group('setAttr method test cases', () {
+  //   final testClass = PropertyTestClass();
 
-    test('sets property value', () {
-      expect(WhixpUtils.getAttr(testClass, 'firstProperty'), equals(42));
+  //   test('sets property value', () {
+  //     expect(WhixpUtils.getAttr(testClass, 'firstProperty'), equals(42));
 
-      WhixpUtils.setAttr(testClass, 'firstProperty', 50);
+  //     WhixpUtils.setAttr(testClass, 'firstProperty', 50);
 
-      expect(WhixpUtils.getAttr(testClass, 'firstProperty'), equals(50));
-    });
+  //     expect(WhixpUtils.getAttr(testClass, 'firstProperty'), equals(50));
+  //   });
 
-    test(
-      'throws error for non-existent property',
-      () => expect(
-        () => WhixpUtils.setAttr(testClass, 'nonExistent', 'value'),
-        throwsArgumentError,
-      ),
-    );
+  //   test(
+  //     'throws error for non-existent property',
+  //     () => expect(
+  //       () => WhixpUtils.setAttr(testClass, 'nonExistent', 'value'),
+  //       throwsArgumentError,
+  //     ),
+  //   );
 
-    test(
-      'throws error for null object',
-      () => expect(
-        () => WhixpUtils.setAttr(null, 'firstProperty', 40),
-        throwsArgumentError,
-      ),
-    );
-  });
+  //   test(
+  //     'throws error for null object',
+  //     () => expect(
+  //       () => WhixpUtils.setAttr(null, 'firstProperty', 40),
+  //       throwsArgumentError,
+  //     ),
+  //   );
+  // });
 }

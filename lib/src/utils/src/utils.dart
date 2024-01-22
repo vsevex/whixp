@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:mirrors' as mirrors;
 import 'dart:typed_data';
 
 import 'package:whixp/src/escaper/escaper.dart';
@@ -440,10 +439,10 @@ class WhixpUtils {
   /// **Warning:**
   /// * Reflection can be affected by certain build configurations, and the
   /// effectiveness of this function may vary in those cases.
-  static bool hasAttr(Object? object, String property) {
-    final instanceMirror = mirrors.reflect(object);
-    return instanceMirror.type.instanceMembers.containsKey(Symbol(property));
-  }
+  // static bool hasAttr(Object? object, String property) {
+  //   final instanceMirror = mirrors.reflect(object);
+  //   return instanceMirror.type.instanceMembers.containsKey(Symbol(property));
+  // }
 
   /// Gets the value of an attribute from an object using reflection.
   ///
@@ -461,16 +460,16 @@ class WhixpUtils {
   /// **Warning:**
   /// * Reflection can be affected by certain build configurations, and the
   /// effectiveness of this function may vary in those cases.
-  static dynamic getAttr(Object? object, String attribute) {
-    final instanceMirror = mirrors.reflect(object);
+  // static dynamic getAttr(Object? object, String attribute) {
+  //   final instanceMirror = mirrors.reflect(object);
 
-    try {
-      final value = instanceMirror.getField(Symbol(attribute)).reflectee;
-      return value;
-    } catch (error) {
-      return null;
-    }
-  }
+  //   try {
+  //     final value = instanceMirror.getField(Symbol(attribute)).reflectee;
+  //     return value;
+  //   } catch (error) {
+  //     return null;
+  //   }
+  // }
 
   /// Sets the value of an attribute on an object using reflection.
   ///
@@ -485,16 +484,16 @@ class WhixpUtils {
   /// **Warning:**
   /// * Reflection can be affected by certain build configurations, and the
   /// effectiveness of this function may vary in those cases.
-  static void setAttr(Object? object, String attribute, dynamic value) {
-    if (value is Function) {
-      throw ArgumentError("Setting methods dynamically is not supported.");
-    }
-    final instanceMirror = mirrors.reflect(object);
-    try {
-      instanceMirror.setField(Symbol(attribute), value);
-    } catch (error) {
-      /// Handle cases where the attribute does not exist
-      throw ArgumentError("Attribute '$attribute' not found");
-    }
-  }
+  // static void setAttr(Object? object, String attribute, dynamic value) {
+  //   if (value is Function) {
+  //     throw ArgumentError("Setting methods dynamically is not supported.");
+  //   }
+  //   final instanceMirror = mirrors.reflect(object);
+  //   try {
+  //     instanceMirror.setField(Symbol(attribute), value);
+  //   } catch (error) {
+  //     /// Handle cases where the attribute does not exist
+  //     throw ArgumentError("Attribute '$attribute' not found");
+  //   }
+  // }
 }
