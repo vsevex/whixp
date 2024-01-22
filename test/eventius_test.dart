@@ -13,7 +13,7 @@ void main() {
 
       void testEvent(bool? data) => happened.add(data);
 
-      eventius.on<bool>('test', (data) => testEvent(data));
+      eventius.on<bool>('test', testEvent);
       eventius.emit<bool>('test', true);
       eventius.emit<bool>('test', true);
 
@@ -45,8 +45,8 @@ void main() {
       eventius.on<bool>('test', testEvent);
       eventius.on<bool>('test', testEventSecond);
 
-      eventius.emit<bool>('test');
-      eventius.emit<bool>('test');
+      await eventius.emit<bool>('test');
+      await eventius.emit<bool>('test');
 
       expect(happened.length, equals(4));
       expect(happened, equals([true, false, true, false]));
