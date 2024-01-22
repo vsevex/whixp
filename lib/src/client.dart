@@ -14,11 +14,11 @@ class Whixp extends WhixpBase {
   /// [host] is a server's host address. This parameter is optional and defaults
   /// to the value defined in the [WhixpBase].
   ///
-  /// [language] is a default language to use in stanza communication. Defaults
-  /// to `en`.
-  ///
   /// [port] is the port number for the server. This parameter is optional and
   /// defaults to the value defined in the [WhixpBase].
+  ///
+  /// [language] is a default language to use in stanza communication. Defaults
+  /// to `en`.
   ///
   /// Timeout for establishing the connection (in milliseconds) is represented
   /// by the [connectionTimeout] parameter. Defaults to `2000`.
@@ -36,10 +36,25 @@ class Whixp extends WhixpBase {
   ///
   /// [useTLS] is the DirectTLS activator. Defaults to `false`.
   ///
+  /// [disableStartTLS] defines whether the client will later call StartTLS or
+  /// not.
+  ///
+  /// When connecting to the server, there can be StartTLS handshaking and
+  /// when the client and server try to handshake, we need to upgrade our
+  /// connection. This flag disables that handshaking and forbids establishing
+  /// a TLS connection on the client side. Defaults to `false`.
+  ///
+  /// [endSessionOnDisconnect] controls if the session can be considered ended
+  /// if the connection is terminated. Defaults to `true`.
+  ///
   /// [logger] is a [Log] instance to print out various log messages properly.
   ///
   /// [certs] is a [List] of paths to a file containing certificates for
   /// verifying the server TLS certificate.
+  ///
+  /// [onBadCertificateCallback] passes [io.X509Certificate] instance when
+  /// returning boolean value which indicates to proceed on bad certificate or
+  /// not.
   ///
   /// ### Example:
   /// ```dart
@@ -50,7 +65,6 @@ class Whixp extends WhixpBase {
     String jabberID,
     String password, {
     super.host,
-    String language = 'en',
     super.port,
     super.connectionTimeout,
     super.whitespaceKeepAliveInterval,
@@ -58,9 +72,12 @@ class Whixp extends WhixpBase {
     super.useIPv6,
     super.useTLS,
     super.disableStartTLS,
+    super.endSessionOnDisconnect,
     super.whitespaceKeepAlive,
     super.logger,
     super.certs,
+    super.onBadCertificateCallback,
+    String language = 'en',
   }) : super(jabberID: jabberID) {
     _language = language;
 
@@ -185,7 +202,7 @@ class Whixp extends WhixpBase {
     }
   }
 
-  /// Connects to the server.
+  /// Connects to the XMPP server.
   ///
   /// When no address is given, a SRV lookup for the server will be attempted.
   /// If that fails, the server user in the JID will be used.
