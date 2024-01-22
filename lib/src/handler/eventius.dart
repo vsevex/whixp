@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:synchronized/extension.dart';
+
 /// A typedef for a function that removes a listener.
 ///
 /// The [_RemoveListener] function is returned when registering a listener,
@@ -23,11 +25,11 @@ abstract class _Eventius {
   late final _events = <String, List<dynamic>>{};
 
   /// Registers a listener for the sprecified [event] with the given [handler].
-  _RemoveListener on<B>(String event, _Handler handler);
+  _RemoveListener on<B>(String event, _Handler<B> handler);
 
   /// Register a one-time listener for the specified [event] with the given
   /// [handler].
-  void once<A>(String event, _Handler handler);
+  void once<A>(String event, _Handler<A> handler);
 
   /// Emits an event with optional data to all registered listeners for that
   /// event.
@@ -69,8 +71,10 @@ class Eventius extends _Eventius {
   /// ```
   @override
   _RemoveListener on<B>(String event, _Handler<B> handler) {
-    final List<_Handler<B>> handlerContainer =
-        _events.putIfAbsent(event, () => <_Handler<B>>[]) as List<_Handler<B>>;
+    final List<_Handler<B>> handlerContainer = _events.putIfAbsent(
+      event,
+      () => <_Handler<B>>[],
+    ) as List<_Handler<B>>;
 
     void offThislistener() => handlerContainer.remove(handler);
 
@@ -95,13 +99,14 @@ class Eventius extends _Eventius {
   /// ```
   @override
   void once<A>(String event, _Handler<A> handler) {
-    final handlerContainer = _events.putIfAbsent(event, () => <_Handler<A>>[]);
+    final List<_Handler<A>> handlerContainer =
+        _events.putIfAbsent(event, () => <_Handler<A>>[]) as List<_Handler<A>>;
     handlerContainer.add(
       (A? data) async {
         if (handler is Future) {
-          await handler(data);
+          await synchronized(() => handler.call(data));
         } else {
-          handler(data);
+          handler.call(data);
         }
         off(event);
       },
@@ -122,12 +127,12 @@ class Eventius extends _Eventius {
   @override
   FutureOr<void> emit<B>(String event, [B? data]) async {
     final List<_Handler<B>> handlerContainer =
-        (_events[event] as List<_Handler<B>>?) ?? [];
+        _events.putIfAbsent(event, () => <_Handler<B>>[]) as List<_Handler<B>>;
     for (final handler in handlerContainer) {
       if (handler is Future) {
-        await handler(data);
+        await synchronized(() => handler.call(data));
       } else {
-        handler(data);
+        handler.call(data);
       }
     }
   }
