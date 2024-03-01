@@ -1,7 +1,14 @@
+export 'command/command.dart';
+export 'compression/compression.dart';
 export 'delay/delay.dart';
 export 'disco/disco.dart';
 export 'form/dataforms.dart';
+export 'pep/pep.dart';
 export 'ping/ping.dart';
 export 'pubsub/pubsub.dart';
+export 'register/register.dart';
 export 'rsm/rsm.dart';
+export 'sm/sm.dart';
 export 'time/time.dart';
+export 'tune/tune.dart';
+export 'vcard/vcard.dart';
