@@ -29,7 +29,7 @@ class RosterNode {
   bool ignoreUpdates = false;
 
   /// Roster's version ID.
-  String version = '';
+  String version = 'ver1';
 
   /// Return the roster item for a subscribed [JabberID].
   dynamic operator [](String key) {
@@ -40,13 +40,35 @@ class RosterNode {
     return _jids[bare];
   }
 
+  Future<void> _setBackend() async {
+    final existingEntries = _jids;
+    final newEntries = _HiveDatabase().getJID(jid);
+
+    final newJids = newEntries?.keys.toList();
+
+    for (final jid in existingEntries.keys) {
+      await _jids[jid]!._setBackend();
+    }
+    if (newJids != null) {
+      for (final jid in existingEntries.keys
+          .where((element) => !newJids.contains(element))
+          .toList()) {
+        add(jid);
+      }
+    }
+  }
+
+  /// Checks rather there is data in the local storage or not.
+  bool get isLocalEmpty {
+    final items = _HiveDatabase().getJID(jid);
+    return items == null || items.isEmpty;
+  }
+
   /// Remove a roster item from the local. To remotely remove the item from the
   /// roster use [remove] method instead.
   void delete(String key) {
     final bare = JabberID(key).bare;
-    if (_jids.containsKey(bare)) {
-      _jids.remove(bare);
-    }
+    if (_jids.containsKey(bare)) _jids.remove(bare);
   }
 
   /// Returns a list of all subscribed JIDs in [String] format.
@@ -61,15 +83,9 @@ class RosterNode {
 
     for (final jid in _jids.entries) {
       final groups = (_jids[jid.key]!)['groups'] as List;
-      if (groups.isEmpty) {
-        if (!result.containsKey('')) {
-          result[''] = jid.key;
-        }
-      }
+      if (groups.isEmpty) if (!result.containsKey('')) result[''] = jid.key;
       for (final group in groups) {
-        if (result.containsKey(group)) {
-          result[group] = [];
-        }
+        if (result.containsKey(group)) result[group] = [];
         result[group] = jid.key;
       }
     }
@@ -139,27 +155,30 @@ class RosterNode {
   void unsubscribe(String jid) => (this[jid] as RosterItem).unsubscribe();
 
   /// Removes a [JabberID] from the roster (remote).
-  void remove(String jid) {
+  FutureOr<IQ?> remove(String jid) {
     (this[jid] as RosterItem).remove();
-    if (!_whixp.transport.isComponent) {
-      return update(jid, subscription: 'remove');
-    }
+    if (!_whixp.isComponent) return update(jid, subscription: 'remove');
+
+    return null;
   }
 
   /// Update a [JabberID]'s roster information.
-  void update(
+  FutureOr<IQ?> update<T>(
     String jid, {
     String? name,
     String? subscription,
-    List? groups,
+    List<String>? groups,
+    FutureOr<T> Function(IQ iq)? callback,
+    FutureOr<void> Function(StanzaError error)? failureCallback,
+    FutureOr<void> Function()? timeoutCallback,
+    int timeout = 10,
   }) {
-    (this[jid] as RosterItem)['item'] = name;
-    (this[jid] as RosterItem)['groups'] = groups ?? [];
+    (this[jid] as RosterItem)['name'] = name;
+    (this[jid] as RosterItem)['groups'] = groups ?? <String>[];
 
-    if (!_whixp.transport.isComponent) {
-      final iq = IQ();
+    if (!_whixp.isComponent) {
+      final iq = _whixp.makeIQSet();
       iq.registerPlugin(roster.Roster());
-      iq['type'] = 'set';
       (iq['roster'] as roster.Roster)['items'] = {
         jid: {
           'name': name,
@@ -168,19 +187,22 @@ class RosterNode {
         },
       };
 
-      iq.sendIQ();
-      return;
+      return iq.sendIQ(
+        callback: callback,
+        failureCallback: failureCallback,
+        timeoutCallback: timeoutCallback,
+        timeout: timeout,
+      );
     }
+    return Future.value();
   }
 
   /// Returns [Presence] information for a [JabberID]'s resources.
   ///
-  /// May return either all onlnie resources' status, or a single [resource]'s
+  /// May return either all online resources' status, or a single [resource]'s
   /// status.
   dynamic presence(String jid, {String? resource}) {
-    if (resource == null) {
-      return (this[jid] as RosterItem).resources;
-    }
+    if (resource == null) return (this[jid] as RosterItem).resources;
 
     final defaultResource = <String, dynamic>{
       'status': '',
@@ -206,9 +228,7 @@ class RosterNode {
   /// forward the send request to the recipient's roster entry for processing.
   void sendPresence() {
     JabberID? presenceFrom;
-    if (_whixp.transport.isComponent) {
-      presenceFrom = JabberID(jid);
-    }
+    if (_whixp.isComponent) presenceFrom = JabberID(jid);
     _whixp.sendPresence(presenceFrom: presenceFrom);
   }
 
@@ -217,7 +237,7 @@ class RosterNode {
       sendPresence();
     } else {
       final presence = lastStatus;
-      if (_whixp.transport.isComponent) {
+      if (_whixp.isComponent) {
         presence!['from'] = jid;
       } else {
         presence!.delete('from');
