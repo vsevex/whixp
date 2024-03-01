@@ -6,7 +6,6 @@ import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/handler/handler.dart';
 import 'package:whixp/src/log/log.dart';
 import 'package:whixp/src/plugins/base.dart';
-import 'package:whixp/src/plugins/mechanisms/stanza/stanza.dart';
 import 'package:whixp/src/sasl/sasl.dart';
 import 'package:whixp/src/stream/base.dart';
 import 'package:whixp/src/stream/matcher/matcher.dart';
@@ -19,6 +18,7 @@ part 'stanza/_failure.dart';
 part 'stanza/_challenge.dart';
 part 'stanza/_response.dart';
 part 'stanza/_success.dart';
+part 'stanza/stanza.dart';
 
 @internal
 typedef SASLCallback = Map<String, String> Function(
@@ -30,8 +30,7 @@ typedef SASLCallback = Map<String, String> Function(
 typedef SecurityCallback = Map<String, bool> Function(Set<String> values);
 
 class FeatureMechanisms extends PluginBase {
-  FeatureMechanisms(
-    this._features, {
+  FeatureMechanisms({
     this.saslCallback,
     this.securityCallback,
     bool encryptedPlain = false,
@@ -42,8 +41,6 @@ class FeatureMechanisms extends PluginBase {
     _unencryptedPlain = unencryptedPlain;
     _unencryptedScram = unencryptedScram;
   }
-
-  final StanzaBase _features;
 
   SASLCallback? saslCallback;
   SecurityCallback? securityCallback;
@@ -103,10 +100,6 @@ class FeatureMechanisms extends PluginBase {
 
     saslCallback ??= _defaultCredentials;
     securityCallback ??= _defaultSecurity;
-
-    final mechanisms = Mechanisms();
-    _features.registerPlugin(mechanisms);
-    _features.enable(mechanisms.name);
   }
 
   Map<String, String> _defaultCredentials(
