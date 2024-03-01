@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' as io;
 
+import 'package:crypto/crypto.dart';
 import 'package:dartz/dartz.dart';
 import 'package:meta/meta.dart';
 
@@ -13,6 +14,7 @@ import 'package:whixp/src/plugins/features.dart';
 import 'package:whixp/src/roster/manager.dart' as rost;
 import 'package:whixp/src/stanza/error.dart';
 import 'package:whixp/src/stanza/features.dart';
+import 'package:whixp/src/stanza/handshake.dart';
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stanza/message.dart';
 import 'package:whixp/src/stanza/presence.dart';
@@ -22,9 +24,8 @@ import 'package:whixp/src/stream/matcher/matcher.dart';
 import 'package:whixp/src/transport.dart';
 import 'package:whixp/src/utils/utils.dart';
 
-import 'package:xml/xml.dart' as xml;
-
 part 'client.dart';
+part 'component.dart';
 
 abstract class WhixpBase {
   /// Adapts the generic [Transport] class for use with XMPP. It also provides
@@ -59,10 +60,6 @@ abstract class WhixpBase {
     /// connection. This flag disables that handshaking and forbids establishing
     /// a TLS connection on the client side. Defaults to `false`
     bool disableStartTLS = false,
-
-    /// Controls if the session can be considered ended if the connection is
-    /// terminated.
-    bool endSessionOnDisconnect = false,
 
     /// If `true`, periodically send a whitespace character over the wire to
     /// keep the connection alive
@@ -100,6 +97,8 @@ abstract class WhixpBase {
 
     /// [Log] instance to print out various log messages properly
     Log? logger,
+    this.hivePathName = 'whixp',
+    this.provideHivePath = false,
   }) {
     _streamNamespace = WhixpUtils.getNamespace('JABBER_STREAM');
 
@@ -140,6 +139,9 @@ abstract class WhixpBase {
         address = host;
         dnsService = null;
       }
+    } else {
+      address = host ?? boundJID.host;
+      dnsService = null;
     }
 
     /// Declare [Transport] with the passed params.
@@ -148,7 +150,6 @@ abstract class WhixpBase {
       port: port,
       useIPv6: useIPv6,
       disableStartTLS: disableStartTLS,
-      endSessionOnDisconnect: endSessionOnDisconnect,
       boundJID: boundJID,
       isComponent: isComponent,
       dnsService: dnsService,
@@ -159,10 +160,14 @@ abstract class WhixpBase {
       whitespaceKeepAlive: whitespaceKeepAlive,
       whitespaceKeepAliveInterval: whitespaceKeepAliveInterval,
       maxReconnectionAttempt: maxReconnectionAttempt,
-      startStreamHandler: (attributes, transport) {
+    );
+
+    /// Set up the transport with XMPP's root stanzas & handlers.
+    transport
+      ..startStreamHandler = ([attributes]) {
         String streamVersion = '';
 
-        for (final attribute in attributes) {
+        for (final attribute in attributes!) {
           if (attribute.localName == 'version') {
             streamVersion = attribute.value;
           } else if (attribute.qualifiedName == 'xml:lang') {
@@ -173,11 +178,7 @@ abstract class WhixpBase {
         if (!isComponent && streamVersion.isEmpty) {
           transport.emit('legacyProtocol');
         }
-      },
-    );
-
-    /// Set up the transport with XMPP's root stanzas & handlers.
-    transport
+      }
       ..registerStanza(IQ(generateID: false))
       ..registerStanza(Presence())
       ..registerStanza(Message(includeNamespace: true))
@@ -187,6 +188,13 @@ abstract class WhixpBase {
           'Presence',
           _handlePresence,
           matcher: XPathMatcher('{$_defaultNamespace}presence'),
+        ),
+      )
+      ..registerHandler(
+        CallbackHandler(
+          'Presence',
+          _handlePresence,
+          matcher: XPathMatcher('{null}presence'),
         ),
       )
       ..registerHandler(
@@ -296,6 +304,10 @@ abstract class WhixpBase {
   /// for choosing how to handle the `to` and `from` JIDs of stanzas.
   final bool isComponent = false;
 
+  /// Hive properties.
+  final String hivePathName;
+  final bool provideHivePath;
+
   @internal
   Map<String, String> credentials = <String, String>{};
 
@@ -324,6 +336,15 @@ abstract class WhixpBase {
     _streamFeatureOrder.sort((a, b) => a.value1.compareTo(b.value1));
   }
 
+  /// Unregisters a stream feature handler.
+  void unregisterFeature(String name, {int order = 5000}) {
+    if (_streamFeatureHandlers.containsKey(name)) {
+      _streamFeatureHandlers.remove(name);
+    }
+    _streamFeatureOrder.remove(Tuple2(order, name));
+    _streamFeatureOrder.sort((a, b) => a.value1.compareTo(b.value1));
+  }
+
   /// Create, initialize, and send a new [Presence].
   void sendPresence({
     /// The recipient of a directed presence
@@ -348,8 +369,13 @@ abstract class WhixpBase {
     String? presenceNick,
   }) {
     final presence = makePresence(
-      presenceFrom: presenceFrom,
       presenceTo: presenceTo,
+      presenceFrom: presenceFrom,
+      presenceShow: presenceShow,
+      presenceStatus: presenceStatus,
+      presencePriority: presencePriority,
+      presenceType: presenceType,
+      presenceNick: presenceNick,
     );
     return presence.send();
   }
@@ -474,12 +500,7 @@ abstract class WhixpBase {
   /// Creates a stanza of type `set`.
   ///
   /// Optionally, a substanza may be given to use as the stanza's payload.
-  IQ makeIQSet({
-    IQ? iq,
-    JabberID? iqTo,
-    JabberID? iqFrom,
-    Tuple2<xml.XmlElement?, XMLBase?>? sub,
-  }) {
+  IQ makeIQSet({IQ? iq, JabberID? iqTo, JabberID? iqFrom, dynamic sub}) {
     iq ??= IQ(transport: transport);
     iq['type'] = 'set';
     if (sub != null) {
@@ -496,19 +517,26 @@ abstract class WhixpBase {
   }
 
   /// Request the roster from the server.
-  void getRoster() {
-    final iq = IQ(transport: transport);
-    iq['type'] = 'get';
-    iq.registerPlugin(Roster());
-    iq.enable('roster');
+  void getRoster<T>({
+    FutureOr<T> Function(IQ iq)? callback,
+    FutureOr<void> Function(StanzaError error)? failureCallback,
+    FutureOr<void> Function()? timeoutCallback,
+    int timeout = 10,
+  }) {
+    final iq = makeIQGet();
 
     if (features.contains('rosterver')) {
-      (iq['roster'] as XMLBase)['ver'] = clientRoster.version;
+      (iq['roster'] as Roster)['ver'] = clientRoster.version;
     }
 
     iq.sendIQ(
-      callback: (stanza) =>
-          transport.emit<StanzaBase>('rosterUpdate', data: stanza),
+      callback: (iq) {
+        transport.emit<IQ>('rosterUpdate', data: iq);
+        callback?.call(iq);
+      },
+      failureCallback: failureCallback,
+      timeoutCallback: timeoutCallback,
+      timeout: timeout,
     );
   }
 
@@ -655,7 +683,7 @@ abstract class WhixpBase {
 
   /// Adds a custom [event] [handler] which will be executed whenever its event
   /// is manually triggered.
-  void addEventHandler<B extends Object>(
+  void addEventHandler<B>(
     String event,
     FutureOr<void> Function(B? data) handler, {
     bool once = false,
