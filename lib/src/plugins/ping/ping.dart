@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:dartz/dartz.dart';
+
 import 'package:whixp/src/handler/handler.dart';
 import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/log/log.dart';
@@ -56,13 +58,13 @@ class Ping extends PluginBase {
   late final bool _keepAlive;
 
   late final IQ _iq;
-  late List<Completer<void>> _pendingTasks;
+  late List<Task> _pendingTasks;
 
   @override
   void pluginInitialize() {
     _iq = IQ(transport: base.transport);
 
-    _pendingTasks = <Completer<void>>[];
+    _pendingTasks = <Task>[];
 
     base.transport.registerHandler(
       CallbackHandler(
@@ -93,18 +95,18 @@ class Ping extends PluginBase {
 
   void _enableKeepalive() {
     void handler() {
+      final temp = <Task>[];
       if (_pendingTasks.isNotEmpty) {
-        final temp = <Completer<void>>[];
         for (final task in _pendingTasks) {
-          if (!task.isCompleted) {
-            temp.add(task);
-          }
+          task.run();
+          temp.add(task);
         }
-        _pendingTasks = temp;
+      }
+      for (final task in temp) {
+        _pendingTasks.remove(task);
       }
 
-      final future = Completer()..complete(_keepalive);
-      _pendingTasks.add(future);
+      _pendingTasks.add(Task(_keepalive));
     }
 
     base.transport.schedule(
@@ -215,7 +217,9 @@ class Ping extends PluginBase {
   /// Automatically reply to ping requests.
   void _handlePing(IQ iq) {
     Log.instance.debug('Ping by ${iq['from']}');
-    iq.replyIQ().sendIQ();
+    iq.replyIQ()
+      ..transport = base.transport
+      ..sendIQ();
   }
 
   @override
