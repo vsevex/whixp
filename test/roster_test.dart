@@ -8,10 +8,7 @@ import 'test_base.dart';
 void main() {
   late IQ iq;
 
-  setUp(() {
-    iq = IQ(generateID: false);
-    iq.enable('roster');
-  });
+  setUp(() => iq = IQ(generateID: false));
 
   group('iq roster test cases', () {
     test('must properly add items to a roster stanza', () {
