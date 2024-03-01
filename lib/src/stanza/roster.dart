@@ -39,6 +39,7 @@ class Roster extends XMLBase {
   Roster({
     super.pluginTagMapping,
     super.pluginAttributeMapping,
+    super.pluginIterables,
     super.getters,
     super.setters,
     super.deleters,
@@ -103,6 +104,7 @@ class Roster extends XMLBase {
   Roster copy({xml.XmlElement? element, XMLBase? parent}) => Roster(
         pluginTagMapping: pluginTagMapping,
         pluginAttributeMapping: pluginAttributeMapping,
+        pluginIterables: pluginIterables,
         getters: getters,
         setters: setters,
         deleters: deleters,
