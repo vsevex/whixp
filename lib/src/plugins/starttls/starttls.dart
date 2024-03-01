@@ -9,13 +9,11 @@ import 'package:whixp/src/utils/utils.dart';
 part 'stanza.dart';
 
 class FeatureStartTLS extends PluginBase {
-  FeatureStartTLS(this._features)
+  FeatureStartTLS()
       : super(
           'starttls',
           description: 'Stream Feature: STARTTLS',
         );
-
-  final StanzaBase _features;
 
   @override
   void pluginInitialize() {
@@ -29,13 +27,9 @@ class FeatureStartTLS extends PluginBase {
         matcher: XPathMatcher(proceed.tag),
       ),
     );
-    base.registerFeature('starttls', _handleStartTLS, restart: true);
+    base.registerFeature('starttls', _handleStartTLS, restart: true, order: 0);
     base.transport.registerStanza(proceed);
     base.transport.registerStanza(failure);
-
-    final startTLS = StartTLS();
-    _features.registerPlugin(startTLS);
-    _features.enable(startTLS.name);
   }
 
   /// Handle notification that the server supports TLS.

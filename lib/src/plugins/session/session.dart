@@ -10,10 +10,8 @@ import 'package:xml/xml.dart' as xml;
 part 'stanza.dart';
 
 class FeatureSession extends PluginBase {
-  FeatureSession(this._features)
-      : super('session', description: 'Start Session');
+  FeatureSession() : super('session', description: 'Start Session');
 
-  final StanzaBase _features;
   late final IQ _iq;
 
   @override
@@ -24,7 +22,6 @@ class FeatureSession extends PluginBase {
     base.registerFeature('session', _handleSessionStart, order: 10001);
 
     _iq.registerPlugin(session);
-    _features.registerPlugin(session);
   }
 
   Future<void> _handleSessionStart(StanzaBase features) async {
