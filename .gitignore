@@ -15,3 +15,6 @@ pubspec.lock
 
 # Ejabberd configuration files
 .ejabberd/
+
+# Local Certificate Files for Development
+certs/
