@@ -11,7 +11,7 @@ import 'package:xml/xml.dart' as xml;
 part 'field.dart';
 part 'form.dart';
 
-/// DataForm - XMPP plugin for XEP-0004: Data Forms
+/// DataForms - XMPP plugin for XEP-0004: Data Forms
 ///
 /// This class is a plugin support for Data Forms (XEP-0004), which defines a
 /// protocol for exchanging structured data through forms. This plugin extends
@@ -21,16 +21,16 @@ part 'form.dart';
 /// ### Example:
 /// ```dart
 /// final whixp = Whixp();
-/// final form = DataForm();
+/// final form = DataForms();
 ///
-/// whixp.registerPlugin(form); /// registered the [DataForm] plugin in the client
+/// whixp.registerPlugin(form); /// registered the [DataForms] plugin in the client
 ///
 /// final createdForm = form.createForm();
 /// ```
-class DataForm extends PluginBase {
-  /// Initializes the [DataForm] instance. It sets the plugin name to `forms`
+class DataForms extends PluginBase {
+  /// Initializes the [DataForms] instance. It sets the plugin name to `forms`
   /// and provides a description for the plugin. It is dependent to the plugin.
-  DataForm()
+  DataForms()
       : super(
           'forms',
           description: 'XEP-0004: Data Forms',
