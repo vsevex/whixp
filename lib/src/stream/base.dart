@@ -410,8 +410,10 @@ class XMLBase {
     final children = <Tuple2<xml.XmlElement, XMLBase?>>{};
 
     for (final child in element!.childElements.toSet()) {
-      final namespace =
-          child.getAttribute('xmlns') ?? element!.getAttribute('xmlns');
+      /// Must assign one of the namespaces.
+      final namespace = child.getAttribute('xmlns') ??
+          element!.getAttribute('xmlns') ??
+          WhixpUtils.getNamespace('CLIENT');
       final tag = '{$namespace}${child.localName}';
 
       if (this.pluginTagMapping.containsKey(tag) &&
@@ -1377,16 +1379,18 @@ class XMLBase {
     /// Attempt to continue matching the XPath using the stanza's plugin
     if (!matchedSubstanzas && xpath.length > 1) {
       final nextTag = xpath[1].split('@')[0].split('}').last;
-      final languages = <String>[];
+      final tags = <int, String?>{};
+      int i = 0;
 
       for (final entry in _plugins.entries) {
         if (entry.key.value1 == nextTag) {
-          languages.add(entry.key.value2);
+          tags[i] = entry.key.value2.isEmpty ? null : entry.key.value2;
+          i++;
         }
       }
 
-      for (final language in languages) {
-        final plugin = getPlugin(nextTag, language: language);
+      for (final entry in tags.entries) {
+        final plugin = getPlugin(nextTag, language: entry.value);
         if (plugin != null && plugin.match(Tuple2(null, xpath.sublist(1)))) {
           return true;
         }
