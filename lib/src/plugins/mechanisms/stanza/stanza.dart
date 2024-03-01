@@ -1,9 +1,4 @@
-import 'package:meta/meta.dart';
-
-import 'package:whixp/src/stream/base.dart';
-import 'package:whixp/src/utils/utils.dart';
-
-import 'package:xml/xml.dart' as xml;
+part of '../feature.dart';
 
 @internal
 class Mechanisms extends XMLBase {
