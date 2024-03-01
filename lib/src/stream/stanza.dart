@@ -89,7 +89,8 @@ class StanzaBase extends XMLBase {
   void setTo(String to) => setAttribute('to', to);
 
   /// Returns the value of stanza's `from` attribute.
-  JabberID get from => JabberID(getAttribute('from'));
+  JabberID? get from =>
+      getAttribute('from').isEmpty ? null : JabberID(getAttribute('from'));
 
   /// Set the default `to` attribute of the stanza according to the passed
   /// [frpm] value.
