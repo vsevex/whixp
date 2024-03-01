@@ -1,5 +1,11 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:hive/hive.dart';
 import 'package:meta/meta.dart';
+
 import 'package:whixp/src/jid/jid.dart';
+import 'package:whixp/src/stanza/error.dart';
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stanza/presence.dart';
 import 'package:whixp/src/stanza/roster.dart' as roster;
@@ -7,8 +13,11 @@ import 'package:whixp/src/stream/base.dart';
 import 'package:whixp/src/transport.dart';
 import 'package:whixp/src/whixp.dart';
 
+part '_database.dart';
 part 'item.dart';
 part 'node.dart';
+
+const _rosterTable = 'roster';
 
 /// ## Roster Manager
 ///
@@ -28,10 +37,12 @@ class RosterManager {
     /// Default autoSubscribe value for the new roster nodes
     this.autoSubscribe = true,
   }) {
-    _whixp.transport.addFilter<void>(
+    _whixp.transport.addFilter(
       mode: FilterMode.out,
       filter: _saveLastStatus,
     );
+
+    _initializeDatabase();
   }
 
   final WhixpBase _whixp;
@@ -44,6 +55,25 @@ class RosterManager {
 
   /// Keeps [RosterNode] instances for this roster.
   final _rosters = <String, RosterNode>{};
+
+  Future<void> _initializeDatabase() async {
+    await _HiveDatabase().initialize(
+      _rosterTable,
+      _whixp.provideHivePath ? _whixp.hivePathName : null,
+    );
+
+    final entries = _HiveDatabase().box.values;
+
+    for (final node in _rosters.keys) {
+      await _rosters[node]!._setBackend();
+    }
+    for (final entry in entries) {
+      for (final node
+          in entry.keys.where((key) => !_rosters.keys.contains(key)).toList()) {
+        add(node as String);
+      }
+    }
+  }
 
   StanzaBase _saveLastStatus(dynamic stanza) {
     if (stanza is Presence) {
@@ -91,20 +121,16 @@ class RosterManager {
 
   /// Adds a new roster node for the given JID.
   void add(String node) {
-    final bare = JabberID(node).bare;
-
-    if (!_rosters.containsKey(bare)) {
-      _rosters[node] = RosterNode(_whixp, jid: bare);
+    if (!_rosters.containsKey(node)) {
+      _rosters[node] = RosterNode(_whixp, jid: node);
     }
   }
 
   /// Resets the state of the roster to forget any current [Presence]
   /// information.
   void reset() {
-    if (_rosters.length > 1) {
-      for (final node in _rosters.entries) {
-        (this[node.key] as RosterItem).reset();
-      }
+    for (final node in _rosters.entries) {
+      (this[node.key] as RosterNode).reset();
     }
   }
 
@@ -114,7 +140,7 @@ class RosterManager {
   /// forward the send request to the recipient's roster entry for processing.
   void sendPresence() {
     JabberID? presenceFrom;
-    if (_whixp.transport.isComponent) {
+    if (_whixp.isComponent) {
       presenceFrom = _whixp.transport.boundJID;
     }
     _whixp.sendPresence(presenceFrom: presenceFrom);
