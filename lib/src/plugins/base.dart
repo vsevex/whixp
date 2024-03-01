@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:meta/meta.dart';
 import 'package:synchronized/synchronized.dart';
 
+import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/log/log.dart';
 import 'package:whixp/src/whixp.dart';
 
@@ -156,7 +157,10 @@ abstract class PluginBase {
   /// Initializes the plugin. Concrete implementations should override this
   /// method to perform necessary setup or initialization.
   void _initialize() {
-    base.addEventHandler<String>('sessionBind', sessionBind);
+    base.addEventHandler<JabberID>(
+      'sessionBind',
+      (jid) => sessionBind(jid.toString()),
+    );
     base.addEventHandler('sessionEnd', (_) => pluginEnd());
     if (base.transport.sessionBind) {
       sessionBind(base.transport.boundJID.toString());
