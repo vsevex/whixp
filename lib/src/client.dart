@@ -72,11 +72,12 @@ class Whixp extends WhixpBase {
     super.useIPv6,
     super.useTLS,
     super.disableStartTLS,
-    super.endSessionOnDisconnect,
     super.whitespaceKeepAlive,
     super.logger,
     super.certs,
     super.onBadCertificateCallback,
+    super.hivePathName,
+    super.provideHivePath,
     String language = 'en',
   }) : super(jabberID: jabberID) {
     _language = language;
@@ -99,12 +100,12 @@ class Whixp extends WhixpBase {
     StanzaBase features = StreamFeatures();
 
     /// Register all necessary features.
-    registerPlugin(FeatureBind(features));
-    registerPlugin(FeatureSession(features));
-    registerPlugin(FeatureStartTLS(features));
-    registerPlugin(FeatureMechanisms(features));
-    registerPlugin(FeatureRosterVersioning(features));
-    registerPlugin(FeaturePreApproval(features));
+    registerPlugin(FeatureBind());
+    registerPlugin(FeatureSession());
+    registerPlugin(FeatureStartTLS());
+    registerPlugin(FeatureMechanisms());
+    registerPlugin(FeatureRosterVersioning());
+    registerPlugin(FeaturePreApproval());
 
     transport
       ..registerStanza(features)
@@ -119,13 +120,37 @@ class Whixp extends WhixpBase {
           matcher: XPathMatcher('{$_streamNamespace}features'),
         ),
       )
-      ..addEventHandler<String>(
+      ..addEventHandler<JabberID>(
         'sessionBind',
-        (data) => _handleSessionBind(data!),
+        (jid) => _handleSessionBind(jid!),
       )
-      ..addEventHandler<StanzaBase>(
-        'rosterUpdate',
-        (stanza) => _handleRoster(stanza!),
+      ..addEventHandler<IQ>('rosterUpdate', (iq) => _handleRoster(iq!))
+      ..registerHandler(
+        CallbackHandler(
+          'Roster Update',
+          (iq) {
+            final JabberID? from;
+            try {
+              from = iq.from;
+              if (from != null &&
+                  from.toString().isNotEmpty &&
+                  from.toString() != transport.boundJID.bare) {
+                final reply = (iq as IQ).replyIQ();
+                reply['type'] = 'error';
+                final error = reply['error'] as StanzaError;
+                error['type'] = 'cancel';
+                error['code'] = 503;
+                error['condition'] = 'service-unavailable';
+                reply.sendIQ();
+                return;
+              }
+              transport.emit<IQ>('rosterUpdate', data: iq as IQ);
+            } on Exception {
+              transport.emit<IQ>('rosterUpdate', data: iq as IQ);
+            }
+          },
+          matcher: StanzaPathMatcher('iq@type=set/roster'),
+        ),
       );
 
     transport.defaultLanguage = _language;
@@ -147,57 +172,110 @@ class Whixp extends WhixpBase {
 
         final result = await handler(features);
 
+        /// Using delay, 'cause establishing connection may require time,
+        /// and if there is something to do with event handling, we should have
+        /// time to do necessary things. (e.g. registering user before sending
+        /// auth challenge to the server)
+        await Future.delayed(const Duration(milliseconds: 150));
+
         if (result != null && restart) {
-          return true;
+          if (result is bool) {
+            if (result) {
+              return true;
+            }
+          } else {
+            return true;
+          }
         }
       }
     }
 
+    Log.instance.info('Finished processing stream features.');
+    transport.emit('streamNegotiated');
     return false;
   }
 
-  void _handleSessionBind(String jid) =>
-      clientRoster = roster[jid] as rost.RosterNode;
+  void _handleSessionBind(JabberID jid) =>
+      clientRoster = roster[jid.bare] as rost.RosterNode;
 
-  void _handleRoster(StanzaBase iq) {
-    iq.enable('roster');
-    final stanza = iq['roster'] as XMLBase;
+  /// Adds or changes a roster item.
+  ///
+  /// [jid] is the entry to modify.
+  FutureOr<IQ?> updateRoster<T>(
+    String jid, {
+    String? name,
+    String? subscription,
+    List<String>? groups,
+    FutureOr<T> Function(IQ iq)? callback,
+    FutureOr<void> Function(StanzaError error)? failureCallback,
+    FutureOr<void> Function()? timeoutCallback,
+    int timeout = 10,
+  }) {
+    final current = clientRoster[jid] as rost.RosterItem;
+
+    name ??= current['name'] as String;
+    subscription ??= current['subscription'] as String;
+    groups ??= (current['groups'] as List).isEmpty
+        ? null
+        : current['groups'] as List<String>;
+
+    return clientRoster.update(
+      jid,
+      name: name,
+      groups: groups,
+      subscription: subscription,
+      callback: callback,
+      failureCallback: failureCallback,
+      timeoutCallback: timeoutCallback,
+      timeout: timeout,
+    );
+  }
+
+  void _handleRoster(IQ iq) {
     if (iq['type'] == 'set') {
-      final bare = JabberID(iq['from'] as String).bare;
-      if (bare.isNotEmpty && bare != transport.boundJID.bare) {
-        throw StanzaException.serviceUnavailable(iq);
+      final JabberID? from;
+      try {
+        from = iq.from;
+        if (from != null &&
+            from.bare.isNotEmpty &&
+            from.bare != transport.boundJID.bare) {
+          throw StanzaException.serviceUnavailable(iq);
+        }
+      } on Exception {
+        /// pass;
       }
     }
 
-    final roster = clientRoster;
-    if (stanza['ver'] != null) {
-      roster.version = stanza['ver'] as String;
+    if (((iq['roster'] as Roster).copy()['ver'] as String).isNotEmpty) {
+      clientRoster.version = (iq['roster'] as Roster)['ver'] as String;
     }
+    final items =
+        (iq['roster'] as Roster)['items'] as Map<String, Map<String, dynamic>>;
 
-    final items = stanza['items'] as Map<String, Map<String, dynamic>>;
-
-    final validSubs = {'to', 'from', 'both', 'none', 'remove'};
+    final validSubscriptions = <String>{'to', 'from', 'both', 'none', 'remove'};
     for (final item in items.entries) {
-      if (validSubs.contains(item.value['subscription'] as String)) {
-        final value = item.value;
-        (roster[item.key] as Roster)['name'] = value['name'];
-        (roster[item.key] as Roster)['groups'] = value['groups'];
-        (roster[item.key] as Roster)['from'] =
-            {'from', 'both'}.contains(value['subscription']);
-        (roster[item.key] as Roster)['to'] =
-            {'to', 'both'}.contains(value['subscription']);
-        (roster[item.key] as Roster)['pending_out'] =
-            value['ask'] == 'subscribe';
+      final value = item.value;
+      final rosterItem = clientRoster[item.key] as rost.RosterItem;
+      if (validSubscriptions.contains(value['subscription'])) {
+        rosterItem['name'] = value['name'];
+        rosterItem['groups'] = value['groups'];
+        rosterItem['from'] =
+            <String>{'from', 'both'}.contains(value['subscription'] as String);
+        rosterItem['to'] =
+            <String>{'to', 'both'}.contains(value['subscription'] as String);
+        rosterItem['pending_out'] = value['ask'] == 'subscribe';
+
+        rosterItem.save(remove: value['subscription'] == 'remove');
       }
     }
 
     if (iq['type'] == 'set') {
       final response = IQ(
-        stanzaTo: iq['from'] != null ? JabberID(iq['from'] as String) : null,
-        stanzaID: iq['id'] as String?,
         stanzaType: 'result',
-      );
-      response.enable('roster');
+        stanzaTo: iq.from ?? transport.boundJID,
+        stanzaID: iq['id'] as String,
+        transport: transport,
+      )..enable('roster');
       response.sendIQ();
     }
   }
