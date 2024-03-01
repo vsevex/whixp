@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:connecta/connecta.dart';
 import 'package:dartz/dartz.dart';
 import 'package:dnsolve/dnsolve.dart';
+import 'package:memoize/memoize.dart';
 import 'package:meta/meta.dart';
 
 import 'package:whixp/src/handler/eventius.dart';
@@ -98,10 +99,6 @@ class Transport {
     /// a TLS connection on the client side. Defaults to `false`
     bool disableStartTLS = false,
 
-    /// Controls if the session can be considered ended if the connection is
-    /// terminated.
-    bool endSessionOnDisconnect = true,
-
     /// If `true`, periodically send a whitespace character over the wire to
     /// keep the connection alive
     this.whitespaceKeepAlive = true,
@@ -131,15 +128,6 @@ class Transport {
     ///
     /// Defaults to 2000 milliseconds
     this.connectionTimeout = 2000,
-
-    /// The overrider for the function of [startStreamHandler].
-    ///
-    /// Performs any initialization actions, such as handshakes, once the stream
-    /// header has been sent
-    void Function(
-      List<parser.XmlEventAttribute> attributes,
-      Transport transport,
-    )? startStreamHandler,
   }) {
     _port = port;
 
@@ -148,14 +136,13 @@ class Transport {
     _useIPv6 = useIPv6;
     _dnsService = dnsService;
 
-    _endSessionOnDisconnect = endSessionOnDisconnect;
+    endSessionOnDisconnect = false;
 
     streamHeader = '<stream>';
     streamFooter = '<stream/>';
 
     _caCerts = caCerts ?? <String, String?>{};
 
-    _startStreamHandlerOverrider = startStreamHandler;
     _onBadCertificateCallback = onBadCertificateCallback;
 
     _setup();
@@ -218,7 +205,7 @@ class Transport {
 
   /// Controls if the session can be considered ended if the connection is
   /// terminated.
-  late final bool _endSessionOnDisconnect;
+  late bool endSessionOnDisconnect;
 
   /// The default interval between keepalive signals when [whitespaceKeepAlive]
   /// is enabled.
@@ -274,13 +261,6 @@ class Transport {
 
   /// The default closing tag for the stream element.
   late String streamFooter;
-
-  /// The overrider for the function of [startStreamHandler].
-  ///
-  /// Performs any initialization actions, such as handshakes, once the stream
-  /// header has been sent.
-  void Function(List<parser.XmlEventAttribute> attributes, Transport transport)?
-      _startStreamHandlerOverrider;
 
   /// [Task] [List] to keep track of [Task]s that are going to be sent slowly.
   final _slowTasks = <Task>[];
@@ -435,11 +415,12 @@ class Transport {
     if (_connectFutureWait > 0) {
       await Future.delayed(Duration(seconds: _connectFutureWait));
     }
+
     final record = await _pickDNSAnswer(_defaultDomain, service: _dnsService);
 
     if (record != null) {
       final host = record.value1;
-      final address = record.value2.substring(0, record.value2.length - 1);
+      final address = record.value2;
       final port = record.value3;
 
       _address = Tuple2(address, port);
@@ -454,7 +435,7 @@ class Transport {
       io.SecurityContext? context = io.SecurityContext(withTrustedRoots: true);
       for (final caCert in _caCerts.entries) {
         try {
-          context!.setTrustedCertificates(
+          context!.setClientAuthorities(
             caCert.key,
             password: caCert.value,
           );
@@ -469,10 +450,11 @@ class Transport {
         ConnectaToolkit(
           hostname: _address.value1,
           port: _address.value2,
+          context: context,
           timeout: connectionTimeout,
           connectionType: ConnectionType.tls,
           onBadCertificateCallback: _onBadCertificateCallback,
-          context: context,
+          supportedProtocols: ['xmpp'],
         ),
       );
     } else {
@@ -481,11 +463,12 @@ class Transport {
           hostname: _address.value1,
           port: _address.value2,
           timeout: connectionTimeout,
-          context: _disableStartTLS ? null : context,
+          context: context,
           onBadCertificateCallback: _onBadCertificateCallback,
           connectionType: _disableStartTLS
               ? ConnectionType.tcp
               : ConnectionType.upgradableTcp,
+          supportedProtocols: ['xmpp'],
         ),
       );
     }
@@ -500,7 +483,7 @@ class Transport {
           onData: _dataReceived,
           onError: (error, trace) async {
             Log.instance.error(
-              'Connection error',
+              'Connection error occured.',
               error: error,
               stackTrace: trace as StackTrace,
             );
@@ -510,6 +493,7 @@ class Transport {
             }
           },
           onDone: _connectionLost,
+          combineWhile: _combineWhile,
         ),
       );
 
@@ -548,7 +532,7 @@ class Transport {
     Log.instance.info('Connection lost.');
     _connecta = null;
 
-    if (_endSessionOnDisconnect) {
+    if (endSessionOnDisconnect) {
       emit('sessionEnd');
       Log.instance.debug('Cancelling slow send tasks.');
       for (final task in _slowTasks) {
@@ -567,7 +551,7 @@ class Transport {
   Future<bool> startTLS() async {
     if (_connecta == null) return false;
     if (_disableStartTLS) {
-      Log.instance.info('Disable StartTLS is enabled');
+      Log.instance.info('Disable StartTLS is enabled.');
       return false;
     }
     _eventWhenConnected = 'tlsSuccess';
@@ -576,11 +560,12 @@ class Transport {
         listener: ConnectaListener(
           onData: _dataReceived,
           onError: (error, trace) => Log.instance.error(
-            'Connection error',
+            'Connection error occured.',
             error: error,
             stackTrace: trace as StackTrace,
           ),
           onDone: _connectionLost,
+          combineWhile: _combineWhile,
         ),
       );
 
@@ -589,7 +574,7 @@ class Transport {
     } on ConnectaException catch (error) {
       Log.instance.error(error.message);
       if (_dnsAnswers != null && _dnsAnswers!.moveNext()) {
-        startTLS();
+        await startTLS();
       } else {
         rethrow;
       }
@@ -597,12 +582,26 @@ class Transport {
     }
   }
 
+  /// Combines while the given condition is true. Works with [Connecta].
+  bool _combineWhile(List<int> bytes) {
+    const messageEof = <String>{'</iq>'};
+    final data = memo0<String>(() => WhixpUtils.unicode(bytes)).call();
+
+    for (final eof in messageEof) {
+      if (data.endsWith(eof)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   /// Called when incoming data is received on the socket. We feed that data
   /// to the parser and then see if this produced any XML event. This could
   /// trigger one or more event.
   Future<void> _dataReceived(List<int> bytes) async {
     bool wrapped = false;
-    String data = WhixpUtils.unicode(bytes);
+    String data = memo0<String>(() => WhixpUtils.unicode(bytes)).call();
     if (data.contains('<stream:stream') && !data.contains('</stream:stream>')) {
       data = _streamWrapper(data);
       wrapped = true;
@@ -615,28 +614,32 @@ class Transport {
         /// We have received the start of the root element.
         Log.instance.info('RECEIVED: $data');
         _disconnectReason = 'End of the stream';
-        _startStreamHandler(event.attributes);
+        startStreamHandler(event.attributes);
         _startStreamHandlerCalled = true;
       }
       _xmlDepth++;
     }
 
-    Future<void> onEndElement(parser.XmlEndElementEvent event) async {
+    void onEndElement(parser.XmlEndElementEvent event) {
       if (event.name == 'stream:stream' && wrapped) return;
       _xmlDepth--;
       if (_xmlDepth == 0) {
         /// The stream's root element has closed, terminating the stream.
-        Log.instance.info('End of stream received');
+        Log.instance.info('End of stream received.');
         abort();
         return;
       } else if (_xmlDepth == 1) {
         int index = data.lastIndexOf('<${event.name}');
+
         if (index > event.stop!) {
           index = data.indexOf('<${event.name}');
         }
+
         final substring = data.substring(index, event.stop);
         if (substring.isEmpty) return;
+
         final element = xml.XmlDocument.parse(substring).rootElement;
+
         if (element.getAttribute('xmlns') == null) {
           if (element.localName == 'message' ||
               element.localName == 'presence' ||
@@ -649,12 +652,12 @@ class Transport {
             );
           }
         }
-        await _spawnEvent(element);
+        _spawnEvent(element);
       }
     }
 
     Stream.value(data)
-        .toXmlEvents(withLocation: true, withParent: true)
+        .toXmlEvents(withLocation: true)
         .normalizeEvents()
         .tapEachEvent(
           onStartElement: onStartElement,
@@ -782,7 +785,7 @@ class Transport {
               datum = await task.timeout(const Duration(seconds: 1)).run();
             } on async.TimeoutException {
               /// Handle the case where the timeout occurred
-              Log.instance.error('Slow Future, rescheduling filters');
+              Log.instance.error('Slow Future, rescheduling filters...');
 
               _slowSend(task, alreadyRunFilters);
             }
@@ -830,7 +833,7 @@ class Transport {
     }
 
     _eventius.once<String>('disconnected', handler);
-    disconnect();
+    disconnect(consume: false);
   }
 
   /// Close the XML stream and wait for ack from the server for at most
@@ -842,7 +845,7 @@ class Transport {
     int timeout = 2000,
     bool consume = true,
   }) async {
-    Log.instance.warning('Disconnect is called');
+    Log.instance.warning('Disconnect method is called.');
 
     /// Run abort() if we do not received the disconnected event after a
     /// waiting time.
@@ -886,7 +889,7 @@ class Transport {
     void handler(String? data) {
       if (completer.isCompleted) {
         Log.instance
-            .debug('Completer registered on event "$event" is already done');
+            .debug('Completer registered on event "$event" is already done.');
       } else {
         completer.complete(data);
       }
@@ -936,13 +939,13 @@ class Transport {
   }
 
   /// Triggers a custom [event] manually.
-  void emit<T extends Object>(String event, {T? data}) =>
+  async.FutureOr<void> emit<T>(String event, {T? data}) async =>
       _eventius.emit<T>(event, data);
 
-  /// Add a custom [event] handler that will be executed whenever its event is
+  /// Adds a custom [event] handler that will be executed whenever its event is
   /// manually triggered. Works with [Eventius] instance.
   @internal
-  void addEventHandler<B extends Object>(
+  void addEventHandler<B>(
     String event,
     async.FutureOr<void> Function(B? data) listener, {
     bool once = false,
@@ -964,6 +967,15 @@ class Transport {
       if (_eventius.events[event] != null) {
         _eventius.events[event]!.removeWhere((callback) => callback == handler);
       }
+    }
+  }
+
+  /// Returns the number [int] of registered handlers for the given [event].
+  int eventHandled(String event) {
+    if (_eventius.events[event] != null) {
+      return _eventius.events[event]!.length;
+    } else {
+      return 0;
     }
   }
 
@@ -1026,8 +1038,10 @@ class Transport {
 
   /// Performs any initialization actions, such as handshakes, once the stream
   /// header has been sent.
-  void _startStreamHandler(List<parser.XmlEventAttribute> attributes) =>
-      _startStreamHandlerOverrider?.call(attributes, this);
+  ///
+  /// Must be overrided.
+  late void Function([List<parser.XmlEventAttribute>? attributes])
+      startStreamHandler;
 
   /// Pick a server and port from DNS answers.
   ///
@@ -1040,7 +1054,7 @@ class Transport {
     String domain, {
     String? service,
   }) async {
-    Log.instance.warning('DNS: Use of IPv6 has been disabled');
+    Log.instance.warning('DNS: Use of IPv6 has been disabled.');
 
     ResolveResponse? response;
     final srvs = <SRVRecord>[];
@@ -1154,7 +1168,7 @@ class Transport {
   ///
   /// [mode] can be "iN", "out", and "outSync". Either sync or async filter
   /// can be passed at the same time. You can not assign two type filters once.
-  void addFilter<T>({
+  void addFilter({
     FilterMode mode = FilterMode.iN,
     SyncFilter? filter,
     AsyncFilter? asyncFilter,
@@ -1163,6 +1177,17 @@ class Transport {
       _filters[mode]!.add(Tuple2(filter, null));
     } else if (asyncFilter != null) {
       _filters[mode]!.add(Tuple2(null, asyncFilter));
+    }
+  }
+
+  /// Removes an incoming or outgoing filter.
+  void removeFilter({
+    FilterMode mode = FilterMode.iN,
+    SyncFilter? filter,
+    AsyncFilter? asyncFilter,
+  }) {
+    if (_filters[mode] != null) {
+      _filters[mode]!.remove(Tuple2(filter, asyncFilter));
     }
   }
 
@@ -1176,6 +1201,8 @@ class Transport {
         if (data.getPlugin('bind', check: true) != null) {
           passthrough = true;
         } else if (data.getPlugin('session', check: true) != null) {
+          passthrough = true;
+        } else if (data.getPlugin('register', check: true) != null) {
           passthrough = true;
         }
       } else if (data is Handshake) {
@@ -1204,6 +1231,7 @@ class Transport {
         'Passed data to be sent is neither List<int> nor String',
       );
     }
+
     Log.instance.debug('SEND: $rawData');
 
     if (_connecta != null) {
