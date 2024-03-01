@@ -43,8 +43,6 @@ class PubSubEvent extends XMLBase {
 
 class PubSubEventItem extends XMLBase {
   PubSubEventItem({
-    super.pluginTagMapping,
-    super.pluginAttributeMapping,
     super.getters,
     super.setters,
     super.deleters,
@@ -52,7 +50,7 @@ class PubSubEventItem extends XMLBase {
     super.parent,
   }) : super(
           name: 'item',
-          namespace: _$event,
+          namespace: WhixpUtils.getNamespace('CLIENT'),
           includeNamespace: false,
           pluginAttribute: 'item',
           interfaces: <String>{'id', 'payload', 'node', 'publisher'},
@@ -90,8 +88,6 @@ class PubSubEventItem extends XMLBase {
   @override
   PubSubEventItem copy({xml.XmlElement? element, XMLBase? parent}) =>
       PubSubEventItem(
-        pluginTagMapping: pluginTagMapping,
-        pluginAttributeMapping: pluginAttributeMapping,
         getters: getters,
         setters: setters,
         deleters: deleters,
@@ -104,6 +100,7 @@ class PubSubEventItems extends XMLBase {
   PubSubEventItems({
     super.pluginTagMapping,
     super.pluginAttributeMapping,
+    super.pluginIterables,
     super.element,
     super.parent,
   }) : super(
@@ -117,11 +114,21 @@ class PubSubEventItems extends XMLBase {
     registerPlugin(PubSubEventRetract(), iterable: true);
   }
 
+  List<PubSubItem> get items {
+    if (iterables.isNotEmpty) {
+      return iterables
+          .map((iterable) => PubSubItem(element: iterable.element))
+          .toList();
+    }
+    return <PubSubItem>[];
+  }
+
   @override
   PubSubEventItems copy({xml.XmlElement? element, XMLBase? parent}) =>
       PubSubEventItems(
         pluginTagMapping: pluginTagMapping,
         pluginAttributeMapping: pluginAttributeMapping,
+        pluginIterables: pluginIterables,
         element: element,
         parent: parent,
       );
@@ -131,7 +138,7 @@ class PubSubEventRetract extends XMLBase {
   PubSubEventRetract({super.element, super.parent})
       : super(
           name: 'retract',
-          namespace: _$event,
+          namespace: WhixpUtils.getNamespace('CLIENT'),
           includeNamespace: false,
           pluginAttribute: 'retract',
           interfaces: <String>{'id'},

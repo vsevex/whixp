@@ -13,7 +13,7 @@ class PubSubStanza extends XMLBase {
           interfaces: <String>{},
         ) {
     registerPlugin(PubSubAffiliations());
-    registerPlugin(PubSubSubscription());
+    registerPlugin(PubSubSubscription(namespace: _$namespace));
     registerPlugin(PubSubSubscriptions());
     registerPlugin(PubSubItems());
     registerPlugin(PubSubCreate());
@@ -558,6 +558,7 @@ class PubSubAffiliations extends XMLBase {
 /// this state (subject to subscriber configuration and content filtering).
 class PubSubSubscription extends XMLBase {
   PubSubSubscription({
+    super.namespace,
     super.pluginTagMapping,
     super.pluginAttributeMapping,
     super.getters,
@@ -566,7 +567,6 @@ class PubSubSubscription extends XMLBase {
     super.parent,
   }) : super(
           name: 'subscription',
-          namespace: _$namespace,
           includeNamespace: false,
           pluginAttribute: 'subscription',
           interfaces: <String>{'node', 'subscription', 'subid', 'jid'},
@@ -604,6 +604,7 @@ class PubSubSubscriptions extends XMLBase {
     String? namespace,
     super.pluginTagMapping,
     super.pluginAttributeMapping,
+    super.pluginIterables,
     super.element,
     super.parent,
   }) : super(
@@ -617,11 +618,22 @@ class PubSubSubscriptions extends XMLBase {
     registerPlugin(PubSubSubscription(), iterable: true);
   }
 
+  List<PubSubSubscription> get subscriptions {
+    if (iterables.isNotEmpty) {
+      return iterables
+          .map((iterable) => PubSubSubscription(element: iterable.element))
+          .toList();
+    }
+    return <PubSubSubscription>[];
+  }
+
   @override
   PubSubSubscriptions copy({xml.XmlElement? element, XMLBase? parent}) =>
       PubSubSubscriptions(
+        namespace: namespace,
         pluginTagMapping: pluginTagMapping,
         pluginAttributeMapping: pluginAttributeMapping,
+        pluginIterables: pluginIterables,
         element: element,
         parent: parent,
       );
@@ -750,7 +762,7 @@ class PubSubItem extends XMLBase {
           interfaces: <String>{'id', 'payload'},
         ) {
     addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
-      const Symbol('payload'): (args, base) => _payload,
+      const Symbol('payload'): (args, base) => payload,
     });
 
     addSetters(<Symbol,
@@ -765,7 +777,7 @@ class PubSubItem extends XMLBase {
     registerPlugin(AtomEntry());
   }
 
-  xml.XmlElement? get _payload {
+  xml.XmlElement? get payload {
     if (element!.childElements.isNotEmpty) {
       return element!.childElements.first;
     }
@@ -778,7 +790,7 @@ class PubSubItem extends XMLBase {
       if (pluginTagMapping.containsKey(value.tag)) {
         initPlugin(value.pluginAttribute, existingXML: value.element);
       }
-      element!.children.add(value.element!);
+      element!.children.add(value.element!.copy());
     } else if (value is xml.XmlElement) {
       element!.children.add(value.copy());
     }

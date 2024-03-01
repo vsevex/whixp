@@ -88,7 +88,7 @@ class PubSub extends PluginBase {
         CallbackHandler(
           'PubSub Items',
           (stanza) => _handleEventItems(stanza as Message),
-          matcher: StanzaPathMatcher('message/pubsub_event/item'),
+          matcher: StanzaPathMatcher('message/pubsub_event/items'),
         ),
       )
       ..registerHandler(
@@ -114,7 +114,7 @@ class PubSub extends PluginBase {
       )
       ..registerHandler(
         CallbackHandler(
-          'PubSub Delete',
+          'PubSub Purge',
           (stanza) => _handleEventPurge(stanza as Message),
           matcher: StanzaPathMatcher('message/pubsub_event/purge'),
         ),
@@ -306,7 +306,8 @@ class PubSub extends PluginBase {
           config.addField(variable: 'pubsub#node_type', value: nodeType);
         }
       }
-      (iq['pubsub'] as PubSubStanza).add(config);
+      ((iq['pubsub'] as PubSubStanza)['configure'] as PubSubConfigure)
+          .add(config.element!.copy());
     }
 
     return iq.sendIQ(
@@ -959,11 +960,10 @@ class PubSub extends PluginBase {
     int timeout = 5,
   }) {
     final iq = base.makeIQSet(iqTo: jid, iqFrom: iqFrom);
-    ((iq['pubsub_owner'] as PubSubOwnerStanza)['delete']
-        as PubSubOwnerDelete)['node'] = node;
-    ((iq['pubsub_owner'] as PubSubOwnerStanza)['configure']
-            as PubSubOwnerConfigure)
-        .add(config);
+    final configure = (iq['pubsub_owner'] as PubSubOwnerStanza)['configure']
+        as PubSubOwnerConfigure;
+    configure['node'] = node;
+    configure.add(config.element!.copy());
 
     return iq.sendIQ(
       callback: callback,
@@ -1020,8 +1020,7 @@ class PubSub extends PluginBase {
   /// Deletes a pubsub [node].
   FutureOr<IQ> deleteNode<T>(
     JabberID jid,
-    String node,
-    Form config, {
+    String node, {
     JabberID? iqFrom,
     FutureOr<T> Function(IQ iq)? callback,
     FutureOr<void> Function(StanzaError error)? failureCallback,
@@ -1029,11 +1028,8 @@ class PubSub extends PluginBase {
     int timeout = 5,
   }) {
     final iq = base.makeIQSet(iqTo: jid, iqFrom: iqFrom);
-    ((iq['pubsub_owner'] as PubSubOwnerStanza)['configure']
-        as PubSubOwnerConfigure)['node'] = node;
-    ((iq['pubsub_owner'] as PubSubOwnerStanza)['configure']
-            as PubSubOwnerConfigure)
-        .add(config);
+    ((iq['pubsub_owner'] as PubSubOwnerStanza)['delete']
+        as PubSubOwnerDelete)['node'] = node;
 
     return iq.sendIQ(
       callback: callback,
