@@ -1,8 +1,11 @@
 import 'dart:async';
 
+import 'package:synchronized/extension.dart';
 import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/handler/handler.dart';
+import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/log/log.dart';
+import 'package:whixp/src/plugins/bind/bind.dart';
 import 'package:whixp/src/plugins/plugins.dart';
 import 'package:whixp/src/stanza/error.dart';
 import 'package:whixp/src/stanza/root.dart';
@@ -138,6 +141,7 @@ class IQ extends RootStanza {
     /// If you have not used the specified stanza, then you have to enable the
     /// stanza through the usage of `pluginAttribute` parameter.
     registerPlugin(StanzaError());
+    registerPlugin(BindStanza());
     registerPlugin(Roster());
     registerPlugin(Form());
     registerPlugin(PingStanza());
@@ -146,6 +150,9 @@ class IQ extends RootStanza {
     registerPlugin(RSMStanza());
     registerPlugin(PubSubStanza());
     registerPlugin(PubSubOwnerStanza());
+    registerPlugin(Register());
+    registerPlugin(VCardTempStanza());
+    registerPlugin(Command());
   }
 
   /// The id of the attached [Handler].
@@ -190,15 +197,21 @@ class IQ extends RootStanza {
     BaseMatcher? matcher;
 
     if (transport!.sessionBind) {
+      JabberID toJID;
+      try {
+        toJID = to;
+      } on Exception {
+        toJID = transport!.boundJID;
+      }
       matcher = MatchIDSender(
         IDMatcherCriteria(
           transport!.boundJID,
-          to,
+          toJID,
           this['id'] as String,
         ),
       );
     } else {
-      matcher = MatcherID(this['id']);
+      matcher = MatcherID(this['id'] as String);
     }
 
     Future<void> successCallback(StanzaBase iq) async {
@@ -221,6 +234,8 @@ class IQ extends RootStanza {
               await failureCallback.call(stanza['error'] as StanzaError);
             }
 
+            completer.complete(stanza);
+
             throw StanzaException.iq(stanza);
           } catch (error) {
             Log.instance.error(error.toString());
@@ -229,7 +244,7 @@ class IQ extends RootStanza {
       } else {
         handler = FutureCallbackHandler(
           _handlerID!,
-          (stanza) async => Future.microtask(() => successCallback(stanza))
+          (stanza) => Future.microtask(() => successCallback(stanza))
               .timeout(Duration(seconds: timeout)),
           matcher: matcher!,
         );
@@ -265,7 +280,7 @@ class IQ extends RootStanza {
 
       handler = FutureCallbackHandler(
         _handlerID!,
-        (stanza) async => Future.microtask(() => successCallback(stanza))
+        (iq) => Future.microtask(() => successCallback(iq))
             .timeout(Duration(seconds: timeout)),
         matcher: matcher,
       );
@@ -276,7 +291,7 @@ class IQ extends RootStanza {
     }
     send();
 
-    return completer.future;
+    return synchronized(() => completer.future);
   }
 
   /// Send a 'feature-not-implemented' error stanza if the stanza is not
@@ -284,10 +299,8 @@ class IQ extends RootStanza {
   @override
   void unhandled([Transport? transport]) {
     if ({'get', 'set'}.contains(this['type'])) {
-      if (this.transport == null) {
-        this.transport = transport;
-      }
       final iq = replyIQ();
+      iq.transport ??= transport ?? this.transport;
       iq
         ..registerPlugin(StanzaError())
         ..enable('error');
@@ -296,6 +309,12 @@ class IQ extends RootStanza {
       error['text'] = 'No handlers registered';
       iq.sendIQ();
     }
+  }
+
+  @override
+  IQ error() {
+    super.error();
+    return this;
   }
 
   /// Overrides [reply] method, instead copies [IQ] with the overrided [copy]
