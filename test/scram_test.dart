@@ -24,7 +24,7 @@ void main() {
 
   group('deriveKeys method test', () {
     test('must return correct client key value in the output', () {
-      final whixp = Whixp('vsevex@localhost', '');
+      final whixp = Whixp('vsevex@localhost', '', provideHivePath: true);
       final result = Scram(whixp).deriveKeys(
         password: 'pencil',
         salt: 'QSXCR+Q6sek8bf92',
