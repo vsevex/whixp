@@ -1,5 +1,9 @@
+import 'package:whixp/src/plugins/features.dart';
+import 'package:whixp/src/plugins/plugins.dart';
 import 'package:whixp/src/stream/base.dart';
 import 'package:whixp/src/utils/utils.dart';
+
+import 'package:xml/xml.dart' as xml;
 
 /// Represents available features in an XMPP stream.
 ///
@@ -41,14 +45,16 @@ class StreamFeatures extends StanzaBase {
   ///
   /// log(features['mechanisms']);
   /// ```
-  StreamFeatures({super.element})
-      : super(
+  StreamFeatures({
+    super.pluginTagMapping,
+    super.pluginAttributeMapping,
+    super.element,
+    super.parent,
+  }) : super(
           name: 'features',
           namespace: WhixpUtils.getNamespace('JABBER_STREAM'),
           interfaces: {'features', 'required', 'optional'},
           subInterfaces: {'features', 'required', 'optional'},
-          pluginAttributeMapping: {},
-          pluginTagMapping: {},
           getters: {
             const Symbol('features'): (args, base) {
               final features = <String, XMLBase>{};
@@ -76,5 +82,28 @@ class StreamFeatures extends StanzaBase {
                   .toList();
             },
           },
-        );
+        ) {
+    registerPlugin(BindStanza());
+    registerPlugin(Session());
+    registerPlugin(StartTLS());
+    registerPlugin(Mechanisms());
+    registerPlugin(RosterVersioning());
+    registerPlugin(RegisterFeature());
+    registerPlugin(PreApproval());
+    registerPlugin(StreamManagementStanza());
+    registerPlugin(CompressionStanza());
+  }
+
+  @override
+  StreamFeatures copy({
+    xml.XmlElement? element,
+    XMLBase? parent,
+    bool receive = false,
+  }) =>
+      StreamFeatures(
+        pluginAttributeMapping: pluginAttributeMapping,
+        pluginTagMapping: pluginTagMapping,
+        element: element,
+        parent: parent,
+      );
 }
