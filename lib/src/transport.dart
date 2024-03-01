@@ -620,7 +620,7 @@ class Transport {
       _xmlDepth++;
     }
 
-    void onEndElement(parser.XmlEndElementEvent event) {
+    Future<void> onEndElement(parser.XmlEndElementEvent event) async {
       if (event.name == 'stream:stream' && wrapped) return;
       _xmlDepth--;
       if (_xmlDepth == 0) {
@@ -652,7 +652,7 @@ class Transport {
             );
           }
         }
-        _spawnEvent(element);
+        await _spawnEvent(element);
       }
     }
 
