@@ -131,7 +131,7 @@ class RosterItem {
     save();
     _unsubscribed();
 
-    final presence = Presence();
+    final presence = Presence(transport: whixp.transport);
     presence['to'] = jid;
     presence['type'] = 'unavailable';
     if (_transport.isComponent) {
@@ -153,7 +153,7 @@ class RosterItem {
 
   /// Unsubscribe from the JID.
   void unsubscribe() {
-    final presence = Presence();
+    final presence = Presence(transport: whixp.transport);
     presence['to'] = jid;
     presence['type'] = 'unsubscribe';
     if (_transport.isComponent) {
@@ -165,7 +165,7 @@ class RosterItem {
 
   /// Handle ack an unsubscribe request.
   void _unsubscribed() {
-    final presence = Presence();
+    final presence = Presence(transport: whixp.transport);
     presence['to'] = jid;
     presence['type'] = 'unsubscribed';
     if (_transport.isComponent) {
@@ -358,7 +358,7 @@ class RosterItem {
   /// exists.
   void remove() {
     if (this['to'] != null) {
-      final presence = Presence();
+      final presence = Presence(transport: whixp.transport);
       presence['to'] = this['to'];
       presence['type'] = 'unsubscribe';
       if (_transport.isComponent) {
