@@ -5,6 +5,7 @@ class Form extends XMLBase {
     String? title,
     super.pluginTagMapping,
     super.pluginAttributeMapping,
+    super.pluginIterables,
     super.getters,
     super.setters,
     super.deleters,
@@ -209,6 +210,15 @@ class Form extends XMLBase {
     }
   }
 
+  Map<String, FormField> getValues() {
+    final values = <String, FormField>{};
+    final fields = this.fields;
+    for (final field in fields.entries) {
+      values[field.key] = field.value;
+    }
+    return values;
+  }
+
   Map<String, FormField> get reported {
     final fields = <String, FormField>{};
     final fieldElement =
@@ -270,6 +280,7 @@ class Form extends XMLBase {
   Form copy({xml.XmlElement? element, XMLBase? parent}) => Form(
         pluginTagMapping: pluginTagMapping,
         pluginAttributeMapping: pluginAttributeMapping,
+        pluginIterables: pluginIterables,
         title: _title,
         getters: getters,
         setters: setters,
