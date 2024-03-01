@@ -67,9 +67,44 @@ class RosterItem {
   /// The last [Presence] sent to this JID.
   Presence? lastStatus;
 
+  Future<void> _setBackend() async {
+    await save();
+    _load();
+  }
+
+  void _load() {
+    final items = _HiveDatabase().getState(_owner.bare, jid);
+
+    if (items != null && items.isNotEmpty) {
+      final item =
+          json.decode(items['state']! as String) as Map<String, dynamic>;
+
+      this['name'] = item['name'];
+      this['groups'] = item['groups'];
+      this['from'] = item['from'];
+      this['whitelisted'] = item['whitelisted'];
+      this['pending_out'] = item['pending_out'];
+      this['pending_in'] = item['pending_in'];
+      this['subscription'] = _subscription();
+    }
+  }
+
+  Future<void> save({bool remove = false}) async {
+    this['subscription'] = _subscription();
+    if (remove) {
+      _state['removed'] = true;
+    }
+
+    await _HiveDatabase().updateData(_owner.bare, jid, _state);
+
+    if (remove) {
+      (whixp.roster[_owner.toString()] as RosterNode).delete(jid);
+    }
+  }
+
   /// Send a subscription request to the JID.
   void subscribe() {
-    final presence = Presence();
+    final presence = Presence(transport: whixp.transport);
     presence['to'] = jid;
     presence['type'] = 'subscribe';
     if (_transport.isComponent) {
@@ -77,12 +112,14 @@ class RosterItem {
     }
     this['pending_out'] = true;
     presence.send();
+    save();
   }
 
   /// Authorize a received subscription request from the JID.
   void authorize() {
     this['from'] = true;
     this['pending_out'] = false;
+    save();
     _subscribed();
     sendLastPresence();
   }
@@ -91,6 +128,7 @@ class RosterItem {
   void unauthorize() {
     this['from'] = false;
     this['pending_in'] = false;
+    save();
     _unsubscribed();
 
     final presence = Presence();
@@ -104,7 +142,7 @@ class RosterItem {
 
   /// Handle ack a subscription.
   void _subscribed() {
-    final presence = Presence();
+    final presence = Presence(transport: whixp.transport);
     presence['to'] = jid;
     presence['type'] = 'subscribed';
     if (_transport.isComponent) {
@@ -121,6 +159,7 @@ class RosterItem {
     if (_transport.isComponent) {
       presence['from'] = _owner.toString();
     }
+    save();
     presence.send();
   }
 
@@ -156,7 +195,7 @@ class RosterItem {
         sendPresence();
       } else {
         presence['to'] = jid;
-        if (whixp.transport.isComponent) {
+        if (whixp.isComponent) {
           presence['from'] = _owner.toString();
         } else {
           presence.delete('from');
@@ -205,7 +244,7 @@ class RosterItem {
   }
 
   void handleSubscribe(Presence presence) {
-    if (whixp.transport.isComponent) {
+    if (whixp.isComponent) {
       if (this['from'] == null && !(this['pending_in'] as bool)) {
         this['pending_in'] = true;
         whixp.transport
@@ -213,6 +252,7 @@ class RosterItem {
       } else if (this['from'] != null) {
         _subscribed();
       }
+      save();
     } else {
       whixp.transport
           .emit<Presence>('rosterSubscriptionRequest', data: presence);
@@ -220,15 +260,14 @@ class RosterItem {
   }
 
   void handleSubscribed(Presence presence) {
-    if (whixp.transport.isComponent) {
+    if (whixp.isComponent) {
       if (this['to'] == null && this['pending_out'] as bool) {
         this['pending_out'] = false;
         this['to'] = true;
         whixp.transport
             .emit<Presence>('rosterSubscriptionAuthorized', data: presence);
-      } else if (this['from'] != null) {
-        _subscribed();
       }
+      save();
     } else {
       whixp.transport
           .emit<Presence>('rosterSubscriptionAuthorized', data: presence);
@@ -236,7 +275,7 @@ class RosterItem {
   }
 
   void handleUnsubscribe(Presence presence) {
-    if (whixp.transport.isComponent) {
+    if (whixp.isComponent) {
       if (this['from'] == null && this['pending_in'] as bool) {
         this['pending_in'] = false;
         _unsubscribed();
@@ -246,6 +285,7 @@ class RosterItem {
         whixp.transport
             .emit<Presence>('rosterSubscriptionRemove', data: presence);
       }
+      save();
     } else {
       whixp.transport
           .emit<Presence>('rosterSubscriptionRemove', data: presence);
@@ -253,7 +293,7 @@ class RosterItem {
   }
 
   void handleUnsubscribed(Presence presence) {
-    if (whixp.transport.isComponent) {
+    if (whixp.isComponent) {
       if (this['to'] == null && this['pending_out'] as bool) {
         this['pending_out'] = false;
       } else if (this['to'] != null && this['pending_out'] as bool) {
@@ -261,6 +301,7 @@ class RosterItem {
         whixp.transport
             .emit<Presence>('rosterSubscriptionRemoved', data: presence);
       }
+      save();
     } else {
       whixp.transport
           .emit<Presence>('rosterSubscriptionRemoved', data: presence);
@@ -327,6 +368,7 @@ class RosterItem {
       this['to'] = false;
     }
     this['whitelisted'] = false;
+    save();
   }
 
   /// Forgot current resource presence information as part of a roster reset
