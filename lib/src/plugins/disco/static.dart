@@ -92,7 +92,8 @@ class _StaticDisco {
         );
       }
     } else {
-      return getNode(jid: jid, node: node)['info']! as DiscoveryInformation;
+      return getNode(jid: jid, node: node)['information']!
+          as DiscoveryInformation;
     }
   }
 
@@ -113,6 +114,17 @@ class _StaticDisco {
     } else {
       return getNode(jid: jid, node: node)['items'] as DiscoveryItems?;
     }
+  }
+
+  /// Replaces the stored items data for a JID/node combination.
+  void setItems({
+    JabberID? jid,
+    String? node,
+    JabberID? iqFrom,
+    required Set<SingleDiscoveryItem> items,
+  }) {
+    final newNode = addNode(jid: jid, node: node);
+    (newNode['items']! as DiscoveryItems).setItems(items);
   }
 
   /// Caches discovery information for an external jabber ID.
@@ -185,5 +197,34 @@ class _StaticDisco {
             .deleteFeature(feature);
       }
     }
+  }
+
+  /// Adds an item to a JID/node combination.
+  void addItem({
+    required Map<String, String?> data,
+    JabberID? jid,
+    String? node,
+  }) {
+    final newNode = addNode(jid: jid, node: node);
+    (newNode['items']! as DiscoveryItems).addItem(
+      data['itemJID']!,
+      name: data['name'] ?? '',
+      node: data['node'] ?? '',
+    );
+  }
+
+  /// Adds a new identity to the JID/node combination.
+  void addIdentity({
+    required Map<String, String?> data,
+    JabberID? jid,
+    String? node,
+  }) {
+    final newNode = addNode(jid: jid, node: node);
+    (newNode['information']! as DiscoveryInformation).addIdentity(
+      data['category'] ?? '',
+      data['type'] ?? '',
+      name: data['name'],
+      language: data['language'],
+    );
   }
 }

@@ -199,6 +199,75 @@ class ServiceDiscovery extends PluginBase {
     return response.future;
   }
 
+  /// Adds a new item to the given JID/node combination.
+  ///
+  /// Each item is required to have a Jabber ID, but may also specify a node
+  /// value to reference non-addressable entities.
+  ///
+  /// * [node] is the node to modify.
+  /// * [subnode] is optional node for the item.
+  void addItem({
+    String? jid,
+    JabberID? itemJid,
+    String? name,
+    String? node,
+    String? subnode,
+  }) {
+    jid ??= base.transport.boundJID.full;
+
+    _static.addItem(
+      jid: itemJid,
+      node: node,
+      data: {'itemJID': jid, 'name': name, 'node': subnode},
+    );
+  }
+
+  /// Sets or replaces all items for the specified JID/node combination.
+  ///
+  /// The given items must be in a [SingleDiscoveryItem]s [Set].
+  void setItems({
+    JabberID? jid,
+    String? node,
+    JabberID? iqFrom,
+    required Set<SingleDiscoveryItem> items,
+  }) =>
+      _static.setItems(jid: jid, node: node, iqFrom: iqFrom, items: items);
+
+  /// Adds a new identity to the given JID/node combination.
+  ///
+  /// Each identity must be unique in terms of all four identity components:
+  /// [category], [type], [name], and [language].
+  void addIdentity({
+    /// The identity's category
+    String category = '',
+
+    /// The identity's type
+    String type = '',
+
+    /// Optional name for identity
+    String name = '',
+
+    /// The node to modify
+    String? node,
+
+    /// Optional two-letter language code
+    String? language,
+
+    /// The Jabber ID to modify
+    JabberID? jid,
+  }) {
+    return _static.addIdentity(
+      jid: jid,
+      node: node,
+      data: {
+        'category': category,
+        'type': type,
+        'name': name,
+        'language': language,
+      },
+    );
+  }
+
   /// Ensures that results are wrapped in an [IQ] stanza if [_wrapResults] has
   /// been set to `true`.
   XMLBase? _wrap({
@@ -262,6 +331,7 @@ class ServiceDiscovery extends PluginBase {
       final node = (iq['disco_info'] as XMLBase)['node'] as String;
 
       final reply = iq.replyIQ();
+      reply.transport = base.transport;
 
       information = _fixDefaultInformation(information);
       information['node'] = node;
