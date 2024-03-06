@@ -75,6 +75,19 @@ class RosterManager {
     }
   }
 
+  /// Listens to the changes which occurs in the roster box.
+  void listenChanges<T>(
+    FutureOr<T> Function(BoxEvent event) onData, {
+    void Function(dynamic error, dynamic trace)? onError,
+    void Function()? onDone,
+  }) {
+    _HiveDatabase().listenable().listen(
+          onData,
+          onError: onError,
+          onDone: onDone,
+        );
+  }
+
   StanzaBase _saveLastStatus(dynamic stanza) {
     if (stanza is Presence) {
       String subscribeFrom = (stanza['from'] as String).isEmpty

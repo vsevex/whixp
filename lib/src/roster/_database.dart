@@ -20,6 +20,8 @@ class _HiveDatabase {
 
   Map<dynamic, dynamic>? getJID(String owner) => box.get(owner);
 
+  Stream<BoxEvent> listenable() => box.watch();
+
   Future<void> updateData(
     String owner,
     String jid,
