@@ -1,4 +1,12 @@
-# 2.0.1-beta1 - 2024-01-23
+# 2.0.1 - Partially Stable
+
+- Added support for XMPP components.
+- Added extension support to pubsub, pep, vcard-temp, and in-band registration as well as tune, ping, delay, stream management, etc.
+- Provided more reliable communication using Dart Sockets.
+- Changed certificate assignment from explicit to `dart:io`'s SecureContext
+- Provided more Whixp-related examples and use cases.
+
+## 2.0.1-beta1 - 2024-01-23
 
 Everything is changed. I mean, literally everything. Can not even put it all into words, especially in here. So, go ahead and give it a try.
 
