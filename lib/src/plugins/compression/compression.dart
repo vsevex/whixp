@@ -39,7 +39,7 @@ class Compression extends PluginBase {
       'compression',
       (stanza) => _handleCompression(stanza as StreamFeatures),
       restart: true,
-      order: 5,
+      order: 101,
     );
   }
 
@@ -60,8 +60,9 @@ class Compression extends PluginBase {
 
   void _handleCompressed(StanzaBase stanza) {
     base.features.add('compression');
-    Log.instance.debug('Stream Compressed!!!');
-    // base.transport.streamCompressed = true;
+    Log.instance.info('Stream Compressed!!!');
+    base.transport.streamCompressed = true;
+    base.transport.sendRaw(base.transport.streamHeader);
   }
 
   /// Do not implement.
