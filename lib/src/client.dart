@@ -49,8 +49,8 @@ class Whixp extends WhixpBase {
   ///
   /// [logger] is a [Log] instance to print out various log messages properly.
   ///
-  /// [certs] is a [List] of paths to a file containing certificates for
-  /// verifying the server TLS certificate.
+  /// [context] is a [io.SecurityContext] instance that is responsible for
+  /// certificate exchange.
   ///
   /// [onBadCertificateCallback] passes [io.X509Certificate] instance when
   /// returning boolean value which indicates to proceed on bad certificate or
@@ -74,7 +74,7 @@ class Whixp extends WhixpBase {
     super.disableStartTLS,
     super.whitespaceKeepAlive,
     super.logger,
-    super.certs,
+    super.context,
     super.onBadCertificateCallback,
     super.hivePathName,
     super.provideHivePath,

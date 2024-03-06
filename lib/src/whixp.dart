@@ -65,10 +65,9 @@ abstract class WhixpBase {
     /// keep the connection alive
     bool whitespaceKeepAlive = true,
 
-    /// [List] of paths to a file containing certificates for verifying the
-    /// server TLS certificate. Uses [Tuple2], the first side is for path to the
-    /// cert file and the second to the password file
-    Map<String, String?>? certs,
+    /// Optional [io.SecurityContext] which is going to be used in socket
+    /// connections
+    io.SecurityContext? context,
 
     /// To avoid processing on bad certification you can use this callback.
     ///
@@ -154,7 +153,7 @@ abstract class WhixpBase {
       isComponent: isComponent,
       dnsService: dnsService,
       useTLS: useTLS,
-      caCerts: certs,
+      context: context,
       onBadCertificateCallback: onBadCertificateCallback,
       connectionTimeout: connectionTimeout,
       whitespaceKeepAlive: whitespaceKeepAlive,

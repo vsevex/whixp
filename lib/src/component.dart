@@ -24,7 +24,7 @@ class WhixpComponent extends WhixpBase {
     super.connectionTimeout,
     super.maxReconnectionAttempt,
     super.onBadCertificateCallback,
-    super.certs,
+    super.context,
     super.logger,
     super.hivePathName,
     super.provideHivePath,

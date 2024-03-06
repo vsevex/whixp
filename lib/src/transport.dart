@@ -112,10 +112,9 @@ class Transport {
     /// established initially. Defaults to 3
     this.maxReconnectionAttempt = 3,
 
-    /// [List] of paths to a file containing certificates for verifying the
-    /// server TLS certificate. Uses [Tuple2], the first side is for path to the
-    /// cert file and the second to the password file
-    Map<String, String?>? caCerts,
+    /// Optional [io.SecurityContext] which is going to be used in socket
+    /// connections
+    io.SecurityContext? context,
 
     /// To avoid processing on bad certification you can use this callback.
     ///
@@ -141,7 +140,7 @@ class Transport {
     streamHeader = '<stream>';
     streamFooter = '<stream/>';
 
-    _caCerts = caCerts ?? <String, String?>{};
+    _context = context ?? io.SecurityContext.defaultContext;
 
     _onBadCertificateCallback = onBadCertificateCallback;
 
@@ -228,10 +227,9 @@ class Transport {
   /// established initially. Defaults to 3.
   late int maxReconnectionAttempt;
 
-  /// [List] of paths to a file containing certificates for verifying the
-  /// server TLS certificate. Uses [Tuple2], the first side is for path to the
-  /// cert file and the second to the password file.
-  late Map<String, String?> _caCerts;
+  /// Optional [io.SecurityContext] which is going to be used in socket
+  /// connections.
+  late io.SecurityContext? _context;
 
   /// [StreamController] for [_waitingQueue].
   final _waitingQueueController =
@@ -321,6 +319,9 @@ class Transport {
   /// The reason why whixp disconnects from the server.
   String? _disconnectReason;
 
+  /// Indicates if stream compressed or not.
+  late bool streamCompressed;
+
   void _setup() {
     _reset();
 
@@ -376,6 +377,8 @@ class Transport {
     _connectionTask = null;
 
     _scheduledEvents = <String, async.Timer>{};
+
+    streamCompressed = false;
   }
 
   /// Begin sending whitespace periodically to keep the connection alive.
@@ -429,28 +432,12 @@ class Transport {
       _dnsAnswers = null;
     }
 
-    io.SecurityContext? context;
-
-    if (_caCerts.isNotEmpty) {
-      io.SecurityContext? context = io.SecurityContext(withTrustedRoots: true);
-      for (final caCert in _caCerts.entries) {
-        try {
-          context!.setClientAuthorities(
-            caCert.key,
-            password: caCert.value,
-          );
-        } on Exception {
-          context = null;
-        }
-      }
-    }
-
     if (_useTLS) {
       _connecta = Connecta(
         ConnectaToolkit(
           hostname: _address.value1,
           port: _address.value2,
-          context: context,
+          context: _context,
           timeout: connectionTimeout,
           connectionType: ConnectionType.tls,
           onBadCertificateCallback: _onBadCertificateCallback,
@@ -463,7 +450,7 @@ class Transport {
           hostname: _address.value1,
           port: _address.value2,
           timeout: connectionTimeout,
-          context: context,
+          context: _context,
           onBadCertificateCallback: _onBadCertificateCallback,
           connectionType: _disableStartTLS
               ? ConnectionType.tcp
@@ -585,7 +572,18 @@ class Transport {
   /// Combines while the given condition is true. Works with [Connecta].
   bool _combineWhile(List<int> bytes) {
     const messageEof = <String>{'</iq>'};
-    final data = memo0<String>(() => WhixpUtils.unicode(bytes)).call();
+    late String data;
+    if (streamCompressed) {
+      final List<int> decompressed;
+      try {
+        decompressed = io.zlib.decode(bytes);
+      } on Exception {
+        return false;
+      }
+      data = memo0<String>(() => WhixpUtils.unicode(decompressed)).call();
+    } else {
+      data = memo0<String>(() => WhixpUtils.unicode(bytes)).call();
+    }
 
     for (final eof in messageEof) {
       if (data.endsWith(eof)) {
@@ -601,7 +599,18 @@ class Transport {
   /// trigger one or more event.
   Future<void> _dataReceived(List<int> bytes) async {
     bool wrapped = false;
-    String data = memo0<String>(() => WhixpUtils.unicode(bytes)).call();
+    late String data;
+    if (streamCompressed) {
+      late List<int> decompressed;
+      try {
+        decompressed = io.zlib.decode(bytes);
+      } on Exception {
+        decompressed = bytes;
+      }
+      data = memo0<String>(() => WhixpUtils.unicode(decompressed)).call();
+    } else {
+      data = memo0<String>(() => WhixpUtils.unicode(bytes)).call();
+    }
     if (data.contains('<stream:stream') && !data.contains('</stream:stream>')) {
       data = _streamWrapper(data);
       wrapped = true;
@@ -896,6 +905,9 @@ class Transport {
     }
 
     addEventHandler<String>(event, handler, once: true);
+
+    /// Emit disconnected while consuming.
+    emit<String>('disconnected');
 
     return completer.future.timeout(Duration(milliseconds: timeout));
   }
@@ -1235,7 +1247,12 @@ class Transport {
     Log.instance.debug('SEND: $rawData');
 
     if (_connecta != null) {
-      _connecta!.send(rawData);
+      if (streamCompressed) {
+        _connecta!
+            .send(io.zlib.encode(WhixpUtils.stringToArrayBuffer(rawData)));
+      } else {
+        _connecta!.send(rawData);
+      }
     }
   }
 
