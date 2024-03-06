@@ -176,10 +176,7 @@ class InBandRegistration extends PluginBase {
       return false;
     }
 
-    print(_createAccount);
-    print(base.transport.eventHandled('register'));
     if (_createAccount && base.transport.eventHandled('register') > 0) {
-      print('IT SHOULD BRING US REGISTRATION FORM');
       await getRegistration(
         callback: (iq) =>
             base.transport.emit<Form>('register', data: iq['form'] as Form),
