@@ -199,15 +199,19 @@ abstract class WhixpBase {
       ..registerHandler(
         CallbackHandler(
           'IM',
-          _handleMessage,
-          matcher: XPathMatcher('{$defaultNamespace}message'),
+          (stanza) => _handleMessage(stanza as Message),
+          matcher: XPathMatcher(
+            '{$_defaultNamespace}message/${_defaultNamespace}body',
+          ),
         ),
       )
       ..registerHandler(
         CallbackHandler(
-          'IM',
-          _handleMessage,
-          matcher: XPathMatcher('{$defaultNamespace}body'),
+          'IMError',
+          (stanza) => _handleMessageError(stanza as Message),
+          matcher: XPathMatcher(
+            '{$defaultNamespace}message/${defaultNamespace}error',
+          ),
         ),
       )
       ..registerHandler(
@@ -379,6 +383,34 @@ abstract class WhixpBase {
     return presence.send();
   }
 
+  /// Creates, initializes and sends a new [Message].
+  void sendMessage(
+    /// The recipient of a directed message
+    JabberID messageTo, {
+    /// The contents of the message
+    String? messageBody,
+
+    /// Optional subject for the message
+    String? messageSubject,
+
+    /// The message's type, defaults to [MessageType.chat]
+    MessageType messageType = MessageType.chat,
+
+    /// The sender of the presence
+    JabberID? messageFrom,
+
+    /// Optional nickname of the message's sender
+    String? messageNick,
+  }) =>
+      makeMessage(
+        messageTo,
+        messageBody: messageBody,
+        messageSubject: messageSubject,
+        messageType: messageType,
+        messageFrom: messageFrom,
+        messageNick: messageNick,
+      ).send();
+
   /// Create and initialize a new [Presence] stanza.
   Presence makePresence({
     /// The recipient of a directed presence
@@ -466,7 +498,8 @@ abstract class WhixpBase {
     final message = Message(
       stanzaTo: messageTo,
       stanzaFrom: messageFrom,
-      stanzaType: messageType.toString(),
+      stanzaType: messageType.name,
+      transport: transport,
     );
     message['body'] = messageBody;
     message['subject'] = messageSubject;
@@ -564,14 +597,23 @@ abstract class WhixpBase {
   Future<void> disconnect() => transport.disconnect();
 
   /// Process incoming message stanzas.
-  void _handleMessage(StanzaBase message) {
-    final to = message['to'] as String;
-    if (to.isNotEmpty) {
-      if (!transport.isComponent && JabberID(to).bare.isNotEmpty) {
-        message['to'] = transport.boundJID.toString();
-      }
+  void _handleMessage(Message message) {
+    final to = message.to;
+
+    if (!transport.isComponent && (to != null || to!.bare.isEmpty)) {
+      message['to'] = transport.boundJID.toString();
     }
-    transport.emit<Message>('message', data: Message(element: message.element));
+
+    transport.emit<Message>('message', data: message);
+  }
+
+  /// Handles error occured while messaging
+  void _handleMessageError(Message message) {
+    if (!isComponent && (message.to == null || message.to!.bare.isEmpty)) {
+      message.setTo(transport.boundJID.toString());
+    }
+
+    transport.emit<Message>('message', data: message);
   }
 
   void _handlePresence(StanzaBase stanza) {

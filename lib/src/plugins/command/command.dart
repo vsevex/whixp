@@ -216,7 +216,7 @@ class AdHocCommands extends PluginBase {
   Future<void> _handleCommandStart(IQ iq) async {
     final sessionID = WhixpUtils.getUniqueId();
     final node = (iq['command'] as Command)['node'] as String;
-    final key = Tuple2<String, String?>(iq.to.full, node);
+    final key = Tuple2<String, String?>(iq.to != null ? iq.to!.full : '', node);
     final command = _commands[key];
     if (command == null || command.value2 == null) {
       Log.instance.info('Command not found: $key, $command');

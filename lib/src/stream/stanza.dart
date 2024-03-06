@@ -82,7 +82,8 @@ class StanzaBase extends XMLBase {
   }
 
   /// Returns the value of stanza's `to` attribute.
-  JabberID get to => JabberID(getAttribute('to'));
+  JabberID? get to =>
+      getAttribute('to').isEmpty ? null : JabberID(getAttribute('to'));
 
   /// Set the default `to` attribute of the stanza according to the passed [to]
   /// value.

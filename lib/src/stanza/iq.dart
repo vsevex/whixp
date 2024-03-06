@@ -199,7 +199,7 @@ class IQ extends RootStanza {
     if (transport!.sessionBind) {
       JabberID toJID;
       try {
-        toJID = to;
+        toJID = to!;
       } on Exception {
         toJID = transport!.boundJID;
       }

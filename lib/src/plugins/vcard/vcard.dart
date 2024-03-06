@@ -114,7 +114,7 @@ class VCardTemp extends PluginBase {
       _cache[iq.from.toString()] = iq['vcard_temp'] as VCardTempStanza;
       return;
     } else if (type == 'get' && base.isComponent) {
-      final vcard = _cache[iq.to.bare];
+      final vcard = _cache[iq.to!.bare];
       final reply = iq.replyIQ();
       reply.add(vcard);
       reply.sendIQ();

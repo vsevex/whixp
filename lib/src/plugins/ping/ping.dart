@@ -123,7 +123,7 @@ class Ping extends PluginBase {
   }
 
   Future<void> _keepalive() async {
-    Log.instance.debug('Keepalive ping is called');
+    Log.instance.info('Keepalive ping is called');
 
     await ping(
       jid: JabberID(base.transport.boundJID.host),
