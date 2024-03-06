@@ -31,13 +31,13 @@ class XPathMatcher extends BaseMatcher {
     final element = base.element;
 
     /// Namespace fix.
-    final rawCriteria = fixNamespace(criteria as String).value1!;
+    final rawCriteria = fixNamespace(criteria as String, split: true).value2;
 
     /// Retrieves the XML tag of the [base.element].
     final tag =
         '<${element!.localName} xmlns="${element.getAttribute('xmlns')}"/>';
 
     /// Compare the stored criteria with the XML tag of the stanza.
-    return rawCriteria == tag;
+    return rawCriteria!.contains(tag);
   }
 }
