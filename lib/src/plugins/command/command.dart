@@ -149,7 +149,7 @@ class AdHocCommands extends PluginBase {
     if (action == 'prev') {
       return _handleCommandPrev(iq);
     }
-    if (action == 'commplete') {
+    if (action == 'complete') {
       return _handleCommandComplete(iq);
     }
     if (action == 'cancel') {
@@ -454,17 +454,19 @@ class AdHocCommands extends PluginBase {
     }
   }
 
-  ///  Creates and sends a command stanza.
+  /// Creates and sends a command stanza.
   ///
   /// If [flow] is true, the process the Iq result using the command workflow
   /// methods contained in the session instead of returning the response stanza
   /// itself. Defaults to `false`.
-  void sendCommand(
+  FutureOr<IQ> sendCommand(
     JabberID jid,
     String node, {
     JabberID? iqFrom,
     String? sessionID,
-    List<XMLBase>? payloads,
+
+    /// Must be in XMLBase or XMl element type.
+    List<dynamic>? payloads,
     String action = 'execute',
   }) {
     final iq = base.makeIQSet()..enable('command');
@@ -484,11 +486,11 @@ class AdHocCommands extends PluginBase {
       }
     }
 
-    iq.sendIQ();
+    return iq.sendIQ();
   }
 
   /// Initiate executing a command provided by a remote agent.
-  void startCommand(
+  FutureOr<IQ> startCommand(
     JabberID jid,
     String node,
     Map<String, dynamic> session, {
@@ -500,16 +502,14 @@ class AdHocCommands extends PluginBase {
     if (!session.containsKey('payload')) {
       session['payload'] = null;
     }
-    final iq = base.makeIQSet();
-    iq.setTo(jid.toString());
-    if (iqFrom != null) {
-      iq.setFrom(iqFrom.toString());
-    }
+    final iq = base.makeIQSet(iqTo: jid, iqFrom: iqFrom);
     session['from'] = iqFrom;
     (iq['command'] as Command)['node'] = node;
     (iq['command'] as Command)['action'] = 'execute';
     if (session['payload'] != null) {
-      final payload = session['payload'] as List<XMLBase>;
+      /// Although it accepts dynamic, the list must contain either XMLBase or
+      /// XML element (from xml package).
+      final payload = session['payload'] as List<dynamic>;
       for (final stanza in payload) {
         (iq['command'] as Command).add(stanza);
       }
@@ -518,17 +518,17 @@ class AdHocCommands extends PluginBase {
     session['id'] = sessionID;
     _sessions[sessionID] = session;
 
-    iq.sendIQ();
+    return iq.sendIQ();
   }
 
-  void continueCommand(
+  FutureOr<IQ> continueCommand(
     Map<String, dynamic> session, {
     String direction = 'next',
   }) {
     final sessionID = 'client:${session['id']}';
     _sessions[sessionID] = session;
 
-    sendCommand(
+    return sendCommand(
       session['jid'] as JabberID,
       session['node'] as String,
       iqFrom: session['from'] as JabberID?,
