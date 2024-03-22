@@ -369,6 +369,10 @@ class WhixpUtils {
     return Uint8List.fromList(bytes);
   }
 
+  /// Encodes the given [value] using [utf8] encoding. Later on encoded string
+  /// can be decoded back using built-in [utf8] decoder.
+  static Uint8List utf8Encode(String value) => utf8.encode(value);
+
   /// This method takes a [Uint8List] as input, representing an array of bytes,
   /// and converts it to a Base64-encoded string. The method first converts
   /// the [ByteBuffer] to a [Uint8List] using the `asUint8List` method.
