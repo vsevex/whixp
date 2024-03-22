@@ -206,7 +206,7 @@ class FeatureMechanisms extends PluginBase {
     try {
       response['value'] = _mech.challenge(stanza['value'] as String);
     } on SASLException {
-      base.transport.disconnect();
+      /// pass
     }
     response.send();
   }
@@ -219,7 +219,9 @@ class FeatureMechanisms extends PluginBase {
 
   bool _handleFailure(StanzaBase stanza) {
     attemptedMechanisms.add(_mech.name);
-    Log.instance.info('Authentication failed: ${stanza['condition']}');
+    Log.instance.info(
+      'Authentication failed: ${stanza['condition']}, mechanism: ${_mech.name}',
+    );
     base.transport.emit<String>(
       'failedAuthentication',
       data: stanza['condition'] as String,
