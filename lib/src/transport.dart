@@ -647,7 +647,18 @@ class Transport {
         final substring = data.substring(index, event.stop);
         if (substring.isEmpty) return;
 
-        final element = xml.XmlDocument.parse(substring).rootElement;
+        late xml.XmlElement element;
+        try {
+          element = xml.XmlDocument.parse(substring).rootElement;
+        } on Exception {
+          final fallbackSubstring =
+              data.substring(data.indexOf('<${event.name}'), event.stop);
+          try {
+            element = xml.XmlDocument.parse(fallbackSubstring).rootElement;
+          } on Exception {
+            return;
+          }
+        }
 
         if (element.getAttribute('xmlns') == null) {
           if (element.localName == 'message' ||
@@ -1008,13 +1019,14 @@ class Transport {
     }
     late async.Timer handler;
     if (repeat) {
-      handler = async.Timer.periodic(Duration(seconds: seconds), (_) {
-        callback();
-        _scheduledEvents.remove(name);
-      });
+      handler = async.Timer.periodic(
+        Duration(seconds: seconds),
+        (_) => callback.call(),
+      );
     } else {
       handler = async.Timer(Duration(seconds: seconds), () {
         callback();
+        _scheduledEvents.remove(name);
       });
     }
     _scheduledEvents[name] = handler;
@@ -1233,10 +1245,10 @@ class Transport {
   ///
   /// [data] can be either [List] of integers or [String].
   void sendRaw(dynamic data) {
-    String rawData;
-    if (data is List<int>) {
-      rawData = WhixpUtils.unicode(data);
-    } else if (data is String) {
+    List<int> rawData;
+    if (data is String) {
+      rawData = WhixpUtils.utf8Encode(data);
+    } else if (data is List<int>) {
       rawData = data;
     } else {
       throw ArgumentError(
@@ -1244,12 +1256,11 @@ class Transport {
       );
     }
 
-    Log.instance.debug('SEND: $rawData');
+    Log.instance.debug('SEND: ${WhixpUtils.unicode(rawData)}');
 
     if (_connecta != null) {
       if (streamCompressed) {
-        _connecta!
-            .send(io.zlib.encode(WhixpUtils.stringToArrayBuffer(rawData)));
+        _connecta!.send(io.zlib.encode(rawData));
       } else {
         _connecta!.send(rawData);
       }
