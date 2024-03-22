@@ -86,6 +86,13 @@ class PubSub extends PluginBase {
     base.transport
       ..registerHandler(
         CallbackHandler(
+          'PubSub IQ Publish',
+          (stanza) => _handleIQPubsub(stanza as IQ),
+          matcher: StanzaPathMatcher('iq/pubsub/publish'),
+        ),
+      )
+      ..registerHandler(
+        CallbackHandler(
           'PubSub Items',
           (stanza) => _handleEventItems(stanza as Message),
           matcher: StanzaPathMatcher('message/pubsub_event/items'),
@@ -119,6 +126,10 @@ class PubSub extends PluginBase {
           matcher: StanzaPathMatcher('message/pubsub_event/purge'),
         ),
       );
+  }
+
+  void _handleIQPubsub(IQ iq) {
+    base.transport.emit<IQ>('pubsubIQ', data: iq);
   }
 
   void _handleEventItems(Message message) {

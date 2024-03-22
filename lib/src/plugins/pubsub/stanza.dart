@@ -4,6 +4,8 @@ class PubSubStanza extends XMLBase {
   PubSubStanza({
     super.pluginTagMapping,
     super.pluginAttributeMapping,
+    super.pluginMultiAttribute,
+    super.pluginIterables,
     super.element,
     super.parent,
   }) : super(
@@ -32,6 +34,8 @@ class PubSubStanza extends XMLBase {
   PubSubStanza copy({xml.XmlElement? element, XMLBase? parent}) => PubSubStanza(
         pluginTagMapping: pluginTagMapping,
         pluginAttributeMapping: pluginAttributeMapping,
+        pluginMultiAttribute: pluginMultiAttribute,
+        pluginIterables: pluginIterables,
         element: element,
         parent: parent,
       );
@@ -756,7 +760,6 @@ class PubSubItem extends XMLBase {
     super.parent,
   }) : super(
           name: 'item',
-          namespace: _$namespace,
           includeNamespace: false,
           pluginAttribute: 'item',
           interfaces: <String>{'id', 'payload'},
@@ -979,6 +982,7 @@ class PubSubPublish extends XMLBase {
   PubSubPublish({
     super.pluginTagMapping,
     super.pluginAttributeMapping,
+    super.pluginIterables,
     super.element,
     super.parent,
   }) : super(
@@ -996,6 +1000,7 @@ class PubSubPublish extends XMLBase {
       PubSubPublish(
         pluginTagMapping: pluginTagMapping,
         pluginAttributeMapping: pluginAttributeMapping,
+        pluginIterables: pluginIterables,
         element: element,
         parent: parent,
       );
@@ -1370,6 +1375,8 @@ class PubSubOptions extends XMLBase {
 /// ```
 class PubSubPublishOptions extends XMLBase {
   PubSubPublishOptions({
+    super.pluginTagMapping,
+    super.pluginAttributeMapping,
     super.getters,
     super.setters,
     super.deleters,
@@ -1381,21 +1388,22 @@ class PubSubPublishOptions extends XMLBase {
           includeNamespace: false,
           pluginAttribute: 'publish_options',
           interfaces: <String>{'publish_options'},
-          isExtension: true,
         ) {
     addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
-      const Symbol('publishOptions'): (args, base) => _publishOptions,
+      const Symbol('publish_options'): (args, base) => _publishOptions,
     });
 
     addSetters(<Symbol,
         dynamic Function(dynamic value, dynamic args, XMLBase base)>{
-      const Symbol('publishOptions'): (value, args, base) =>
+      const Symbol('publish_options'): (value, args, base) =>
           _setPublishOptions(value),
     });
 
     addDeleters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
-      const Symbol('publishOptions'): (args, base) => _deletePublishOptions(),
+      const Symbol('publish_options'): (args, base) => _deletePublishOptions(),
     });
+
+    registerPlugin(Form());
   }
 
   Form? get _publishOptions {
@@ -1432,6 +1440,8 @@ class PubSubPublishOptions extends XMLBase {
   @override
   PubSubPublishOptions copy({xml.XmlElement? element, XMLBase? parent}) =>
       PubSubPublishOptions(
+        pluginAttributeMapping: pluginAttributeMapping,
+        pluginTagMapping: pluginTagMapping,
         getters: getters,
         setters: setters,
         deleters: deleters,
