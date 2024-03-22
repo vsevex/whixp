@@ -109,6 +109,8 @@ class Ping extends PluginBase {
       _pendingTasks.add(Task(_keepalive));
     }
 
+    handler.call();
+
     base.transport.schedule(
       'pingalive',
       handler,
