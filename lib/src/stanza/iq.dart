@@ -191,18 +191,16 @@ class IQ extends RootStanza {
     /// `10` seconds.
     int timeout = 10,
   }) async {
-    final completer = Completer<IQ>();
+    final completer = Completer<IQ?>();
+    final errorCompleter = Completer<IQ?>();
+    final resultCompleter = Completer<IQ>();
 
     Handler? handler;
     BaseMatcher? matcher;
 
     if (transport!.sessionBind) {
-      JabberID toJID;
-      try {
-        toJID = to!;
-      } on Exception {
-        toJID = transport!.boundJID;
-      }
+      final toJID = to ?? JabberID(transport!.boundJID.domain);
+
       matcher = MatchIDSender(
         IDMatcherCriteria(
           transport!.boundJID,
@@ -226,15 +224,15 @@ class IQ extends RootStanza {
       if (type == 'result') {
         if (!completer.isCompleted) {
           completer.complete(stanza);
+          resultCompleter.complete(stanza);
+          errorCompleter.complete(null);
         }
       } else if (type == 'error') {
-        if (!completer.isCompleted) {
+        if (!completer.isCompleted && !errorCompleter.isCompleted) {
           try {
-            if (failureCallback != null) {
-              await failureCallback.call(stanza['error'] as StanzaError);
-            }
-
-            completer.complete(stanza);
+            completer.complete(null);
+            errorCompleter.complete(stanza);
+            resultCompleter.complete(stanza);
 
             throw StanzaException.iq(stanza);
           } catch (error) {
@@ -254,15 +252,27 @@ class IQ extends RootStanza {
 
       transport?.cancelSchedule(_handlerID!);
 
+      /// Run provided callback if there is any completed IQ stanza.
       if (callback != null) {
-        await callback.call(await completer.future);
+        final result = await completer.future;
+        if (result != null) {
+          await callback.call(result);
+        }
+      }
+
+      /// Run provided failure callback if there is any completed error stanza.
+      if (failureCallback != null) {
+        final result = await errorCompleter.future;
+        if (result != null) {
+          await failureCallback.call(result['error'] as StanzaError);
+        }
       }
     }
 
     void callbackTimeout() {
       runZonedGuarded(
         () {
-          if (!completer.isCompleted) {
+          if (!resultCompleter.isCompleted) {
             throw StanzaException.timeout(this);
           }
         },
@@ -291,7 +301,7 @@ class IQ extends RootStanza {
     }
     send();
 
-    return synchronized(() => completer.future);
+    return synchronized(() => resultCompleter.future);
   }
 
   /// Send a 'feature-not-implemented' error stanza if the stanza is not
