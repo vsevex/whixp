@@ -91,7 +91,7 @@ class Scram {
       } else if (matches[1] == 'i') {
         iter = int.parse(matches[2]!, radix: 10);
       } else {
-        throw SASLException.scram('Error happened while parsing the challenge');
+        break;
       }
     }
 
