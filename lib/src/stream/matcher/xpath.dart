@@ -35,9 +35,9 @@ class XPathMatcher extends BaseMatcher {
 
     /// Retrieves the XML tag of the [base.element].
     final tag =
-        '<${element!.localName} xmlns="${element.getAttribute('xmlns')}"/>';
+        '<${element!.localName} xmlns="${element.getAttribute('xmlns') ?? ''}"/>';
 
     /// Compare the stored criteria with the XML tag of the stanza.
-    return rawCriteria!.contains(tag);
+    return rawCriteria?.contains(tag) ?? false;
   }
 }
