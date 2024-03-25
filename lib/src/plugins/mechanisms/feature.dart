@@ -206,7 +206,9 @@ class FeatureMechanisms extends PluginBase {
     try {
       response['value'] = _mech.challenge(stanza['value'] as String);
     } on SASLException {
-      /// pass
+      /// Disconnects if there is any [SASLException] occures.
+      base.transport.disconnect();
+      return;
     }
     response.send();
   }
