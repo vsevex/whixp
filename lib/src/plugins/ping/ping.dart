@@ -128,7 +128,8 @@ class Ping extends PluginBase {
     Log.instance.info('Keepalive ping is called');
 
     await ping(
-      jid: JabberID(base.transport.boundJID.host),
+      jid: base.transport.boundJID,
+      iqFrom: base.transport.boundJID,
       timeout: _timeout,
       timeoutCallback: (_) {
         Log.instance.debug(
