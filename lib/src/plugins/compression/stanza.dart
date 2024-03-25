@@ -1,6 +1,7 @@
 part of 'compression.dart';
 
 const _$namespace = 'http://jabber.org/features/compress';
+const _$protocolNamespace = 'http://jabber.org/protocol/compress';
 
 class CompressionStanza extends XMLBase {
   CompressionStanza({super.getters, super.element, super.parent})
@@ -40,7 +41,7 @@ class Compress extends StanzaBase {
   Compress({super.element, super.parent})
       : super(
           name: 'compress',
-          namespace: _$namespace,
+          namespace: _$protocolNamespace,
           interfaces: <String>{'method'},
           subInterfaces: <String>{'method'},
           pluginAttribute: 'compress',
