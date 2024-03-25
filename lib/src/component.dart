@@ -60,7 +60,7 @@ class WhixpComponent extends WhixpBase {
     transport
       ..registerHandler(
         CallbackHandler(
-          'Handshake',
+          'Handshake with Component namespace',
           _handleHandshake,
           matcher: XPathMatcher(
             '{${WhixpUtils.getNamespace('COMPONENT')}}handshake',
@@ -69,11 +69,18 @@ class WhixpComponent extends WhixpBase {
       )
       ..registerHandler(
         CallbackHandler(
-          'Handshake',
+          'Handshake with Stream namespace',
           _handleHandshake,
           matcher: XPathMatcher(
             '{${WhixpUtils.getNamespace('JABBER_STREAM')}}handshake',
           ),
+        ),
+      )
+      ..registerHandler(
+        CallbackHandler(
+          'Handshake without namespace',
+          _handleHandshake,
+          matcher: XPathMatcher('handshake'),
         ),
       );
     transport.addEventHandler<Presence>('presenceProbe', _handleProbe);
