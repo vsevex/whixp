@@ -1,7 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:meta/meta.dart';
-
 import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/plugins/mechanisms/feature.dart';
 import 'package:whixp/src/sasl/scram.dart';
@@ -173,7 +171,7 @@ class _SASLPlain extends Mechanism {
     auth = '$auth$username';
     auth = '$auth\u0000';
     auth = '$auth$password';
-    return WhixpUtils.utf16to8(auth);
+    return const WhixpUtils().utf16to8(auth);
   }
 
   @override
