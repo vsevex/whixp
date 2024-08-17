@@ -1,258 +1,175 @@
-import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/exception.dart';
+import 'package:whixp/src/stanza/mixins.dart';
+import 'package:whixp/src/stanza/node.dart';
+import 'package:whixp/src/stanza/stanza.dart';
 import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
 
-/// Represents an XMPP stanza error.
-///
-/// Extends [XMLBase] and implements [Exception] interface.
-///
-/// This class is designed to handle XMPP stanza errors, specifically related
-/// to client communication.
-///
-/// ### Example:
-/// ```xml
-/// <error type="cancel" code="404">
-///   <item-not-found xmlns="urn:ietf:params:xml:ns:xmpp-stanzas" />
-///   <text xmlns="urn:ietf:params:xml:ns:xmpp-stanzas">
-///     Some error text.
-///   </text>
-/// </error>
-/// ```
-class StanzaError extends XMLBase implements Exception {
-  /// Creates a new instance of [StanzaError] with optional parameters.
-  ///
-  /// [conditionNamespace] represents the XML namespace for conditions.
-  StanzaError({
-    super.getters,
-    super.setters,
-    super.deleters,
-    String? conditionNamespace,
-    super.element,
-    super.parent,
-  }) : super(
-          name: 'error',
-          namespace: WhixpUtils.getNamespace('CLIENT'),
-          pluginAttribute: 'error',
-          interfaces: {
-            'code',
-            'condition',
-            'text',
-            'type',
-            'gone',
-            'redirect',
-            'by',
-          },
-          subInterfaces: {'text'},
-        ) {
-    _conditionNamespace =
-        conditionNamespace ?? WhixpUtils.getNamespace('STANZAS');
+/// Represents an error stanza in XMPP.
+class ErrorStanza extends Stanza {
+  /// Holds the name of the error stanza.
+  static const String _name = 'error';
 
-    if (parent != null) {
-      parent!['type'] = 'error';
+  ErrorStanza();
+
+  /// Returns the error code of the stanza.
+  int? code;
+
+  /// Returns the type of the error. The type is an attribute of the stanza that
+  /// identifies the category of the error.
+  String? type;
+
+  /// Returns the reason for the error. Attribute of the stanza that provides a
+  /// human-readable explanation of the error.
+  String? reason;
+
+  /// Attribute of the stanza that provides additional information about the
+  /// error.
+  String? text;
+
+  /// Creates an instance of the stanza from a string.
+  factory ErrorStanza.fromString(String stanza) {
+    try {
+      final root = xml.XmlDocument.parse(stanza);
+      return ErrorStanza.fromXML(root.rootElement);
+    } catch (_) {
+      throw WhixpInternalException.invalidXML();
     }
-
-    addGetters(
-      <Symbol, dynamic Function(dynamic args, XMLBase base)>{
-        const Symbol('condition'): (args, base) => condition,
-
-        /// Retrieves the contents of the <text> element.
-        const Symbol('text'): (args, base) => base.getSubText('text'),
-        const Symbol('gone'): (args, base) => base.getSubText('gone'),
-      },
-    );
-
-    addSetters(
-      <Symbol, void Function(dynamic value, dynamic args, XMLBase base)>{
-        const Symbol('condition'): (value, args, base) {
-          if (_conditions.contains(value as String)) {
-            base.delete('condition');
-            base.element!.children.add(WhixpUtils.xmlElement(value));
-          }
-        },
-      },
-    );
-
-    addDeleters(
-      <Symbol, dynamic Function(dynamic args, XMLBase base)>{
-        /// Removes the condition element.
-        const Symbol('condition'): (args, base) {
-          final elements = <xml.XmlElement>[];
-          for (final child in base.element!.childElements) {
-            if (child.getAttribute('xmlns') == _conditionNamespace) {
-              final condition = child.localName;
-              if (_conditions.contains(condition)) {
-                elements.add(child);
-              }
-            }
-          }
-
-          for (final element in elements) {
-            base.element!.children.remove(element);
-          }
-        },
-      },
-    );
   }
 
-  /// The namespace for the condition element.
-  late final String _conditionNamespace;
-
+  /// Overrides of the `toXML` method that returns an XML representation of the
+  /// stanza.
   @override
-  bool setup([xml.XmlElement? element]) {
-    final setup = super.setup(element);
-    if (setup) {
-      this['type'] = 'cancel';
-      this['condition'] = 'feature-not-implemented';
-    }
-    if (parent != null) {
-      parent!['type'] = 'error';
-    }
-    return setup;
+  xml.XmlElement toXML() {
+    final builder = WhixpUtils.makeGenerator();
+    final dictionary = <String, String>{};
+
+    if (type != null) dictionary['type'] = type!;
+    if (code != null && code != 0) dictionary['code'] = code!.toString();
+    dictionary.addAll({
+      'xmlns': 'urn:ietf:params:xml:ns:xmpp-stanzas',
+    });
+
+    builder.element(
+      _name,
+      attributes: dictionary,
+      nest: () {
+        if (reason?.isNotEmpty ?? false) {
+          builder.element('reason', nest: () => builder.text(reason!));
+        }
+        if (text?.isNotEmpty ?? false) {
+          builder.element('text', nest: () => builder.text(text!));
+        }
+      },
+    );
+
+    return builder.buildDocument().rootElement;
   }
 
-  /// Returns the condition element's name.
-  String get condition {
-    for (final child in element!.childElements) {
-      if (child.getAttribute('xmlns') == _conditionNamespace) {
-        final condition = child.localName;
-        if (_conditions.contains(condition)) {
-          return condition;
-        }
+  /// Creates an instance of the stanza from an XML node.
+  factory ErrorStanza.fromXML(xml.XmlElement node) {
+    if (node.localName != _name) {
+      throw WhixpInternalException.invalidNode(node.localName, _name);
+    }
+
+    final error = ErrorStanza();
+
+    for (final attribute in node.attributes) {
+      switch (attribute.localName) {
+        case "code":
+          final innerText = attribute.value;
+          if (innerText.isNotEmpty) {
+            error.code = innerText.isNotEmpty ? int.parse(innerText) : 0;
+          }
+        case "type":
+          final innerText = attribute.value;
+          error.type = innerText.isNotEmpty ? innerText : null;
+        default:
+          break;
       }
     }
-    return '';
+
+    for (final child in node.children.whereType<xml.XmlElement>()) {
+      if (child.localName == "text") {
+        error.text = child.innerText;
+      } else {
+        error.reason = child.localName;
+      }
+    }
+    return error;
   }
 
   @override
-  StanzaError copy({
-    xml.XmlElement? element,
-    XMLBase? parent,
-    bool receive = false,
-  }) =>
-      StanzaError(
-        getters: getters,
-        setters: setters,
-        deleters: deleters,
-        element: element,
-        parent: parent,
-        conditionNamespace: _conditionNamespace,
-      );
-}
-
-/// Represents an XMPP stream error.
-///
-/// This class is designed to handle stream errors.
-///
-/// ### Example:
-/// ```xml
-/// <stream:error>
-///   <not-well-formed xmlns="urn:ietf:params:xml:ns:xmpp-streams" />
-///   <text xmlns="urn:ietf:params:xml:ns:xmpp-streams">
-///     XML was not well-formed.
-///   </text>
-/// </stream:error>
-/// ```
-class StreamError extends StanzaBase implements Exception {
-  /// XMPP stanzas of type `error` should inclue an __<error>__ stanza that
-  /// describes the nature of the error and how it should be handled.
-  ///
-  /// The __stream:error__ stanza is used to provide more information for
-  /// error that occur with underlying XML stream itself, and not a particular
-  /// stanza.
-  ///
-  /// [conditionNamespace] represents the XML namespace for conditions.
-  StreamError({
-    super.getters,
-    super.setters,
-    super.deleters,
-    super.element,
-    super.parent,
-    String? conditionNamespace,
-  }) : super(
-          name: 'error',
-          namespace: WhixpUtils.getNamespace('JABBER_STREAM'),
-          pluginAttribute: 'error',
-          interfaces: {'condition', 'text', 'see_other_host'},
-        ) {
-    _conditionNamespace =
-        conditionNamespace ?? WhixpUtils.getNamespace('STREAM');
-
-    addGetters(
-      <Symbol, dynamic Function(dynamic args, XMLBase base)>{
-        const Symbol('see_other_host'): (args, base) {
-          final namespace = _conditionNamespace;
-
-          return base.getSubText('{$namespace}see-other-host');
-        },
-      },
-    );
-
-    addSetters(
-      <Symbol, dynamic Function(dynamic value, dynamic args, XMLBase base)>{
-        const Symbol('see_other_host'): (value, args, base) {
-          if (value is String && value.isNotEmpty) {
-            base.delete('condition');
-
-            final namespace = _conditionNamespace;
-
-            return base.getSubText('{$namespace}see-other-host');
-          }
-        },
-      },
-    );
-
-    addDeleters(
-      <Symbol, dynamic Function(dynamic args, XMLBase base)>{
-        const Symbol('see_other_host'): (args, base) {
-          final namespace = _conditionNamespace;
-
-          return base.getSubText('{$namespace}see-other-host');
-        },
-      },
-    );
-  }
-
-  /// The namespace for the condition element.
-  late final String _conditionNamespace;
+  String get name => _name;
 
   @override
-  StreamError copy({
-    xml.XmlElement? element,
-    XMLBase? parent,
-    bool receive = false,
-  }) =>
-      StreamError(
-        getters: getters,
-        setters: setters,
-        deleters: deleters,
-        element: element,
-        parent: parent,
-        conditionNamespace: _conditionNamespace,
-      );
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ErrorStanza &&
+          runtimeType == other.runtimeType &&
+          code == other.code &&
+          type == other.type &&
+          reason == other.reason &&
+          text == other.text;
+
+  @override
+  int get hashCode =>
+      code.hashCode ^ type.hashCode ^ reason.hashCode ^ text.hashCode;
 }
 
-const _conditions = {
-  'bad-request',
-  'conflict',
-  'feature-not-implemented',
-  'forbidden',
-  'gone',
-  'internal-server-error',
-  'item-not-found',
-  'jid-malformed',
-  'not-acceptable',
-  'not-allowed',
-  'not-authorized',
-  'payment-required',
-  'recipient-unavailable',
-  'redirect',
-  'registration-required',
-  'remote-server-not-found',
-  'remote-server-timeout',
-  'resource-constraint',
-  'service-unavailable',
-  'subscription-required',
-  'undefined-condition',
-  'unexpected-request',
-};
+/// Represents an error in the XMPP stream.
+class StreamError with Packet {
+  static const String _name = 'error';
+  static const String _namespace = 'http://etherx.jabber.org/streams';
+
+  StreamError();
+
+  /// The specific error node associated with the stream error.
+  Node? error;
+
+  /// If the error is `see-other-host`.
+  bool seeOtherHost = false;
+
+  /// The error text message, if available.
+  String? text;
+
+  /// Constructs a [StreamError] instance from the given XML [node].
+  factory StreamError.fromXML(xml.XmlElement node) {
+    final error = StreamError();
+
+    for (final child in node.children.whereType<xml.XmlElement>()) {
+      if (child.localName == 'see-other-host') {
+        error.seeOtherHost = true;
+        error.text = child.innerText;
+      }
+      if (child.localName == 'text' &&
+          child.namespaceUri == 'urn:ietf:params:xml:ns:xmpp-streams') {
+        error.text = child.innerText;
+      } else {
+        error.error = Node.fromXML(child);
+      }
+    }
+
+    return error;
+  }
+
+  @override
+  xml.XmlElement toXML() {
+    final builder = WhixpUtils.makeGenerator();
+
+    builder.element(_name, attributes: <String, String>{'xmlns': _namespace});
+    if (text?.isNotEmpty ?? false) {
+      builder.element('text', nest: () => builder.text(text!));
+    }
+
+    final root = builder.buildDocument().rootElement;
+
+    if (error != null) root.children.add(error!.toXML().copy());
+
+    return root;
+  }
+
+  @override
+  String get name => 'stream:error';
+}
