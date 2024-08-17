@@ -1,31 +1,15 @@
 import 'dart:async';
 import 'dart:io' as io;
 
-import 'package:crypto/crypto.dart';
-import 'package:dartz/dartz.dart';
-import 'package:meta/meta.dart';
-
-import 'package:whixp/src/exception.dart';
+import 'package:whixp/src/database/controller.dart';
 import 'package:whixp/src/handler/handler.dart';
-import 'package:whixp/src/jid/jid.dart';
-import 'package:whixp/src/log/log.dart';
-import 'package:whixp/src/plugins/base.dart';
-import 'package:whixp/src/plugins/features.dart';
-import 'package:whixp/src/roster/manager.dart' as rost;
-import 'package:whixp/src/stanza/error.dart';
-import 'package:whixp/src/stanza/features.dart';
-import 'package:whixp/src/stanza/handshake.dart';
-import 'package:whixp/src/stanza/iq.dart';
-import 'package:whixp/src/stanza/message.dart';
-import 'package:whixp/src/stanza/presence.dart';
-import 'package:whixp/src/stanza/roster.dart';
-import 'package:whixp/src/stream/base.dart';
-import 'package:whixp/src/stream/matcher/matcher.dart';
+import 'package:whixp/src/session.dart';
+import 'package:whixp/src/stanza/mixins.dart';
 import 'package:whixp/src/transport.dart';
-import 'package:whixp/src/utils/utils.dart';
+import 'package:whixp/whixp.dart';
 
-part 'client.dart';
-part 'component.dart';
+part '_extensions.dart';
+// part 'component.dart';
 
 abstract class WhixpBase {
   /// Adapts the generic [Transport] class for use with XMPP. It also provides
@@ -41,7 +25,7 @@ abstract class WhixpBase {
     int port = 5222,
 
     /// Jabber ID associated with the XMPP client
-    String jabberID = '',
+    String? jabberID,
 
     /// Default XML namespace, defualts to "client"
     String? defaultNamespace,
@@ -63,7 +47,7 @@ abstract class WhixpBase {
 
     /// If `true`, periodically send a whitespace character over the wire to
     /// keep the connection alive
-    bool whitespaceKeepAlive = true,
+    bool pingKeepAlive = true,
 
     /// Optional [io.SecurityContext] which is going to be used in socket
     /// connections
@@ -73,7 +57,7 @@ abstract class WhixpBase {
     ///
     /// Passes [io.X509Certificate] instance when returning boolean value which
     /// indicates to proceed on bad certificate or not.
-    bool Function(io.X509Certificate)? onBadCertificateCallback,
+    bool Function(io.X509Certificate cert)? onBadCertificateCallback,
 
     /// Represents the duration in milliseconds for which the system will wait
     /// for a connection to be established before raising a [TimeoutException].
@@ -81,23 +65,18 @@ abstract class WhixpBase {
     /// Defaults to 2000 milliseconds
     int connectionTimeout = 2000,
 
-    /// The maximum number of reconnection attempts that the [Transport] will
-    /// make in case the connection with the server is lost or cannot be
-    /// established initially. Defaults to 3
-    int maxReconnectionAttempt = 3,
-
     /// The maximum number of consecutive `see-other-host` redirections that
     /// will be followed before quitting
     int maxRedirects = 5,
 
-    /// The default interval between keepalive signals when [whitespaceKeepAlive]
-    /// is enabled. Represents in seconds. Defaults to `300`
-    int whitespaceKeepAliveInterval = 300,
+    /// The default interval between keepalive signals when
+    /// [pingKeepAliveInterval] is enabled. Represents in seconds. Defaults to `300`
+    int pingKeepAliveInterval = 300,
 
     /// [Log] instance to print out various log messages properly
     Log? logger,
-    this.hivePathName = 'whixp',
-    this.provideHivePath = false,
+    String internalDatabasePath = '/',
+    ReconnectionPolicy? reconnectionPolicy,
   }) {
     _streamNamespace = WhixpUtils.getNamespace('JABBER_STREAM');
 
@@ -105,14 +84,14 @@ abstract class WhixpBase {
     /// be used.
     _defaultNamespace = defaultNamespace ?? WhixpUtils.getNamespace('CLIENT');
 
-    /// requested [JabberID] from the passed jabber ID.
-    requestedJID = JabberID(jabberID);
+    /// Requested [JabberID] from the passed jabber ID.
+    if (jabberID != null) _requestedJID = JabberID(jabberID);
 
     /// [JabberID] from the passed jabber ID.
-    final boundJID = JabberID(jabberID);
-
-    /// Initialize [PluginManager].
-    _pluginManager = PluginManager();
+    JabberID? boundJID;
+    if (jabberID != null) {
+      boundJID = JabberID(jabberID);
+    }
 
     /// Equals passed maxRedirect count to the local variable.
     _maxRedirects = maxRedirects;
@@ -123,10 +102,16 @@ abstract class WhixpBase {
     late String address;
     late String? dnsService;
 
-    if (!isComponent) {
+    if (host == null && boundJID == null) {
+      throw WhixpInternalException.setup(
+        'You need to declare either host or jid to connect to the server.',
+      );
+    }
+
+    if (!_isComponent) {
       /// Check if this class is not used for component initialization, and try
       /// to point [host] and [port] properly.
-      if (host == null) {
+      if (host == null && boundJID != null) {
         address = boundJID.host;
 
         if (useTLS) {
@@ -134,152 +119,143 @@ abstract class WhixpBase {
         } else {
           dnsService = 'xmpp-client';
         }
-      } else {
+      } else if (host != null) {
         address = host;
         dnsService = null;
       }
     } else {
-      address = host ?? boundJID.host;
+      address = host ?? boundJID!.host;
       dnsService = null;
     }
 
+    /// Initialize internal used database for Whixp.
+    HiveController.initialize(internalDatabasePath);
+
     /// Declare [Transport] with the passed params.
-    transport = Transport(
+    _transport = Transport(
       address,
       port: port,
       useIPv6: useIPv6,
       disableStartTLS: disableStartTLS,
       boundJID: boundJID,
-      isComponent: isComponent,
       dnsService: dnsService,
       useTLS: useTLS,
       context: context,
       onBadCertificateCallback: onBadCertificateCallback,
       connectionTimeout: connectionTimeout,
-      whitespaceKeepAlive: whitespaceKeepAlive,
-      whitespaceKeepAliveInterval: whitespaceKeepAliveInterval,
-      maxReconnectionAttempt: maxReconnectionAttempt,
+      pingKeepAlive: pingKeepAlive,
+      pingKeepAliveInterval: pingKeepAliveInterval,
+      reconnectionPolicy:
+          reconnectionPolicy ?? RandomBackoffReconnectionPolicy(0, 2),
     );
 
-    /// Set up the transport with XMPP's root stanzas & handlers.
-    transport
-      ..startStreamHandler = ([attributes]) {
-        String streamVersion = '';
+    /// Initialize PubSub instance
+    PubSub.initialize();
 
-        for (final attribute in attributes!) {
-          if (attribute.localName == 'version') {
+    /// Set up the transport with XMPP's root stanzas & handlers.
+    _transport
+      ..startStreamHandler = (attributes) {
+        String? streamVersion;
+
+        for (final attribute in attributes.entries) {
+          if (attribute.key == 'version') {
             streamVersion = attribute.value;
-          } else if (attribute.qualifiedName == 'xml:lang') {
-            transport.peerDefaultLanguage = attribute.value;
+          } else if (attribute.value == 'xml:lang') {
+            _transport.peerDefaultLanguage = attribute.value;
           }
         }
 
-        if (!isComponent && streamVersion.isEmpty) {
-          transport.emit('legacyProtocol');
+        if (!_isComponent && (streamVersion?.isEmpty ?? true)) {
+          _transport.emit('legacyProtocol');
         }
       }
-      ..registerStanza(IQ(generateID: false))
-      ..registerStanza(Presence())
-      ..registerStanza(Message(includeNamespace: true))
-      ..registerStanza(StreamError())
+      ..registerHandler(Handler('IM', _handleMessage)..packet('message'))
+      // ..registerHandler(
+      //   Handler('Presence', _handlePresence),
+      //   CallbackHandler(
+      //     'Presence',
+      //     _handlePresence,
+      //     matcher: XPathMatcher('{$_defaultNamespace}presence'),
+      //   ),
+      // )
+      // ..registerHandler(
+      //   CallbackHandler(
+      //     'Presence',
+      //     _handlePresence,
+      //     matcher: XPathMatcher('{null}presence'),
+      //   ),
+      // )
+      // ..registerHandler(
+      //   CallbackHandler(
+      //     'IMError',
+      //     (stanza) => _handleMessageError(stanza as Message),
+      //     matcher: XPathMatcher(
+      //       '{$defaultNamespace}message/${defaultNamespace}error',
+      //     ),
+      //   ),
+      // )
       ..registerHandler(
-        CallbackHandler(
-          'Presence',
-          _handlePresence,
-          matcher: XPathMatcher('{$_defaultNamespace}presence'),
-        ),
-      )
-      ..registerHandler(
-        CallbackHandler(
-          'Presence',
-          _handlePresence,
-          matcher: XPathMatcher('{null}presence'),
-        ),
-      )
-      ..registerHandler(
-        CallbackHandler(
-          'IM',
-          (stanza) => _handleMessage(stanza as Message),
-          matcher: XPathMatcher(
-            '{$_defaultNamespace}message/${_defaultNamespace}body',
-          ),
-        ),
-      )
-      ..registerHandler(
-        CallbackHandler(
-          'IMError',
-          (stanza) => _handleMessageError(stanza as Message),
-          matcher: XPathMatcher(
-            '{$defaultNamespace}message/${defaultNamespace}error',
-          ),
-        ),
-      )
-      ..registerHandler(
-        CallbackHandler(
-          'Stream Error',
-          _handleStreamError,
-          matcher: XPathMatcher('{$_streamNamespace}error'),
-        ),
+        Handler('Stream Error', _handleStreamError)..packet('stream_error'),
       );
 
     /// Initialize [RosterManager].
-    roster = rost.RosterManager(this);
+    // roster = rost.RosterManager(this);
 
     /// Add current user jid to the roster.
-    roster.add(boundJID.toString());
+    // roster.add(boundJID.toString());
 
     /// Get current user's roster from the roster manager.
-    clientRoster = roster[boundJID.toString()] as rost.RosterNode;
+    // clientRoster = roster[boundJID.toString()] as rost.RosterNode;
 
-    transport
-      ..addEventHandler<String>('disconnected', (_) => _handleDisconnected())
-      ..addEventHandler<Presence>(
-        'presenceDnd',
-        (presence) => _handleAvailable(presence!),
-      )
-      ..addEventHandler<Presence>(
-        'presenceXa',
-        (presence) => _handleAvailable(presence!),
-      )
-      ..addEventHandler<Presence>(
-        'presenceChat',
-        (presence) => _handleAvailable(presence!),
-      )
-      ..addEventHandler<Presence>(
-        'presenceAway',
-        (presence) => _handleAvailable(presence!),
-      )
-      ..addEventHandler<Presence>(
-        'presenceAvailable',
-        (presence) => _handleAvailable(presence!),
-      )
-      ..addEventHandler<Presence>(
-        'presenceUnavailable',
-        (presence) => _handleUnavailable(presence!),
-      )
-      ..addEventHandler<Presence>(
-        'presenceSubscribe',
-        (presence) => _handleSubscribe(presence!),
-      )
-      ..addEventHandler<Presence>(
-        'presenceSubscribed',
-        (presence) => _handleSubscribed(presence!),
-      )
-      ..addEventHandler<Presence>(
-        'presenceUnsubscribe',
-        (presence) => _handleUnsubscribe(presence!),
-      )
-      ..addEventHandler<Presence>(
-        'presenceUnsubscribed',
-        (presence) => _handleUnsubscribed(presence!),
-      )
-      ..addEventHandler<Presence>(
-        'rosterSubscriptionRequest',
-        (presence) => _handleNewSubscription(presence!),
-      );
+    // transport
+    //   ..addEventHandler<String>('disconnected', (_) => _handleDisconnected())
+    //   ..addEventHandler<Presence>(
+    //     'presenceDnd',
+    //     (presence) => _handleAvailable(presence!),
+    //   )
+    //   ..addEventHandler<Presence>(
+    //     'presenceXa',
+    //     (presence) => _handleAvailable(presence!),
+    //   )
+    //   ..addEventHandler<Presence>(
+    //     'presenceChat',
+    //     (presence) => _handleAvailable(presence!),
+    //   )
+    //   ..addEventHandler<Presence>(
+    //     'presenceAway',
+    //     (presence) => _handleAvailable(presence!),
+    //   )
+    //   ..addEventHandler<Presence>(
+    //     'presenceAvailable',
+    //     (presence) => _handleAvailable(presence!),
+    //   )
+    //   ..addEventHandler<Presence>(
+    //     'presenceUnavailable',
+    //     (presence) => _handleUnavailable(presence!),
+    //   )
+    //   ..addEventHandler<Presence>(
+    //     'presenceSubscribe',
+    //     (presence) => _handleSubscribe(presence!),
+    //   )
+    //   ..addEventHandler<Presence>(
+    //     'presenceSubscribed',
+    //     (presence) => _handleSubscribed(presence!),
+    //   )
+    //   ..addEventHandler<Presence>(
+    //     'presenceUnsubscribe',
+    //     (presence) => _handleUnsubscribe(presence!),
+    //   )
+    //   ..addEventHandler<Presence>(
+    //     'presenceUnsubscribed',
+    //     (presence) => _handleUnsubscribed(presence!),
+    //   )
+    //   ..addEventHandler<Presence>(
+    //     'rosterSubscriptionRequest',
+    //     (presence) => _handleNewSubscription(presence!),
+    //   );
   }
-  @internal
-  late final Transport transport;
+
+  late final Transport _transport;
 
   /// Late final initialization of stream namespace.
   late final String _streamNamespace;
@@ -288,8 +264,7 @@ abstract class WhixpBase {
   late final String _defaultNamespace;
 
   /// The JabberID (JID) requested for this connection.
-  @internal
-  late final JabberID requestedJID;
+  late final JabberID _requestedJID;
 
   /// The maximum number of consecutive `see-other-host` redirections that will
   /// be followed before quitting.
@@ -300,119 +275,123 @@ abstract class WhixpBase {
 
   /// The sasl data keeper. Works with [SASL] class and keeps various data(s)
   /// that can be used accross package.
-  @internal
-  final saslData = <String, dynamic>{};
+  final _saslData = <String, dynamic>{};
 
   /// The distinction between clients and components can be important, primarily
   /// for choosing how to handle the `to` and `from` JIDs of stanzas.
-  final bool isComponent = false;
+  final bool _isComponent = false;
 
-  /// Hive properties.
-  final String hivePathName;
-  final bool provideHivePath;
+  /// Session initializer.
+  Session? _session;
 
-  @internal
-  Map<String, String> credentials = <String, String>{};
-
-  late final PluginManager _pluginManager;
+  /// Map holder for the given user properties for the connection.
+  Map<String, String> _credentials = <String, String>{};
 
   /// [rost.RosterManager] instance to make communication with roster easier.
-  late final rost.RosterManager roster;
-  late rost.RosterNode clientRoster;
-
-  final features = <String>{};
+  // late final rost.RosterManager roster;
+  // late rost.RosterNode clientRoster;
 
   final _streamFeatureHandlers =
-      <String, Tuple2<FutureOr<dynamic> Function(StanzaBase stanza), bool>>{};
+      <String, Tuple2<FutureOr<bool> Function(Packet features), bool>>{};
 
   final _streamFeatureOrder = <Tuple2<int, String>>[];
 
-  /// Register a stream feature handler.
-  void registerFeature(
+  /// Registers a stream feature handler.
+  void _registerFeature(
     String name,
-    FutureOr<dynamic> Function(StanzaBase stanza) handler, {
+    FutureOr<bool> Function(Packet features) handler, {
     bool restart = false,
     int order = 5000,
   }) {
     _streamFeatureHandlers[name] = Tuple2(handler, restart);
     _streamFeatureOrder.add(Tuple2(order, name));
-    _streamFeatureOrder.sort((a, b) => a.value1.compareTo(b.value1));
+    _streamFeatureOrder.sort((a, b) => a.firstValue.compareTo(b.firstValue));
   }
 
   /// Unregisters a stream feature handler.
-  void unregisterFeature(String name, {int order = 5000}) {
-    if (_streamFeatureHandlers.containsKey(name)) {
-      _streamFeatureHandlers.remove(name);
-    }
-    _streamFeatureOrder.remove(Tuple2(order, name));
-    _streamFeatureOrder.sort((a, b) => a.value1.compareTo(b.value1));
-  }
+  // void _unregisterFeature(String name, {int order = 5000}) {
+  //   if (_streamFeatureHandlers.containsKey(name)) {
+  //     _streamFeatureHandlers.remove(name);
+  //   }
+  //   _streamFeatureOrder.remove(Tuple2(order, name));
+  //   _streamFeatureOrder.sort((a, b) => a.firstValue.compareTo(b.firstValue));
+  // }
 
   /// Create, initialize, and send a new [Presence].
   void sendPresence({
     /// The recipient of a directed presence
-    JabberID? presenceTo,
+    JabberID? to,
 
     /// The sender of the presence
-    JabberID? presenceFrom,
+    JabberID? from,
 
     /// The presence's show value
-    String? presenceShow,
+    String? show,
 
     /// The presence's status message
-    String? presenceStatus,
-
-    /// The connection's priority
-    String? presencePriority,
+    String? status,
 
     /// The type of presence, such as 'subscribe'
-    String? presenceType,
+    String? type,
 
     /// Optional nickname of the presence's sender
-    String? presenceNick,
+    String? nick,
+
+    /// The connection's priority
+    int? priority,
   }) {
-    final presence = makePresence(
-      presenceTo: presenceTo,
-      presenceFrom: presenceFrom,
-      presenceShow: presenceShow,
-      presenceStatus: presenceStatus,
-      presencePriority: presencePriority,
-      presenceType: presenceType,
-      presenceNick: presenceNick,
+    final presence = _makePresence(
+      presenceTo: to,
+      presenceFrom: from,
+      presenceShow: show,
+      presenceStatus: status,
+      presencePriority: priority,
+      presenceType: type,
+      presenceNick: nick,
     );
-    return presence.send();
+    return Transport.instance().send(presence);
   }
 
   /// Creates, initializes and sends a new [Message].
   void sendMessage(
     /// The recipient of a directed message
-    JabberID messageTo, {
+    JabberID to, {
     /// The contents of the message
-    String? messageBody,
+    String? body,
 
     /// Optional subject for the message
-    String? messageSubject,
+    String? subject,
 
     /// The message's type, defaults to [MessageType.chat]
-    MessageType messageType = MessageType.chat,
+    MessageType type = MessageType.chat,
 
     /// The sender of the presence
-    JabberID? messageFrom,
+    JabberID? from,
 
     /// Optional nickname of the message's sender
-    String? messageNick,
+    String? nick,
+
+    /// List of custom extensions for the message stanza
+    List<MessageExtension>? extensions,
+
+    /// List of payloads to be inserted
+    List<Stanza>? payloads,
   }) =>
-      makeMessage(
-        messageTo,
-        messageBody: messageBody,
-        messageSubject: messageSubject,
-        messageType: messageType,
-        messageFrom: messageFrom,
-        messageNick: messageNick,
-      ).send();
+      Transport.instance().send(
+        _makeMessage(
+          to,
+          messageBody: body,
+          messageSubject: subject,
+          messageType: type,
+          messageFrom: from,
+          messageNick: nick,
+          extensions: extensions,
+          payloads: payloads,
+        ),
+      );
 
   /// Create and initialize a new [Presence] stanza.
-  Presence makePresence({
+  Presence _makePresence({
     /// The recipient of a directed presence
     JabberID? presenceTo,
 
@@ -425,29 +404,26 @@ abstract class WhixpBase {
     /// The presence's status message
     String? presenceStatus,
 
-    /// The connection's priority
-    String? presencePriority,
-
     /// The type of presence, such as 'subscribe'
     String? presenceType,
 
     /// Optional nickname of the presence's sender
     String? presenceNick,
+
+    /// The connection's priority
+    int? presencePriority,
   }) {
     final presence = _presence(
       presenceType: presenceType,
       presenceTo: presenceTo,
       presenceFrom: presenceFrom,
+      presenceShow: presenceShow,
+      presencePriority: presencePriority,
+      presenceStatus: presenceStatus,
     );
-    if (presenceShow != null) {
-      presence['type'] = presenceShow;
+    if (presenceFrom != null && _isComponent) {
+      presence.from = _session!.bindJID;
     }
-    if (presenceFrom != null && transport.isComponent) {
-      presence['from'] = transport.boundJID.full;
-    }
-    presence['priority'] = presencePriority;
-    presence['status'] = presenceStatus;
-    presence['nick'] = presenceNick;
     return presence;
   }
 
@@ -458,25 +434,22 @@ abstract class WhixpBase {
     String? presenceType,
     String? presenceShow,
     String? presenceStatus,
-    String? presencePriority,
     String? presenceNick,
+    int? presencePriority,
   }) {
     final presence = Presence(
-      transport: transport,
-      stanzaType: presenceType,
-      stanzaTo: presenceTo,
-      stanzaFrom: presenceFrom,
-    );
-    if (presenceShow != null) {
-      presence['type'] = presenceShow;
+      show: presenceShow,
+      priority: presencePriority,
+      status: presenceStatus,
+      nick: presenceNick,
+    )
+      ..to = presenceTo
+      ..from = presenceFrom
+      ..type = presenceType;
+    if (presenceFrom != null && _isComponent) {
+      presence.from = _session!.bindJID;
     }
-    if (presenceFrom != null && isComponent) {
-      presence['from'] = transport.boundJID.full;
-    }
-    presence['priority'] = presencePriority;
-    presence['status'] = presenceStatus;
-    presence['nick'] = presenceNick;
-    presence['lang'] = transport.defaultLanguage;
+
     return presence;
   }
 
@@ -487,238 +460,222 @@ abstract class WhixpBase {
   /// <br>[messageSubject] is an optional subject for the message.
   /// Take a look at the [MessageType] enum for the message types.
   /// <br> [messageNick] is an optional nickname for the sender.
-  Message makeMessage(
+  Message _makeMessage(
     JabberID messageTo, {
     String? messageBody,
     String? messageSubject,
     MessageType messageType = MessageType.chat,
     JabberID? messageFrom,
     String? messageNick,
+    List<MessageExtension>? extensions,
+    List<Stanza>? payloads,
   }) {
-    final message = Message(
-      stanzaTo: messageTo,
-      stanzaFrom: messageFrom,
-      stanzaType: messageType.name,
-      transport: transport,
-    );
-    message['body'] = messageBody;
-    message['subject'] = messageSubject;
-    if (messageNick != null) {
-      message['nick'] = messageNick;
+    final message =
+        Message(body: messageBody, subject: messageSubject, nick: messageNick)
+          ..to = messageTo
+          ..from = messageFrom
+          ..type = messageType.name;
+
+    if (extensions?.isNotEmpty ?? false) {
+      for (final extension in extensions!) {
+        message.addExtension(extension);
+      }
     }
+
+    if (payloads?.isNotEmpty ?? false) {
+      for (final payload in payloads!) {
+        message.addPayload(payload);
+      }
+    }
+
     return message;
   }
 
   /// Creates a stanza of type `get`.
-  IQ makeIQGet({
-    IQ? iq,
-    String? queryXMLNS,
-    JabberID? iqTo,
-    JabberID? iqFrom,
-  }) {
-    iq ??= IQ(transport: transport);
-    iq['type'] = 'get';
-    iq['query'] = queryXMLNS;
-    if (iqTo != null) {
-      iq['to'] = iqTo;
-    }
-    if (iqFrom != null) {
-      iq['from'] = iqFrom;
-    }
+  // IQ makeIQGet({
+  //   IQ? iq,
+  //   String? queryXMLNS,
+  //   JabberID? iqTo,
+  //   JabberID? iqFrom,
+  // }) {
+  //   iq ??= IQ();
+  //   iq.type = StanzaType.get;
+  //   iq.query = queryXMLNS;
 
-    return iq;
-  }
+  //   if (iqTo != null) iq.to = iqTo;
+  //   if (iqFrom != null) iq.from = iqFrom;
+
+  //   return iq;
+  // }
 
   /// Creates a stanza of type `set`.
   ///
   /// Optionally, a substanza may be given to use as the stanza's payload.
-  IQ makeIQSet({IQ? iq, JabberID? iqTo, JabberID? iqFrom, dynamic sub}) {
-    iq ??= IQ(transport: transport);
-    iq['type'] = 'set';
-    if (sub != null) {
-      iq.add(sub);
-    }
-    if (iqTo != null) {
-      iq['to'] = iqTo;
-    }
-    if (iqFrom != null) {
-      iq['from'] = iqFrom;
-    }
+  // IQ makeIQSet({IQ? iq, JabberID? iqTo, JabberID? iqFrom, dynamic sub}) {
+  //   iq ??= IQ();
+  //   iq.type = StanzaType.set;
 
-    return iq;
-  }
+  //   if (sub != null) iq.add(sub);
+  //   if (iqTo != null) iq.to = iqTo;
+  //   if (iqFrom != null) iq.from = iqFrom;
+
+  //   return iq;
+  // }
 
   /// Request the roster from the server.
-  void getRoster<T>({
-    FutureOr<T> Function(IQ iq)? callback,
-    FutureOr<void> Function(StanzaError error)? failureCallback,
-    FutureOr<void> Function()? timeoutCallback,
-    int timeout = 10,
-  }) {
-    final iq = makeIQGet();
+  // void getRoster<T>({
+  //   FutureOr<T> Function(IQ iq)? callback,
+  //   FutureOr<void> Function(StanzaError error)? failureCallback,
+  //   FutureOr<void> Function()? timeoutCallback,
+  //   int timeout = 10,
+  // }) {
+  //   final iq = makeIQGet();
 
-    if (features.contains('rosterver')) {
-      (iq['roster'] as Roster)['ver'] = clientRoster.version;
-    }
+  //   if (features.contains('rosterver')) {
+  //     (iq['roster'] as Roster)['ver'] = clientRoster.version;
+  //   }
 
-    iq.sendIQ(
-      callback: (iq) {
-        transport.emit<IQ>('rosterUpdate', data: iq);
-        callback?.call(iq);
-      },
-      failureCallback: failureCallback,
-      timeoutCallback: timeoutCallback,
-      timeout: timeout,
-    );
-  }
-
-  /// Registers and configures a [PluginBase] instance to use in this stream.
-  void registerPlugin(PluginBase plugin) {
-    if (!_pluginManager.registered(plugin.name)) {
-      _pluginManager.register(plugin.name, plugin);
-
-      /// Assign the instance of this class to the [plugin].
-      plugin.base = this;
-    }
-    _pluginManager.enable(plugin.name, enabled: _pluginManager.enabledPlugins);
-  }
-
-  /// Responsible for retrieving an instance of a specified type [T] which
-  /// extends [PluginBase] from the plugin registry.
-  ///
-  /// Optionally, it can activate the plugin if it is registered but not yet
-  /// active.
-  P? getPluginInstance<P>(String name, {bool enableIfRegistered = true}) =>
-      _pluginManager.getPluginInstance<P>(name);
+  //   iq.sendIQ(
+  //     callback: (iq) {
+  //       transport.emit<IQ>('rosterUpdate', data: iq);
+  //       callback?.call(iq);
+  //     },
+  //     failureCallback: failureCallback,
+  //     timeoutCallback: timeoutCallback,
+  //     timeout: timeout,
+  //   );
+  // }
 
   /// Close the XML stream and wait for ack from the server.
   ///
-  /// Calls the primary method from [transport].
-  Future<void> disconnect() => transport.disconnect();
+  /// Calls the primary method from [Transport].
+  Future<void> disconnect({bool consume = true}) =>
+      Transport.instance().disconnect(consume: consume);
 
-  /// Process incoming message stanzas.
-  void _handleMessage(Message message) {
+  // /// Process incoming message stanzas.
+  void _handleMessage(Packet message) {
+    if (message is! Message) return;
     final to = message.to;
 
-    if (!transport.isComponent && (to != null || to!.bare.isEmpty)) {
-      message['to'] = transport.boundJID.toString();
+    if (!_isComponent && (to != null || to!.bare.isEmpty)) {
+      message.to = transport.boundJID;
     }
 
     transport.emit<Message>('message', data: message);
   }
 
-  /// Handles error occured while messaging
-  void _handleMessageError(Message message) {
-    if (!isComponent && (message.to == null || message.to!.bare.isEmpty)) {
-      message.setTo(transport.boundJID.toString());
-    }
+  // /// Handles error occured while messaging
+  // void _handleMessageError(Message message) {
+  //   if (!isComponent && (message.to == null || message.to!.bare.isEmpty)) {
+  //     message.to = transport.boundJID;
+  //   }
 
-    transport.emit<Message>('message', data: message);
-  }
+  //   transport.emit<Message>('message', data: message);
+  // }
 
-  void _handlePresence(StanzaBase stanza) {
-    final presence = Presence(element: stanza.element);
+  // void _handlePresence(Stanza stanza) {
+  //   final presence = Presence(xml: stanza.xml);
 
-    if (((roster[presence['from'] as String]) as rost.RosterNode)
-        .ignoreUpdates) {
-      return;
-    }
+  //   if (((roster[presence.from as String]) as rost.RosterNode).ignoreUpdates) {
+  //     return;
+  //   }
 
-    if (!isComponent && JabberID(presence['to'] as String).bare.isNotEmpty) {
-      presence['to'] = transport.boundJID.toString();
-    }
+  //   if (!isComponent && (presence.to?.bare.isNotEmpty ?? false)) {
+  //     presence.to = transport.boundJID;
+  //   }
 
-    transport.emit<Presence>('presence', data: presence);
-    transport.emit<Presence>(
-      'presence${(presence['type'] as String).capitalize()}',
-      data: presence,
-    );
+  //   transport.emit<Presence>('presence', data: presence);
+  //   transport.emit<Presence>(
+  //     'presence${presence.typeRaw.capitalize()}',
+  //     data: presence,
+  //   );
 
-    if ({'subscribe', 'subscribed', 'unsubscribe', 'unsubscribed'}
-        .contains(presence['type'])) {
-      transport.emit<Presence>('changedSubscription', data: presence);
-      return;
-    } else if (!{'available', 'unavailable'}.contains(presence['type'])) {
-      return;
-    }
-  }
+  //   if ({'subscribe', 'subscribed', 'unsubscribe', 'unsubscribed'}
+  //       .contains(presence.typeRaw)) {
+  //     transport.emit<Presence>('changedSubscription', data: presence);
+  //     return;
+  //   } else if (!{'available', 'unavailable'}.contains(presence.typeRaw)) {
+  //     return;
+  //   }
+  // }
 
-  void _handleDisconnected() {
-    roster.reset();
-    transport.sessionBind = false;
-  }
+  // void _handleDisconnected() {
+  //   roster.reset();
+  //   transport.sessionBind = false;
+  // }
 
-  void _handleAvailable(Presence presence) {
-    ((roster[presence['to'] as String]
-            as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
-        .handleAvailable(presence);
-  }
+  // void _handleAvailable(Presence presence) {
+  //   ((roster[presence['to'] as String]
+  //           as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
+  //       .handleAvailable(presence);
+  // }
 
-  void _handleUnavailable(Presence presence) {
-    ((roster[presence['to'] as String]
-            as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
-        .handleUnavailable(presence);
-  }
+  // void _handleUnavailable(Presence presence) {
+  //   ((roster[presence['to'] as String]
+  //           as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
+  //       .handleUnavailable(presence);
+  // }
 
-  void _handleSubscribe(Presence presence) {
-    ((roster[presence['to'] as String]
-            as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
-        .handleSubscribe(presence);
-  }
+  // void _handleSubscribe(Presence presence) {
+  //   ((roster[presence['to'] as String]
+  //           as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
+  //       .handleSubscribe(presence);
+  // }
 
-  void _handleSubscribed(Presence presence) {
-    ((roster[presence['to'] as String]
-            as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
-        .handleSubscribed(presence);
-  }
+  // void _handleSubscribed(Presence presence) {
+  //   ((roster[presence['to'] as String]
+  //           as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
+  //       .handleSubscribed(presence);
+  // }
 
-  void _handleUnsubscribe(Presence presence) {
-    ((roster[presence['to'] as String]
-            as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
-        .handleUnsubscribe(presence);
-  }
+  // void _handleUnsubscribe(Presence presence) {
+  //   ((roster[presence['to'] as String]
+  //           as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
+  //       .handleUnsubscribe(presence);
+  // }
 
-  void _handleUnsubscribed(Presence presence) {
-    ((roster[presence['to'] as String]
-            as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
-        .handleUnsubscribed(presence);
-  }
+  // void _handleUnsubscribed(Presence presence) {
+  //   ((roster[presence['to'] as String]
+  //           as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
+  //       .handleUnsubscribed(presence);
+  // }
 
-  /// Attempt to automatically handle subscription requests.
-  ///
-  /// Subscriptions will be approved if the request is from a whitelisted JID,
-  /// of `autoAuthorize` is true.
-  void _handleNewSubscription(Presence presence) {
-    final roster = this.roster[presence['to'] as String] as rost.RosterNode;
-    final rosterItem = roster[presence['from'] as String] as rost.RosterItem;
-    if (rosterItem['whitelisted'] as bool) {
-      rosterItem.authorize();
-      if (roster.autoAuthorize) {
-        rosterItem.subscribe();
-      }
-    } else if (roster.autoAuthorize) {
-      rosterItem.authorize();
-      if (roster.autoSubscribe) {
-        rosterItem.subscribe();
-      }
-    } else if (!roster.autoAuthorize) {
-      rosterItem.unauthorize();
-    }
-  }
+  // /// Attempt to automatically handle subscription requests.
+  // ///
+  // /// Subscriptions will be approved if the request is from a whitelisted JID,
+  // /// of `autoAuthorize` is true.
+  // void _handleNewSubscription(Presence presence) {
+  //   final roster = this.roster[presence['to'] as String] as rost.RosterNode;
+  //   final rosterItem = roster[presence['from'] as String] as rost.RosterItem;
+  //   if (rosterItem['whitelisted'] as bool) {
+  //     rosterItem.authorize();
+  //     if (roster.autoAuthorize) {
+  //       rosterItem.subscribe();
+  //     }
+  //   } else if (roster.autoAuthorize) {
+  //     rosterItem.authorize();
+  //     if (roster.autoSubscribe) {
+  //       rosterItem.subscribe();
+  //     }
+  //   } else if (!roster.autoAuthorize) {
+  //     rosterItem.unauthorize();
+  //   }
+  // }
 
-  void _handleStreamError(StanzaBase error) {
-    transport.emit<StreamError>('streamError', data: error as StreamError);
+  void _handleStreamError(Packet error) {
+    if (error is! StreamError) return;
+    _transport.emit<StreamError>('streamError', data: error);
 
-    if (error['condition'] == 'see-other-host') {
-      final otherHost = error['see-other-host'] as String?;
+    if (error.seeOtherHost) {
+      final otherHost = error.text;
       if (otherHost == null || otherHost.isEmpty) {
         _logger.warning('No other host specified');
         return;
       }
 
-      transport.handleStreamError(otherHost, maxRedirects: _maxRedirects);
+      _transport.handleStreamError(otherHost, maxRedirects: _maxRedirects);
     } else {
-      transport.disconnect(reason: 'System shutted down', timeout: 0);
+      _transport.disconnect(consume: false);
     }
   }
 
@@ -729,10 +686,10 @@ abstract class WhixpBase {
     FutureOr<void> Function(B? data) handler, {
     bool once = false,
   }) =>
-      transport.addEventHandler<B>(event, handler, once: once);
+      _transport.addEventHandler<B>(event, handler, once: once);
 
   /// Password from credentials.
-  String get password => credentials['password']!;
+  String get password => _credentials['password']!;
 }
 
 extension StringExtension on String {

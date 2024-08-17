@@ -1,9 +1,9 @@
-import 'package:whixp/src/jid/jid.dart';
-import 'package:whixp/src/plugins/delay/delay.dart';
-import 'package:whixp/src/plugins/form/dataforms.dart';
-import 'package:whixp/src/plugins/pubsub/pubsub.dart';
-import 'package:whixp/src/stanza/root.dart';
-import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/exception.dart';
+import 'package:whixp/src/log/log.dart';
+import 'package:whixp/src/stanza/error.dart';
+import 'package:whixp/src/stanza/mixins.dart';
+import 'package:whixp/src/stanza/node.dart';
+import 'package:whixp/src/stanza/stanza.dart';
 import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
@@ -30,235 +30,192 @@ enum MessageType { chat, error, groupchat, headline, normal }
 /// ### Example:
 /// ```xml
 /// <message to="vsevex@example.com" from="alyosha@example.com">
-///   <body>salam!</body>
+///   <body>hohoho!</body>
 /// </message>
 /// ```
-///
-/// For more information on "id" and "type" please refer to [XML stanzas](https://xmpp.org/rfcs/rfc3920.html#stanzas)
-class Message extends RootStanza {
-  /// [types] may be one of: normal, chat, headline, groupchat, or error.
-  ///
-  /// All parameters are extended from [RootStanza]. For more information please
-  /// take a look at [RootStanza].
+class Message extends Stanza with Attributes {
+  static const String _name = 'message';
+
+  /// Constructs a message stanza.
   Message({
-    super.stanzaTo,
-    super.stanzaFrom,
-    super.stanzaType,
-    super.transport,
-    super.includeNamespace = false,
-    super.getters,
-    super.setters,
-    super.deleters,
-    super.pluginTagMapping,
-    super.pluginAttributeMapping,
-    super.pluginMultiAttribute,
-    super.pluginIterables,
-    super.overrides,
-    super.isExtension,
-    super.boolInterfaces,
-    super.receive,
-    super.element,
-    super.parent,
-  }) : super(
-          name: 'message',
-          namespace: WhixpUtils.getNamespace('CLIENT'),
-          pluginAttribute: 'message',
-          interfaces: {
-            'type',
-            'to',
-            'from',
-            'id',
-            'body',
-            'subject',
-            'thread',
-            'parent_thread',
-            'mucroom',
-            'mucnick',
-          },
-          subInterfaces: {'body', 'subject', 'thread'},
-          languageInterfaces: {'body', 'subject', 'thread'},
-          types: {'normal', 'chat', 'headline', 'error', 'groupchat'},
-        ) {
-    if (!receive && this['id'] == '') {
-      if (transport != null) {
-        this['id'] = WhixpUtils.getUniqueId();
-      }
+    this.subject,
+    this.body,
+    this.thread,
+    this.nick,
+    this.error,
+  });
+
+  /// The subject of the message.
+  final String? subject;
+
+  /// The body of the message.
+  final String? body;
+
+  /// The thread ID associated with the message.
+  final String? thread;
+
+  /// The nick associated with the message.
+  final String? nick;
+
+  /// Error stanza associated with this message stanza, if any.
+  final ErrorStanza? error;
+
+  /// List of payloads associated with this message stanza.
+  final _payloads = <Stanza>[];
+
+  /// List of extension nodes associated with this message stanza.
+  final extensions = <MessageExtension>[];
+
+  /// Constructs a message stanza from a string representation.
+  ///
+  /// Throws [WhixpInternalException] if the input XML is invalid.
+  factory Message.fromString(String stanza) {
+    try {
+      final doc = xml.XmlDocument.parse(stanza);
+      final root = doc.rootElement;
+
+      return Message.fromXML(root);
+    } catch (_) {
+      throw WhixpInternalException.invalidXML();
     }
-
-    addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
-      const Symbol('type'): (args, base) => base.getAttribute('type', 'normal'),
-      const Symbol('id'): (args, base) => base.getAttribute('id'),
-      const Symbol('origin-id'): (args, base) {
-        var element = base.element;
-        if (element != null) {
-          element = base.element!
-              .getElement('origin-id', namespace: 'urn:xmpp:sid:0');
-        }
-        if (element != null) {
-          return element.getAttribute('id') ?? '';
-        }
-        return '';
-      },
-      const Symbol('parent_thread'): (args, base) {
-        final element = base.element;
-        if (element != null) {
-          final thread =
-              base.element!.getElement('thread', namespace: namespace);
-          if (thread != null) {
-            return thread.getAttribute('parent') ?? '';
-          }
-        }
-        return '';
-      },
-    });
-
-    addSetters(
-      <Symbol, void Function(dynamic value, dynamic args, XMLBase base)>{
-        const Symbol('id'): (value, args, base) => _setIDs(value, base),
-        const Symbol('origin-id'): (value, args, base) => _setIDs(value, base),
-        const Symbol('parent_thread'): (value, args, base) {
-          var element = base.element;
-          if (element != null) {
-            element = base.element!.getElement('thread', namespace: namespace);
-          }
-          if (value != null) {
-            if (element == null) {
-              final thread =
-                  WhixpUtils.xmlElement('thread', namespace: namespace);
-              base.element!.children.add(thread);
-            }
-          } else {
-            if (element != null && element.getAttribute('parent') != null) {
-              element.removeAttribute('parent');
-            }
-          }
-        },
-      },
-    );
-
-    addDeleters(
-      <Symbol, void Function(dynamic args, XMLBase base)>{
-        const Symbol('origin-id'): (args, base) {
-          var element = base.element;
-          if (element != null) {
-            element = base.element!
-                .getElement('origin-id', namespace: 'urn:xmpp:sid:0');
-          }
-          if (element != null) {
-            base.element!.children.remove(element);
-          }
-        },
-        const Symbol('parent_thread'): (args, base) {
-          var element = base.element;
-          if (element != null) {
-            element =
-                base.element!.getElement('origin-id', namespace: namespace);
-          }
-          if (element != null && element.getAttribute('parent') != null) {
-            element.removeAttribute('parent');
-          }
-        },
-      },
-    );
-
-    /// Register all required stanzas beforehand, so we won't need to declare
-    /// them one by one whenever there is a need to specific stanza.
-    ///
-    /// If you have not used the specified stanza, then you have to enable the
-    /// stanza through the usage of `pluginAttribute` parameter.
-    registerPlugin(Form());
-    registerPlugin(DelayStanza());
-    registerPlugin(PubSubEvent());
   }
 
-  /// Set the message type to "chat".
-  void chat() => this['type'] = 'chat';
-
-  /// Set the message type to "normal".
-  void normal() => this['type'] = 'normal';
-
-  /// Overrider of [reply] method for [Message] stanza class. Can take optional
-  /// [body] parameter which is assigned to the body of the [Message] stanza.
+  /// Constructs a message stanza from an XML element node.
   ///
-  /// Sets proper "to" attribute if the message is a from a MUC.
-  Message replyMessage({String? body, bool clear = true}) {
-    final message = super.reply<Message>(copiedStanza: copy(), clear: clear);
+  /// Throws [WhixpInternalException] if the provided XML node is invalid.
+  factory Message.fromXML(xml.XmlElement node) {
+    String? subject;
+    String? body;
+    String? thread;
+    String? nick;
+    ErrorStanza? error;
+    final payloads = <Stanza>[];
+    final extensions = <MessageExtension>[];
 
-    if (this['type'] == 'groupchat') {
-      message['to'] = JabberID(message['to'] as String).bare;
+    for (final child in node.children.whereType<xml.XmlElement>()) {
+      switch (child.localName) {
+        case 'subject':
+          subject = child.innerText;
+        case 'body':
+          body = child.innerText;
+        case 'thread':
+          thread = child.innerText;
+        case 'nick':
+          nick = child.innerText;
+        case 'error':
+          error = ErrorStanza.fromXML(child);
+        default:
+          try {
+            final tag = WhixpUtils.generateNamespacedElement(child);
+            final stanza = Stanza.payloadFromXML(tag, child);
+
+            payloads.add(stanza);
+          } on WhixpException catch (exception) {
+            if (child.localName.isNotEmpty && child.attributes.isNotEmpty) {
+              final extension = MessageExtension(child.localName);
+              for (final attribute in child.attributes) {
+                extension.addAttribute(attribute.localName, attribute.value);
+              }
+              extensions.add(extension);
+            } else {
+              Log.instance.error(exception.message);
+            }
+          }
+          break;
+      }
     }
-
-    message['thread'] = this['thread'];
-    message['parent_thread'] = this['parent_thread'];
-
-    message.delete('id');
-
-    if (transport != null) {
-      message['id'] = WhixpUtils.getUniqueId();
-    }
-
-    if (body != null) {
-      message['body'] = body;
-    }
+    final message = Message(
+      subject: subject,
+      body: body,
+      thread: thread,
+      nick: nick,
+      error: error,
+    );
+    message._payloads.addAll(payloads);
+    message.extensions.addAll(extensions);
+    message.loadAttributes(node);
 
     return message;
   }
 
-  /// Return the name of the MUC room where the message originated.
-  String get mucRoom {
-    if (this['type'] == 'groupchat') {
-      return JabberID(this['from'] as String).bare;
+  /// Converts the message stanza to its XML representation.
+  @override
+  xml.XmlElement toXML() {
+    final builder = WhixpUtils.makeGenerator();
+    final attributes = attributeHash;
+
+    builder.element(
+      _name,
+      attributes: attributes,
+      nest: () {
+        if (subject?.isNotEmpty ?? false) {
+          builder.element('subject', nest: () => builder.text(subject!));
+        }
+        if (body?.isNotEmpty ?? false) {
+          builder.element('body', nest: () => builder.text(body!));
+        }
+        if (nick?.isNotEmpty ?? false) {
+          builder.element('nick', nest: () => builder.text(nick!));
+        }
+        if (thread?.isNotEmpty ?? false) {
+          builder.element('thread', nest: () => builder.text(thread!));
+        }
+      },
+    );
+
+    final root = builder.buildDocument().rootElement;
+
+    if (error != null) root.children.add(error!.toXML().copy());
+    for (final payload in _payloads) {
+      root.children.add(payload.toXML().copy());
     }
-    return '';
+
+    for (final extension in extensions) {
+      root.children.add(extension.toXML().copy());
+    }
+
+    return root;
   }
 
-  /// Return the nickname of the MUC user that sent the message.
-  String get mucNick {
-    if (this['type'] == 'groupchat') {
-      return JabberID(this['from'] as String).resource;
-    }
-    return '';
-  }
+  /// Adds payload [Stanza] to the given [Message].
+  void addPayload(Stanza payload) => _payloads.add(payload);
+
+  /// Adds an extension to the given [Message].
+  void addExtension(MessageExtension extension) => extensions.add(extension);
+
+  /// Returns a list of payloads of a specific type associated with this message
+  /// stanza.
+  List<S> get<S extends Stanza>() => _payloads.whereType<S>().toList();
+
+  /// Returns the name of the message stanza.
+  @override
+  String get name => _name;
 
   @override
-  Message copy({
-    xml.XmlElement? element,
-    XMLBase? parent,
-    bool receive = false,
-  }) =>
-      Message(
-        pluginMultiAttribute: pluginMultiAttribute,
-        overrides: overrides,
-        pluginTagMapping: pluginTagMapping,
-        pluginAttributeMapping: pluginAttributeMapping,
-        boolInterfaces: boolInterfaces,
-        pluginIterables: pluginIterables,
-        isExtension: isExtension,
-        includeNamespace: includeNamespace,
-        getters: getters,
-        setters: setters,
-        deleters: deleters,
-        receive: receive,
-        element: element,
-        parent: parent,
-      );
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Message &&
+          runtimeType == other.runtimeType &&
+          type == other.type &&
+          subject == other.subject &&
+          body == other.body &&
+          thread == other.thread &&
+          error == other.error &&
+          _payloads == other._payloads &&
+          extensions == other.extensions;
 
-  void _setIDs(dynamic value, XMLBase base) {
-    if (value == null || value == '') {
-      return;
-    }
+  @override
+  int get hashCode =>
+      subject.hashCode ^
+      id.hashCode ^
+      body.hashCode ^
+      thread.hashCode ^
+      error.hashCode ^
+      _payloads.hashCode ^
+      extensions.hashCode;
+}
 
-    base.element!.setAttribute('id', value as String);
-
-    final sub =
-        base.element!.getElement('origin-id', namespace: 'urn:xmpp:sid:0');
-    if (sub != null) {
-      sub.setAttribute('id', value);
-    } else {
-      final sub =
-          WhixpUtils.xmlElement('origin-id', namespace: 'urn:xmpp:sid:0');
-      sub.setAttribute('id', value);
-      return base.element!.children.add(sub);
-    }
-  }
+/// An extension for the message that can be added beside of the message stanza.
+class MessageExtension extends Node {
+  MessageExtension(super.name);
 }

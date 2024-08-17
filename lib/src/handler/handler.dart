@@ -1,52 +1,63 @@
 import 'dart:async';
 
-import 'package:whixp/src/stream/base.dart';
-import 'package:whixp/src/stream/matcher/base.dart';
-import 'package:whixp/src/transport.dart';
+import 'package:whixp/src/handler/matcher.dart';
+import 'package:whixp/src/stanza/mixins.dart';
+import 'package:whixp/src/utils/utils.dart';
 
-part 'callback.dart';
+/// A handler for processing packets based on various matching criteria.
+class Handler {
+  /// Constructs a handler with a [name] and a [callback] function.
+  Handler(this.name, this.callback);
 
-/// An abstract class representing a generic handler for processing XMPP
-/// stanzas.
-///
-/// Handlers are responsible for processing stanzas based on a defined
-/// matching criteria.
-///
-/// ### Example:
-/// ```dart
-/// class CustomHandler extends Handler{
-///   final matcher = Matcher();
-///   final handler = CustomHandler('customIQHandler', matcher: matcher);
-/// }
-///
-/// void main() {
-///   final stanzaFromServer = StanzaBase();
-///
-///   handler.run(stanzaFromServer);
-/// }
-/// ```
-abstract class Handler {
-  /// Creates an instance of the [Handler] with the specified parameters.
-  Handler(this.name, {required this.matcher, this.transport});
-
-  /// The name of the [Handler].
+  /// The name of the handler.
   final String name;
 
-  /// The matcher used to determine whether the handler should process the
-  /// given stanza.
-  final BaseMatcher matcher;
+  /// The callback function to be executed when a packet matches the handler's
+  /// criteria.
+  final FutureOr<void> Function(Packet packet) callback;
 
-  /// This can be initialized through [Transport] class later, so cannot be
-  /// marked as final.
+  /// List of matchers added to the handler.
+  final _matchers = <Matcher>[];
+
+  /// Adds a matcher to the handler.
+  void addMatcher(Matcher matcher) => _matchers.add(matcher);
+
+  /// Matches the incoming packet against the registered matchers.
   ///
-  /// This instance will help us to use the instance of [Transport] to send
-  /// over stanzas if mandatory.
-  Transport? transport;
+  /// If a match is found, the associated callback function is executed. Returns
+  /// `true` if a match is found, otherwise `false`.
+  bool match(Packet packet) {
+    for (final matcher in _matchers) {
+      if (matcher.match(packet)) {
+        callback.call(packet);
+        return true;
+      }
+    }
 
-  /// Determines whether the given [StanzaBase] object matches the criteria
-  /// defined by the handler's matcher.
-  bool match(StanzaBase stanza) => matcher.match(stanza);
+    return false;
+  }
 
-  /// Executes the handler's logic to process the given [StanzaBase] payload.
-  FutureOr<void> run(StanzaBase payload);
+  /// Adds a matcher that matches packets with a specific [name].
+  void packet(String name) => addMatcher(NameMatcher(name));
+
+  /// Adds a matcher that contains both success and failure stanza name(s).
+  void sf(Tuple2<String, String> sf) =>
+      addMatcher(SuccessAndFailureMatcher(sf));
+
+  /// Adds a matcher that matches packets with a specific IQ [id].
+  void id(String id) => addMatcher(IQIDMatcher(id));
+
+  void descendant(String descendants) =>
+      addMatcher(DescendantMatcher(descendants));
+
+  /// Adds a matcher that matches packets based on their stanza [types].
+  void stanzaType(List<String> types) =>
+      addMatcher(NamespaceTypeMatcher(types));
+
+  /// Adds a matcher that matches IQ packets based on their [namespaces].
+  void iqNamespaces(List<String> namespaces) => addMatcher(
+        NamespaceIQMatcher(
+          namespaces.map((namespace) => namespace.toLowerCase()).toList(),
+        ),
+      );
 }

@@ -1,73 +1,60 @@
 part of '../feature.dart';
 
-class _Failure extends StanzaBase {
-  _Failure()
-      : super(
-          name: 'failure',
-          namespace: WhixpUtils.getNamespace('SASL'),
-          interfaces: {'condition', 'text'},
-          pluginAttribute: 'failure',
-          subInterfaces: {'text'},
-        ) {
-    addGetters(
-      <Symbol, dynamic Function(dynamic args, XMLBase base)>{
-        const Symbol('condition'): (args, base) {
-          for (final child in base.element!.childElements) {
-            final condition = child.localName;
-            if (_conditions.contains(condition)) {
-              return condition;
-            }
-          }
-          return 'not-authorized';
-        },
-      },
+/// Represents a failure packet.
+///
+/// This packet is used to indicate a failure in an operation.
+class SASLFailure with Packet {
+  /// Constructs a [SASLFailure] packet.
+  const SASLFailure({this.reason, this.type, this.any});
+
+  /// The reason for the failure.
+  final String? reason;
+
+  /// The type of failure.
+  final String? type;
+
+  /// Additional nodes associated with the failure.
+  final Nodes? any;
+
+  /// Constructs a [SASLFailure] packet from XML.
+  factory SASLFailure.fromXML(xml.XmlElement node) {
+    String? reason;
+    String? type;
+
+    for (final child in node.children.whereType<xml.XmlElement>()) {
+      switch (child.localName) {
+        case 'text':
+          reason = child.innerText;
+        case 'type':
+          type = child.localName;
+      }
+    }
+    final failure = SASLFailure(
+      reason: reason,
+      type: type,
+      any: Nodes.fromXML(
+        node.children
+            .whereType<xml.XmlElement>()
+            .map((node) => Node.fromXML(node))
+            .toList(),
+      ),
     );
 
-    addSetters(
-      <Symbol, void Function(dynamic value, dynamic args, XMLBase base)>{
-        const Symbol('condition'): (value, args, base) {
-          if (_conditions.contains(value)) {
-            base.delete('condition');
-            base.element!.children
-                .add(xml.XmlElement(xml.XmlName(value as String)));
-          }
-        },
-      },
-    );
-
-    addDeleters(
-      <Symbol, dynamic Function(dynamic args, XMLBase base)>{
-        const Symbol('condition'): (args, base) {
-          for (final child in base.element!.children) {
-            final condition = child.innerText;
-            if (_conditions.contains(condition)) {
-              base.element!.children.remove(child);
-            }
-          }
-        },
-      },
-    );
+    return failure;
   }
 
   @override
-  bool setup([xml.XmlElement? element]) {
-    if (element != null) {
-      this['condition'] = 'not-authorized';
+  xml.XmlElement toXML() {
+    final element = WhixpUtils.xmlElement('failure', namespace: _namespace);
+    if (any?.nodes.isNotEmpty ?? false) {
+      for (final node in any!.nodes) {
+        element.children.add(node.toXML().copy());
+      }
     }
-    return super.setup(element);
+
+    return element;
   }
 
-  final _conditions = <String>{
-    'aborted',
-    'account-disabled',
-    'credentials-expired',
-    'encryption-required',
-    'incorrect-encoding',
-    'invalid-authzid',
-    'invalid-mechanism',
-    'malformed-request',
-    'mechansism-too-weak',
-    'not-authorized',
-    'temporary-auth-failure',
-  };
+  @override
+  String get name => _failure;
 }

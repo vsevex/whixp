@@ -32,20 +32,3 @@ dynamic _date({int? year, int? month, int? day, bool asString = true}) {
   }
   return value.toUtc();
 }
-
-@visibleForTesting
-DateTime parse(String time) => _parse(time);
-
-@visibleForTesting
-String format(DateTime time) => _format(time);
-
-@visibleForTesting
-String formatDate(DateTime time) => _formatDate(time);
-
-@visibleForTesting
-String formatTime(DateTime time, {bool useZulu = false}) =>
-    _formatTime(time, useZulu: useZulu);
-
-@visibleForTesting
-dynamic date({int? year, int? month, int? day, bool asString = true}) =>
-    _date(year: year, month: month, day: day, asString: asString);

@@ -1,28 +1,30 @@
 part of '../feature.dart';
 
-class _Success extends StanzaBase {
-  _Success()
-      : super(
-          name: 'success',
-          namespace: WhixpUtils.getNamespace('SASL'),
-          interfaces: {'value'},
-          pluginAttribute: 'success',
-          getters: <Symbol, dynamic Function(dynamic args, XMLBase base)>{
-            const Symbol('value'): (args, base) =>
-                WhixpUtils.atob(base.element!.innerText),
-          },
-          setters: <Symbol,
-              void Function(dynamic value, dynamic args, XMLBase base)>{
-            const Symbol('value'): (value, args, base) {
-              if ((value as String).isNotEmpty) {
-                base.element!.innerText = WhixpUtils.btoa(value);
-              } else {
-                base.element!.innerText = '=';
-              }
-            },
-          },
-          deleters: <Symbol, dynamic Function(dynamic args, XMLBase base)>{
-            const Symbol('value'): (args, base) => base.element!.innerText = '',
-          },
-        );
+/// Represents a success packet.
+///
+/// This packet is used to indicate a successful operation.
+class SASLSuccess with Packet {
+  /// Constructs a [SASLSuccess] packet.
+  const SASLSuccess({this.body});
+
+  /// The body of the success message.
+  final String? body;
+
+  /// Constructs a [SASLSuccess] packet from XML.
+  factory SASLSuccess.fromXML(xml.XmlElement node) {
+    final success = SASLSuccess(body: node.innerText);
+
+    return success;
+  }
+
+  @override
+  xml.XmlElement toXML() {
+    final element = WhixpUtils.xmlElement('success', namespace: _namespace);
+    if (body != null) element.children.add(xml.XmlText(body!).copy());
+
+    return element;
+  }
+
+  @override
+  String get name => _success;
 }

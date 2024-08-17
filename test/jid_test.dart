@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+
 import 'package:whixp/src/jid/jid.dart';
 
 void main() {

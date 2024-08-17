@@ -1,6 +1,6 @@
 import 'package:test/test.dart';
 
-import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/stanza/stanza.dart';
 import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
@@ -86,45 +86,19 @@ xml.XmlElement parseXMLFromString(String xmlToParse) {
 /// add or remove XML elements. Only interfaces that map to XML attributes may
 /// be set using the defaults parameter. The supplied XML must take into account
 /// any extra elements that are included by default.
-void check(
-  XMLBase stanza,
-  dynamic criteria, {
-  bool useValues = true,
-}) {
+void check(Stanza stanza, Stanza copiedStanza, dynamic criteria) {
   late xml.XmlElement eksemel;
-  if (criteria is! XMLBase) {
+  if (criteria is! Stanza) {
     eksemel = parseXMLFromString(criteria as String);
   } else {
-    eksemel = criteria.element!;
-  }
-
-  final stanza1 = stanza.copy(element: eksemel);
-
-  if (useValues) {
-    final values = Map<String, dynamic>.from(stanza.values);
-    final stanza2 = stanza1.copy();
-    stanza2.values = values;
-
-    // print('stanza: $stanza');
-    // print('stanza1: $stanza1');
-    // print('stanza2: $stanza2');
-
-    compare(
-      eksemel,
-      elements: [
-        stanza.element!,
-        stanza1.element!,
-        stanza2.element!,
-      ],
-    );
-    return;
+    eksemel = criteria.toXML();
   }
 
   compare(
     eksemel,
     elements: [
-      stanza.element!,
-      stanza1.element!,
+      stanza.toXML(),
+      copiedStanza.toXML(),
     ],
   );
 }

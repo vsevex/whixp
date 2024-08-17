@@ -1,52 +1,53 @@
 part of 'delay.dart';
 
-class DelayStanza extends XMLBase {
-  DelayStanza({
-    super.pluginTagMapping,
-    super.pluginAttributeMapping,
-    super.getters,
-    super.setters,
-    super.element,
-    super.parent,
-  }) : super(
-          name: 'delay',
-          namespace: 'urn:xmpp:delay',
-          pluginAttribute: 'delay',
-          interfaces: {'from', 'stamp', 'text'},
-        ) {
-    addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
-      const Symbol('from'): (args, base) => from,
-      const Symbol('text'): (args, base) => text,
-    });
+class DelayStanza extends MessageStanza {
+  const DelayStanza(this.from, this.stamp, this.text);
 
-    addSetters(<Symbol,
-        dynamic Function(dynamic value, dynamic args, XMLBase base)>{
-      const Symbol('from'): (value, args, base) => setFrom(value as JabberID),
-      const Symbol('text'): (value, args, base) => text = value as String,
-    });
-  }
-
-  JabberID? get from {
-    final jid = getAttribute('from');
-    if (jid.isNotEmpty) {
-      return JabberID(jid);
-    }
-    return null;
-  }
-
-  void setFrom(JabberID jid) => setAttribute('from', jid.toString());
-
-  String get text => element!.innerText;
-
-  set text(String value) => element!.innerText = value;
+  final JabberID? from;
+  final String? stamp;
+  final String? text;
 
   @override
-  DelayStanza copy({xml.XmlElement? element, XMLBase? parent}) => DelayStanza(
-        pluginTagMapping: pluginTagMapping,
-        pluginAttributeMapping: pluginAttributeMapping,
-        getters: getters,
-        setters: setters,
-        element: element,
-        parent: parent,
-      );
+  xml.XmlElement toXML() {
+    final builder = WhixpUtils.makeGenerator();
+    final attributes = <String, String>{};
+
+    if (from != null) attributes['from'] = from.toString();
+    if (stamp?.isNotEmpty ?? false) attributes['stamp'] = stamp!;
+
+    builder.element(
+      name,
+      attributes: <String, String>{'xmlns': 'urn:xmpp:delay'}
+        ..addAll(attributes),
+      nest: () {
+        if (text?.isNotEmpty ?? false) builder.text(text!);
+      },
+    );
+
+    return builder.buildDocument().rootElement;
+  }
+
+  factory DelayStanza.fromXML(xml.XmlElement node) {
+    JabberID? jid;
+    String? stamp;
+
+    for (final attribute in node.attributes) {
+      switch (attribute.localName) {
+        case 'from':
+          jid = JabberID(attribute.value);
+        case 'stamp':
+          stamp = attribute.value;
+        default:
+          break;
+      }
+    }
+
+    return DelayStanza(jid, stamp, node.innerText);
+  }
+
+  @override
+  String get name => 'delay';
+
+  @override
+  String get tag => delayTag;
 }

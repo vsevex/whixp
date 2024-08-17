@@ -1,81 +1,50 @@
-import 'dart:async';
+import 'dart:async' as async;
 
+import 'package:whixp/src/_static.dart';
 import 'package:whixp/src/jid/jid.dart';
-import 'package:whixp/src/plugins/base.dart';
-import 'package:whixp/src/plugins/form/dataforms.dart';
-import 'package:whixp/src/stanza/error.dart';
+import 'package:whixp/src/plugins/form/form.dart';
 import 'package:whixp/src/stanza/iq.dart';
-import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/stanza/stanza.dart';
+import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
 
 part 'stanza.dart';
 
-class Push extends PluginBase {
-  Push()
-      : super(
-          'push',
-          description: 'XEP-0357: Push Notifications',
-          dependencies: {'disco'},
-        );
+// ignore: avoid_classes_with_only_static_members
+/// Provides static methods to enable and disable push notifications for a
+/// specific Jabber ID (JID) and node.
+class Push {
+  const Push();
 
-  @override
-  void pluginInitialize() {}
-
-  FutureOr<IQ> enablePush<T>(
-    JabberID jid, {
-    required String node,
-    Form? config,
-    FutureOr<T> Function(IQ iq)? callback,
-    FutureOr<void> Function(StanzaError error)? failureCallback,
-    FutureOr<void> Function()? timeoutCallback,
-    int timeout = 10,
-  }) {
-    final iq = base.makeIQSet();
-    final enable = _EnablePush();
-    enable['jid'] = jid.bare;
-    enable['node'] = node;
-
-    if (config != null) enable.add(config);
-
-    iq.add(enable);
-
-    return iq.sendIQ(
-      callback: callback,
-      failureCallback: failureCallback,
-      timeoutCallback: timeoutCallback,
-      timeout: timeout,
-    );
-  }
-
-  FutureOr<IQ> disablePush<T>(
+  /// Enables push notifications for the specified [jid] and [node].
+  ///
+  /// If [node] is not provided, then unique one will be created and will be
+  /// returned to the user.
+  static String enableNotifications(
     JabberID jid, {
     String? node,
-    FutureOr<T> Function(IQ iq)? callback,
-    FutureOr<void> Function(StanzaError error)? failureCallback,
-    FutureOr<void> Function()? timeoutCallback,
-    int timeout = 10,
+    Form? payload,
   }) {
-    final iq = base.makeIQSet();
-    final disable = _DisablePush();
-    disable['jid'] = jid.bare;
-    disable['node'] = node;
+    final nod = node ?? WhixpUtils.generateUniqueID('push');
+    final iq = IQ(generateID: true)
+      ..type = iqTypeSet
+      ..payload = Enable(jid, nod, payload: payload);
 
-    iq.add(disable);
+    iq.send();
 
-    return iq.sendIQ(
-      callback: callback,
-      failureCallback: failureCallback,
-      timeoutCallback: timeoutCallback,
-      timeout: timeout,
-    );
+    return nod;
   }
 
-  /// Do not implement.
-  @override
-  void sessionBind(String? jid) {}
+  /// Disables push notifications for the specified [jid] and optional [node].
+  static async.FutureOr<IQ> disableNotifications(
+    JabberID jid, {
+    String? node,
+  }) {
+    final iq = IQ(generateID: true)
+      ..type = iqTypeSet
+      ..payload = Disable(jid, node: node);
 
-  /// Do not implement.
-  @override
-  void pluginEnd() {}
+    return iq.send();
+  }
 }

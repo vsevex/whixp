@@ -1,346 +1,121 @@
-part of 'disco.dart';
+import 'dart:collection';
 
-/// The ability to discover information about entities on the Jabber network is
-/// extremely valuable. Such information might include features offered or
-/// protocols supported by the entity, the entity's type or identity, and
-/// additional entities that are associated with the original entity in some way
-/// (often thought of as "children" of the "parent" entity).
+import 'package:whixp/src/_static.dart';
+import 'package:whixp/src/exception.dart';
+import 'package:whixp/src/stanza/stanza.dart';
+import 'package:whixp/src/utils/utils.dart';
+
+import 'package:xml/xml.dart' as xml;
+
+part '_feature.dart';
+part '_identity.dart';
+
+final String _namespace = WhixpUtils.getNamespace('DISCO_INFO');
+
+/// Represents an XMPP disco information IQ stanza.
 ///
-/// see https://xmpp.org/extensions/xep-0030.html#intro
-class DiscoveryInformation extends XMLBase {
-  /// Allows for users and agents to find the identities and features supported
-  /// by other entities in the network (XMPP) through service discovery
-  /// ("disco").
+/// Disco information IQ stanzas are used for querying and discovering
+/// information about an XMPP entity's capabilities and features.
+class DiscoInformation extends IQStanza {
+  static const String _name = 'query';
+
+  /// Constructs a disco information IQ stanza.
+  DiscoInformation({this.node});
+
+  /// The node associated with the disco information.
+  final String? node;
+
+  /// List of identities associated with the disco information.
+  final identities = <Identity>[];
+
+  /// List of features associated with the disco information.
+  final features = <Feature>[];
+
+  /// Constructs a disco information IQ stanza from an XML element node.
   ///
-  /// In particular, the "disco#info" query type of __IQ__ stanzas is used to
-  /// request the list of identities and features offered by a Jabber ID.
-  ///
-  /// An identity is a combination of a __category__ and __type__, such as the
-  /// "client" category with a type "bot" to indicate the agent is not a human
-  /// operated client, or a category of "gateway" with a type of "aim" to
-  /// identify the agent as a gateway for the legacy AIM protocol.
-  ///
-  /// XMPP Registrar Disco Categories: <http://xmpp.org/registrar/disco-categories.html>
-  ///
-  /// ### Example:
-  /// ```xml
-  /// <iq type="result">
-  ///   <query xmlns="http://jabber.org/protocol/disco#info">
-  ///     <identity category="client" type="bot" name="Slixmpp Bot" />
-  ///     <feature var="http://jabber.org/protocol/disco#info" />
-  ///     <feature var="jabber:x:data" />
-  ///     <feature var="urn:xmpp:ping" />
-  ///   </query>
-  /// </iq>
-  /// ```
-  DiscoveryInformation({
-    super.element,
-    super.parent,
-    super.getters,
-    super.deleters,
-  }) : super(
-          name: 'query',
-          namespace: WhixpUtils.getNamespace('DISCO_INFO'),
-          includeNamespace: true,
-          pluginAttribute: 'disco_info',
-          interfaces: {'node', 'features', 'identities'},
-          languageInterfaces: {'identities'},
-        ) {
-    _features = <String>{};
-    _identities = <DiscoveryIdentity>{};
-
-    addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
-      const Symbol('features'): (args, base) => getFeatures(),
-    });
-
-    addSetters(
-      <Symbol, void Function(dynamic value, dynamic args, XMLBase base)>{
-        const Symbol('features'): (value, args, base) =>
-            setFeatures(value as Iterable<String>),
-      },
-    );
-
-    addDeleters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
-      const Symbol('identities'): (args, base) => deleteIdentities(),
-      const Symbol('features'): (args, base) => deleteFeatures(),
-    });
-  }
-
-  /// [Set] of features.
-  late final Set<String> _features;
-
-  late final Set<DiscoveryIdentity> _identities;
-
-  /// Returns a [Set] or [List] of all identities in [DiscoveryIdentity].
-  ///
-  /// If a [language] was specified, only return identities using that language.
-  /// If [duplicate] was set to true, then use [List] as it is allowed to
-  /// duplicate items.
-
-  Iterable<DiscoveryIdentity> getIdentities({
-    String? language,
-    bool duplicate = false,
-  }) {
-    late final Iterable<DiscoveryIdentity> identities;
-    if (duplicate) {
-      identities = <DiscoveryIdentity>[];
-    } else {
-      identities = <DiscoveryIdentity>{};
+  /// Throws a [WhixpInternalException] if the provided XML node is invalid.
+  factory DiscoInformation.fromXML(xml.XmlElement node) {
+    if (node.localName != _name) {
+      throw WhixpInternalException.invalidNode(node.localName, _name);
     }
 
-    for (final idElement
-        in element!.findAllElements('identity', namespace: namespace)) {
-      final xmlLanguage = idElement.getAttribute('xml:lang');
-      if (language == null || xmlLanguage == language) {
-        final identity = DiscoveryIdentity(
-          idElement.getAttribute('category')!,
-          idElement.getAttribute('type')!,
-          name: idElement.getAttribute('name'),
-          language: idElement.getAttribute('xml:lang'),
-        );
-
-        if (identities is Set) {
-          (identities as Set).add(identity);
-        } else {
-          (identities as List).add(identity);
-        }
+    String? nod;
+    for (final attribute in node.attributes) {
+      switch (attribute.localName) {
+        case 'node':
+          nod = attribute.value;
       }
     }
 
-    return identities;
-  }
+    final info = DiscoInformation(node: nod);
 
-  /// Adds a new identity element. Each identity must be unique in terms of all
-  /// four identity components.
-  ///
-  /// The XMPP Registrar maintains a registry of values for the [category] and
-  /// [type] attributes of the <identity/> element in the
-  /// 'http://jabber.org/protocol/disco#info' namespace.
-  ///
-  /// Multiple, identical [category]/[type] pairs allowed only if the xml:lang
-  /// values are different. Likewise, multiple [category]/[type]/xml:[language]
-  /// pairs are allowed so long as the [name]s are different.
-  ///
-  /// [category] and [type] are required.
-  ///
-  /// see: <https://xmpp.org/registrar/disco-categories.html>
-  bool addIdentity(
-    String category,
-    String type, {
-    String? name,
-    String? language,
-  }) {
-    final identity = DiscoveryIdentity(category, type, language: language);
-    if (!_identities.contains(identity)) {
-      _identities.add(identity);
-      final idElement = WhixpUtils.xmlElement('identity');
-      idElement.setAttribute('category', category);
-      idElement.setAttribute('type', type);
-      if (language != null && language.isNotEmpty) {
-        idElement.setAttribute('xml:lang', language);
-      }
-      if (name != null && name.isNotEmpty) {
-        idElement.setAttribute('name', name);
-      }
-      element!.children.insert(0, idElement);
-      return true;
-    }
-
-    return false;
-  }
-
-  /// Adds or replaces all entities. The [identities] must be in a
-  /// [DiscoveryIdentity] form.
-  ///
-  /// If a [language] is specified, any [identities] using that language will be
-  /// removed to be replaced with the given [identities].
-  void setIdentities(
-    Iterable<DiscoveryIdentity> identities, {
-    String? language,
-  }) {
-    deleteIdentities(language: language);
-    for (final identity in identities) {
-      addIdentity(
-        identity.category,
-        identity.type,
-        name: identity.name,
-        language: identity.language,
-      );
-    }
-  }
-
-  /// Removes a given identity.
-  bool deleteIdentity(
-    String category,
-    String type, {
-    String? name,
-    String? language,
-  }) {
-    final identity =
-        DiscoveryIdentity(category, type, name: name, language: language);
-    if (_identities.contains(identity)) {
-      _identities.remove(identity);
-      for (final idElement
-          in element!.findAllElements('identity', namespace: namespace)) {
-        final id = DiscoveryIdentity(
-          idElement.getAttribute('category') ?? '',
-          idElement.getAttribute('type') ?? '',
-          language: idElement.getAttribute('xml:lang'),
-        );
-
-        if (id == identity) {
-          element!.children.remove(idElement);
-          return true;
-        }
+    for (final child in node.children.whereType<xml.XmlElement>()) {
+      switch (child.localName) {
+        case 'identity':
+          info.identities.add(Identity.fromXML(child));
+        case 'feature':
+          info.features.add(Feature.fromXML(child));
       }
     }
 
-    return false;
+    return info;
   }
 
-  /// Removes all identities. If a [language] was specified, only remove
-  /// identities using that language.
-  void deleteIdentities({String? language}) {
-    for (final idElement
-        in element!.findAllElements('identity', namespace: namespace)) {
-      if (language == null || language.isEmpty) {
-        element!.children.remove(idElement);
-      } else if (idElement.getAttribute('xml:lang') == language) {
-        _identities.remove(
-          DiscoveryIdentity(
-            idElement.getAttribute('category') ?? '',
-            idElement.getAttribute('type') ?? '',
-            language: idElement.getAttribute('xml:lang'),
-          ),
-        );
-        element!.children.remove(idElement);
-      }
-    }
-  }
-
-  /// Returns a [Set] or [List] of all features as so:
-  /// __(category, type, name, language)__
-  ///
-  /// If [duplicate] was set to true, then use [List] as it is allowed to
-  /// duplicate items.
-  Iterable<String> getFeatures({bool duplicate = false}) {
-    late final Iterable<String> features;
-    if (duplicate) {
-      features = <String>[];
-    } else {
-      features = <String>{};
-    }
-
-    for (final featureElement
-        in element!.findAllElements('feature', namespace: namespace)) {
-      if (features is Set) {
-        (features as Set).add(featureElement.getAttribute('var'));
-      } else {
-        (features as List).add(featureElement.getAttribute('var'));
-      }
-    }
-
-    return features;
-  }
-
-  /// Adds a single feature.
-  ///
-  /// The XMPP Registrar maintains a registry of features for use as values of
-  /// the 'var' attribute of the <feature/> element in the
-  /// 'http://jabber.org/protocol/disco#info' namespace;
-  ///
-  /// see <https://xmpp.org/registrar/disco-features.html>
-  bool addFeature(String feature) {
-    if (!_features.contains(feature)) {
-      _features.add(feature);
-      final featureElement = WhixpUtils.xmlElement('feature');
-      featureElement.setAttribute('var', feature);
-      element!.children.add(featureElement);
-      return true;
-    }
-    return false;
-  }
-
-  /// Adds or replaces all supported [features]. The [features]  must be in a
-  /// [Set] where each identity is a [String].
-  void setFeatures(Iterable<String> features) {
-    deleteFeatures();
-    for (final feature in features) {
-      addFeature(feature);
-    }
-  }
-
-  /// Deletes a single feature.
-  bool deleteFeature(String feature) {
-    if (_features.contains(feature)) {
-      _features.remove(feature);
-      for (final featureElement
-          in element!.findAllElements('feature', namespace: namespace)) {
-        element!.children.remove(featureElement);
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  /// Removes all features.
-  void deleteFeatures() {
-    for (final featureElement
-        in element!.findAllElements('feature', namespace: namespace)) {
-      element!.children.remove(featureElement);
-    }
-  }
-
-  /// Overrided [copy] method with `setters` and `getters` list copied.
+  /// Converts the disco information IQ stanza to its XML representation.
   @override
-  DiscoveryInformation copy({xml.XmlElement? element, XMLBase? parent}) =>
-      DiscoveryInformation(
-        element: element,
-        parent: parent,
-        getters: getters,
-        deleters: deleters,
-      );
-}
+  xml.XmlElement toXML() {
+    final dictionary = HashMap<String, String>();
+    final builder = WhixpUtils.makeGenerator();
+    dictionary['xmlns'] = namespace;
+    if (node?.isNotEmpty ?? false) {
+      dictionary['node'] = node!;
+    }
 
-/// Represents an identity as defined in disco (service discovery) entities.
-///
-/// It encapsulates information such as [category], [type], [name], and
-/// [language] associated with the identity.
-class DiscoveryIdentity {
-  /// Constructs an Identity instance with the specified [category] and [type].
-  /// Optionally includes a [name] and [language] associated with the identity.
-  const DiscoveryIdentity(this.category, this.type, {this.name, this.language});
+    builder.element(_name, attributes: dictionary);
+    final root = builder.buildDocument().rootElement;
 
-  /// Gets the category of the identity.
-  final String category;
+    if (identities.isNotEmpty) {
+      for (final child in identities) {
+        root.children.add(child.toXML().copy());
+      }
+    }
 
-  /// Gets the type of the identity.
-  final String type;
+    if (features.isNotEmpty) {
+      for (final feature in features) {
+        root.children.add(feature.toXML().copy());
+      }
+    }
 
-  /// Gets the optional name associated with the identity. May be `null` if not
-  /// provided.
-  final String? name;
+    return root;
+  }
 
-  /// Gets the optional language associated with the identity. May be null if
-  /// not provided.
-  final String? language;
+  /// Adds an identity to the disco information.
+  void addIdentity(String name, String category, {String? type}) {
+    int? index;
+    if (identities.where((identity) => identity.name == name).isNotEmpty) {
+      index = identities.indexWhere((identity) => identity.name == name);
+    }
+    final identity = Identity(name: name, category: category, type: type);
+    if (index != null) {
+      identities[index] = identity;
+      return;
+    }
+    identities.add(identity);
+  }
+
+  /// Adds features to the disco information.
+  void addFeature(List<String> namespaces) {
+    for (final namespace in namespaces) {
+      features.add(Feature(variable: namespace));
+    }
+  }
 
   @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is DiscoveryIdentity &&
-          runtimeType == other.runtimeType &&
-          category == other.category &&
-          type == other.type &&
-          name == other.name &&
-          language == other.language;
+  String get name => _name;
 
   @override
-  int get hashCode =>
-      category.hashCode ^ type.hashCode ^ name.hashCode ^ language.hashCode;
+  String get namespace => _namespace;
 
   @override
-  String toString() =>
-      'Discovery Identity (category: $category, type: $type, name: $name, language: $language)';
+  String get tag => discoInformationTag;
 }

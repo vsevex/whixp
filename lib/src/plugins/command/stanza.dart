@@ -9,161 +9,125 @@ part of 'command.dart';
 /// commands are used primarily for human interaction.
 ///
 /// see <http://xmpp.org/extensions/xep-0050.html>
-class Command extends XMLBase {
-  /// Example:
-  /// ```xml
-  /// <iq type="set">
-  ///   <command xmlns="http://jabber.org/protocol/commands"
-  ///            node="run_foo"
-  ///            action="execute" />
-  /// </iq>
-  /// ```
-  Command({
-    super.pluginTagMapping,
-    super.pluginAttributeMapping,
-    super.pluginIterables,
-    super.getters,
-    super.setters,
-    super.deleters,
-    super.element,
-    super.parent,
-  }) : super(
-          name: 'command',
-          namespace: 'http://jabber.org/protocol/commands',
-          pluginAttribute: 'command',
-          interfaces: <String>{
-            'action',
-            'sessionid',
-            'node',
-            'status',
-            'actions',
-            'notes',
-          },
-          includeNamespace: true,
-        ) {
-    addGetters(<Symbol, void Function(dynamic args, XMLBase base)>{
-      const Symbol('action'): (args, base) => action,
-      const Symbol('actions'): (args, base) => actions,
-      const Symbol('notes'): (args, base) => notes,
-    });
+class Command extends IQStanza {
+  /// Creates an instance of `Command`.
+  const Command(
+    this.node, {
+    this.action,
+    this.sessionID,
+    this.status,
+    this.payloads,
+    this.resultActions,
+  });
 
-    addSetters(<Symbol,
-        void Function(dynamic value, dynamic args, XMLBase base)>{
-      const Symbol('actions'): (value, args, base) =>
-          setActions(value as List<String>),
-      const Symbol('notes'): (value, args, base) =>
-          setNotes(value as Map<String, String>),
-    });
+  /// The node identifier of the command.
+  final String? node;
 
-    addDeleters(<Symbol, void Function(dynamic args, XMLBase base)>{
-      const Symbol('actions'): (args, base) => deleteActions(),
-      const Symbol('notes'): (args, base) => deleteNotes(),
-    });
+  /// The action to be performed by the command.
+  final String? action;
 
-    registerPlugin(Form(), iterable: true);
-  }
+  /// The list of action(s) from the `result` stanza.
+  final List<String>? resultActions;
 
-  /// Returns the value of the `action` attribute.
-  String get action {
-    if (parent!['type'] == 'set') {
-      return getAttribute('action', 'execute');
-    }
-    return getAttribute('action');
-  }
+  /// The session ID of the command.
+  final String? sessionID;
 
-  /// Assign the set of allowable next actions.
-  void setActions(List<String> values) {
-    delete('actions');
-    if (values.isNotEmpty) {
-      setSubText('{$namespace}actions', text: '', keep: true);
-      final actions = element!.getElement('actions', namespace: namespace);
-      for (final value in values) {
-        if (_nextActions.contains(value)) {
-          final action = WhixpUtils.xmlElement(value);
-          element!.childElements
-              .firstWhere((element) => element == actions)
-              .children
-              .add(action);
-        }
-      }
-    }
-  }
+  /// The status of the command.
+  final String? status;
 
-  /// Returns the [Iterable] of the allowable next actions.
-  Iterable<String> get actions {
+  /// The Command form payload.
+  final List<Stanza>? payloads;
+
+  /// Creates a `Command` instance from an XML element.
+  ///
+  /// - [node]: An XML element representing an Adhoc Command.
+  factory Command.fromXML(xml.XmlElement node) {
+    String? action;
+    String? status;
+    String? sessionID;
     final actions = <String>[];
-    final actionElements = element!.getElement('actions', namespace: namespace);
-    if (actionElements != null) {
-      for (final action in _nextActions) {
-        final actionElement =
-            actionElements.getElement(action, namespace: namespace);
-        if (actionElement != null) {
-          actions.add(action);
-        }
+    final payloads = <Stanza>[];
+
+    // Iterate over the child elements of the node to extract vCard information
+    for (final attribute in node.attributes) {
+      switch (attribute.localName) {
+        case 'status':
+          status = attribute.innerText;
+        case 'sessionid':
+          sessionID = attribute.innerText;
       }
     }
-    return actions;
-  }
 
-  /// Remove all allowable next actions.
-  void deleteActions() => deleteSub('{$namespace}actions');
-
-  /// Returns a [Map] of note information.
-  Map<String, String> get notes {
-    final notes = <String, String>{};
-    final xml = element!.findAllElements('note', namespace: namespace);
-    for (final note in xml) {
-      notes.addAll({note.getAttribute('type') ?? 'info': note.innerText});
-    }
-    return notes;
-  }
-
-  /// Adds multiple notes to the command result.
-  ///
-  /// [Map] representation the notes, with the key being of "info", "warning",
-  /// or "error", and the value of [notes] being any human readable message.
-  ///
-  /// ### Example:
-  /// ```dart
-  /// final notes = {
-  ///   'info': 'salam, blyat!',
-  ///   'warning': 'do not go gentle into that good night',
-  /// };
-  /// ```
-  void setNotes(Map<String, String> notes) {
-    delete('notes');
-    for (final note in notes.entries) {
-      addNote(note.value, note.key);
-    }
-  }
-
-  /// Removes all note associated with the command result.
-  void deleteNotes() {
-    final notes = element!.findAllElements('note', namespace: namespace);
-    for (final note in notes) {
-      element!.children.remove(note);
-    }
-  }
-
-  /// Adds a single [note] annotation to the command.
-  void addNote(String note, String type) {
-    final xml = WhixpUtils.xmlElement('note');
-    xml.setAttribute('type', type);
-    xml.innerText = note;
-    element!.children.add(xml);
-  }
-
-  final _nextActions = <String>{'prev', 'next', 'complete'};
-
-  @override
-  Command copy({xml.XmlElement? element, XMLBase? parent}) => Command(
-        pluginTagMapping: pluginTagMapping,
-        pluginAttributeMapping: pluginAttributeMapping,
-        pluginIterables: pluginIterables,
-        getters: getters,
-        setters: setters,
-        deleters: deleters,
-        element: element,
-        parent: parent,
+    for (final child in node.children.whereType<xml.XmlElement>()) {
+      switch (child.localName) {
+        case 'actions':
+          for (final child in child.children.whereType<xml.XmlElement>()) {
+            actions.add(child.localName);
+          }
+      }
+      payloads.add(
+        Stanza.payloadFromXML(
+          WhixpUtils.generateNamespacedElement(child),
+          child,
+        ),
       );
+    }
+
+    return Command(
+      node.getAttribute('node'),
+      action: action,
+      status: status,
+      sessionID: sessionID,
+      payloads: payloads,
+      resultActions: actions,
+    );
+  }
+
+  /// Converts the `VCard4` instance to an XML element.
+  @override
+  xml.XmlElement toXML() {
+    final builder = WhixpUtils.makeGenerator();
+    final attributes = <String, String>{};
+
+    if (sessionID?.isNotEmpty ?? false) {
+      attributes['sessionid'] = sessionID!;
+    }
+    if (node?.isNotEmpty ?? false) {
+      attributes['node'] = node!;
+    }
+    if (action?.isNotEmpty ?? false) {
+      attributes['action'] = action!;
+    }
+
+    builder.element(
+      name,
+      attributes: <String, String>{'xmlns': namespace}..addAll(attributes),
+      nest: () {
+        if (status?.isNotEmpty ?? false) {
+          builder.element('status', nest: () => builder.text(status!));
+        }
+      },
+    );
+
+    final element = builder.buildDocument().rootElement;
+    if (payloads?.isNotEmpty ?? false) {
+      for (final payload in payloads!) {
+        element.children.add(payload.toXML().copy());
+      }
+    }
+
+    return element;
+  }
+
+  /// The name of the XML element representing the vCard.
+  @override
+  String get name => 'command';
+
+  /// The XML namespace for the vCard 4.0.
+  @override
+  String get namespace => 'http://jabber.org/protocol/commands';
+
+  /// A tag used to identify the vCard element.
+  @override
+  String get tag => adhocCommandTag;
 }
