@@ -7,4 +7,3 @@ export 'id/id.dart';
 export 'pubsub/pubsub.dart';
 export 'push/push.dart';
 export 'time/time.dart';
-export 'vcard/temp.dart';
