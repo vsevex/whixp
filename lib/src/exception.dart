@@ -1,7 +1,5 @@
-import 'package:whixp/src/stanza/error.dart';
 import 'package:whixp/src/stanza/iq.dart';
-import 'package:whixp/src/stanza/presence.dart';
-import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/stanza/stanza.dart';
 
 /// The given given class is a custom written [Exception] class for [Whixp].
 ///
@@ -24,6 +22,72 @@ abstract class WhixpException implements Exception {
 
   @override
   String toString() => '''Whixp Exception: $message''';
+}
+
+/// Represents an exception that occurs during the internal processing of Whixp.
+class WhixpInternalException extends WhixpException {
+  /// Constructor for [WhixpInternalException] that takes a message as a
+  /// parameter.
+  const WhixpInternalException(super.message);
+
+  /// Whenever there is an exception there in the setup process of the package,
+  /// then this exception will be thrown.
+  factory WhixpInternalException.setup(String message) =>
+      WhixpInternalException(message);
+
+  /// Factory constructor for [WhixpInternalException] that creates an instance
+  /// of the exception with a message "Invalid XML".
+  factory WhixpInternalException.invalidXML() =>
+      const WhixpInternalException('Invalid XML');
+
+  /// Factory constructor for [WhixpInternalException] that creates an instance
+  /// of the exception with a message "Invalid node".
+  factory WhixpInternalException.invalidNode(String node, String name) =>
+      WhixpInternalException('Invalid $node, expecting $name');
+
+  /// Factory constructor for [WhixpInternalException] that creates an instance
+  /// of the exception with a message "Unexpected XMPP packet".
+  factory WhixpInternalException.unexpectedPacket(
+    String? namespace,
+    String node,
+  ) =>
+      WhixpInternalException('Unexpected XMPP packet {$namespace} <$node>');
+
+  /// Factory constructor for [WhixpInternalException] that creates an instance
+  /// of the exception with a message "Unknown namespace while trying to parse
+  /// element".
+  factory WhixpInternalException.unknownNamespace(String namespace) =>
+      WhixpInternalException(
+        'Unknown namespace($namespace) while trying to parse element',
+      );
+
+  /// Factory constructor for [WhixpInternalException] that creates an instance
+  /// of the exception with a message "Unable to find stanza for XML Tag".
+  factory WhixpInternalException.stanzaNotFound(
+    String stanza,
+    String tag,
+  ) =>
+      WhixpInternalException('Unable to find $stanza stanza for XML Tag: $tag');
+
+  /// Overrides of the `toString` method to return the message of the exception.
+  @override
+  String toString() => message;
+}
+
+/// Exception thrown when authentication fails.
+class AuthenticationException extends WhixpException {
+  /// Creates an [AuthenticationException] with the given [message].
+  AuthenticationException(super.message);
+
+  /// Creates an [AuthenticationException] indicating that TLS is required by the server.
+  factory AuthenticationException.requiresTLS() => AuthenticationException(
+        'Server requires TLS session. Ensure you either "disableStartTLS" attribute to "false"',
+      );
+
+  /// Creates an [AuthenticationException] indicating that TLS is disabled but requested.
+  factory AuthenticationException.disabledTLS() => AuthenticationException(
+        "You requested TLS session, but Server doesn't support TLS",
+      );
 }
 
 /// Represents an exception related to XMPP stanzas within the context of the
@@ -69,30 +133,28 @@ class StanzaException extends WhixpException {
   final String errorType;
 
   /// The XMPP stanza associated with the exception.
-  final XMLBase? stanza;
+  final Stanza? stanza;
 
   /// Creates a [StanzaException] for a timed-out response from the server.
-  factory StanzaException.timeout(StanzaBase stanza) => StanzaException(
+  factory StanzaException.timeout(Stanza? stanza) => StanzaException(
         'Waiting for response from the server is timed out',
         stanza: stanza,
         condition: 'remote-server-timeout',
       );
 
   /// Creates a [StanzaException] for a received service unavailable stanza.
-  factory StanzaException.serviceUnavailable(StanzaBase stanza) =>
-      StanzaException(
+  factory StanzaException.serviceUnavailable(Stanza stanza) => StanzaException(
         'Received service unavailable stanza',
         stanza: stanza,
-        condition: (stanza['error'] as StanzaError)['condition'] as String,
       );
 
   /// Creates a [StanzaException] for an IQ error with additional details.
   factory StanzaException.iq(IQ iq) => StanzaException(
         'IQ error has occured',
         stanza: iq,
-        text: (iq['error'] as StanzaError)['text'] as String,
-        condition: (iq['error'] as StanzaError)['condition'] as String,
-        errorType: (iq['error'] as StanzaError)['type'] as String,
+        text: iq.error?.text ?? '',
+        condition: iq.error?.reason ?? '',
+        errorType: iq.error?.type ?? '',
       );
 
   /// Creates a [StanzaException] for an IQ timeout.
@@ -100,15 +162,6 @@ class StanzaException extends WhixpException {
         'IQ timeout has occured',
         stanza: iq,
         condition: 'remote-server-timeout',
-      );
-
-  /// Creates a [StanzaException] for an Presence error.
-  factory StanzaException.presence(Presence presence) => StanzaException(
-        'Presence error has occured',
-        stanza: presence,
-        condition: (presence['error'] as StanzaError)['condition'] as String,
-        text: (presence['error'] as StanzaError)['text'] as String,
-        errorType: (presence['error'] as StanzaError)['type'] as String,
       );
 
   /// Formats the exception details.
