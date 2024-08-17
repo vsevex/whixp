@@ -1,6 +1,5 @@
 part of 'sasl.dart';
 
-@internal
 abstract class Mechanism {
   Mechanism(
     this._base, {
