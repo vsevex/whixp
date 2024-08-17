@@ -1,7 +1,7 @@
-import 'package:whixp/src/plugins/delay/delay.dart';
+import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/stanza/error.dart';
-import 'package:whixp/src/stanza/root.dart';
-import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/stanza/mixins.dart';
+import 'package:whixp/src/stanza/stanza.dart';
 import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
@@ -26,160 +26,135 @@ import 'package:xml/xml.dart' as xml;
 ///   <priority>1</priority>
 /// </presence>
 /// ```
-class Presence extends RootStanza {
-  Presence({
-    /// [showtypes] may be one of: dnd, chat, xa, away.
-    this.showtypes = const {'dnd', 'chat', 'xa', 'away'},
-    super.transport,
-    super.stanzaType,
-    super.stanzaTo,
-    super.stanzaFrom,
-    super.receive = false,
-    super.includeNamespace = false,
-    super.getters,
-    super.setters,
-    super.deleters,
-    super.pluginTagMapping,
-    super.pluginAttributeMapping,
-    super.pluginMultiAttribute,
-    super.pluginIterables,
-    super.overrides,
-    super.isExtension,
-    super.boolInterfaces,
-    super.element,
-    super.parent,
-  }) : super(
-          name: 'presence',
-          namespace: WhixpUtils.getNamespace('CLIENT'),
-          pluginAttribute: 'presence',
-          interfaces: <String>{
-            'type',
-            'to',
-            'from',
-            'id',
-            'show',
-            'status',
-            'priority',
-          },
-          subInterfaces: <String>{'show', 'status', 'priority'},
-          languageInterfaces: <String>{'status'},
-          types: <String>{
-            'available',
-            'unavailable',
-            'error',
-            'probe',
-            'subscribe',
-            'subscribed',
-            'unsubscribe',
-            'unsubscribed',
-          },
-        ) {
-    if (!receive && this['id'] == '') {
-      if (transport != null) {
-        this['id'] = WhixpUtils.getUniqueId();
+class Presence extends Stanza with Attributes {
+  static const String _name = "presence";
+
+  /// Constructs a presence stanza.
+  Presence({this.show, this.status, this.nick, this.priority, this.error});
+
+  /// The current presence show information.
+  final String? show;
+
+  /// The status message associated with the presence.
+  final String? status;
+
+  /// The nick associated with the presence.
+  final String? nick;
+
+  /// The priority of the presence.
+  final int? priority;
+
+  /// Error stanza associated with this presence stanza, if any.
+  final ErrorStanza? error;
+
+  /// List of payloads associated with this presence stanza.
+  final payloads = <Stanza>[];
+
+  /// Constructs a presence stanza from a string representation.
+  ///
+  /// Throws [WhixpInternalException] if the input XML is invalid.
+  factory Presence.fromString(String stanza) {
+    try {
+      final doc = xml.XmlDocument.parse(stanza);
+      final root = doc.rootElement;
+
+      return Presence.fromXML(root);
+    } catch (_) {
+      throw WhixpInternalException.invalidXML();
+    }
+  }
+
+  /// Constructs a presence stanza from an XML element node.
+  ///
+  /// Throws [WhixpInternalException] if the provided XML node is invalid.
+  factory Presence.fromXML(xml.XmlElement node) {
+    if (node.localName != _name) {
+      throw WhixpInternalException.invalidNode(node.localName, _name);
+    }
+
+    String? show;
+    String? status;
+    int? priority;
+    String? nick;
+    ErrorStanza? error;
+    final payloads = <Stanza>[];
+
+    for (final child in node.children.whereType<xml.XmlElement>()) {
+      switch (child.localName) {
+        case 'show':
+          show = child.innerText;
+        case 'status':
+          status = child.innerText;
+        case 'priority':
+          priority = int.parse(child.innerText);
+        case 'nick':
+          nick = child.innerText;
+        case 'error':
+          error = ErrorStanza.fromXML(child);
+        default:
+          try {
+            final tag = WhixpUtils.generateNamespacedElement(child);
+
+            payloads.add(Stanza.payloadFromXML(tag, child));
+          } catch (ex) {
+            // XMPPLogger.warn(ex);
+          }
+          break;
       }
     }
 
-    addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
-      const Symbol('type'): (args, base) {
-        String out = base.getAttribute('type');
-        if (out.isEmpty && showtypes.contains(base['show'])) {
-          out = this['show'] as String;
-        }
-        if (out.isEmpty) {
-          out = 'available';
-        }
-        return out;
-      },
-      const Symbol('priority'): (args, base) {
-        String presence = base.getSubText('priority') as String;
-        if (presence.isEmpty) {
-          presence = '0';
-        }
-        return presence;
-      },
-    });
-
-    addSetters(
-      <Symbol, void Function(dynamic value, dynamic args, XMLBase base)>{
-        const Symbol('type'): (value, args, base) {
-          if (types.contains(value)) {
-            base['show'] = null;
-            if (value == 'available') {
-              value = '';
-            }
-            base.setAttribute('type', value as String);
-          } else if (showtypes.contains(value)) {
-            base['show'] = value;
-          }
-        },
-        const Symbol('priority'): (value, args, base) => base.setSubText(name),
-        const Symbol('show'): (value, args, base) {
-          final show = value as String?;
-          if (show == null || show.isEmpty) {
-            deleteSub('show');
-          } else if (showtypes.contains(show)) {
-            setSubText('show', text: show);
-          }
-        },
-      },
-    );
-
-    addDeleters(
-      <Symbol, void Function(dynamic args, XMLBase base)>{
-        const Symbol('type'): (args, base) {
-          base.deleteAttribute('type');
-          base.deleteSub('show');
-        },
-      },
-    );
-
-    /// Register all required stanzas beforehand, so we won't need to declare
-    /// them one by one whenever there is a need to specific stanza.
-    ///
-    /// If you have not used the specified stanza, then you have to enable the
-    /// stanza through the usage of `pluginAttribute` parameter.
-    registerPlugin(StanzaError());
-    registerPlugin(DelayStanza());
-  }
-
-  /// Creates a new reply [Presence] from the current stanza.
-  Presence replyPresence({bool clear = true}) {
-    final presence = super.reply<Presence>(copiedStanza: copy(), clear: clear);
-
-    if (this['type'] == 'unsubscribe') {
-      presence['type'] = 'unsubscribed';
-    } else if (this['type'] == 'subscribe') {
-      presence['type'] = 'subscribed';
-    }
+    final presence = Presence(
+      show: show,
+      status: status,
+      nick: nick,
+      priority: priority,
+      error: error,
+    )..payloads.addAll(payloads);
+    presence.loadAttributes(node);
 
     return presence;
   }
 
+  /// Converts the presence stanza to its XML representation.
   @override
-  Presence copy({
-    xml.XmlElement? element,
-    XMLBase? parent,
-    bool receive = false,
-  }) =>
-      Presence(
-        transport: transport,
-        receive: receive,
-        includeNamespace: includeNamespace,
-        getters: getters,
-        setters: setters,
-        deleters: deleters,
-        pluginTagMapping: pluginTagMapping,
-        pluginAttributeMapping: pluginAttributeMapping,
-        pluginMultiAttribute: pluginMultiAttribute,
-        pluginIterables: pluginIterables,
-        overrides: overrides,
-        isExtension: isExtension,
-        boolInterfaces: boolInterfaces,
-        element: element,
-        parent: parent,
-      );
+  xml.XmlElement toXML() {
+    final dict = attributeHash;
+    final builder = WhixpUtils.makeGenerator();
 
-  /// [showtypes] may be one of: dnd, chat, xa, away.
-  final Set<String> showtypes;
+    builder.element(
+      _name,
+      attributes: dict,
+      nest: () {
+        if (show?.isNotEmpty ?? false) {
+          builder.element('show', nest: () => builder.text(show!));
+        }
+        if (status?.isNotEmpty ?? false) {
+          builder.element('status', nest: () => builder.text(status!));
+        }
+        if (nick?.isNotEmpty ?? false) {
+          builder.element('nick', nest: () => builder.text(nick!));
+        }
+        if (priority != null && priority != 0) {
+          builder.element(
+            'priority',
+            nest: () => builder.text(priority.toString()),
+          );
+        }
+      },
+    );
+
+    final root = builder.buildDocument().rootElement;
+
+    if (error != null) root.children.add(error!.toXML().copy());
+
+    return root;
+  }
+
+  /// Gets the payload of a specific type from the presence stanza.
+  PresenceStanza? get<P extends PresenceStanza>() =>
+      payloads.firstWhere((payload) => payload is P) as PresenceStanza?;
+
+  /// Returns the name of the presence stanza.
+  @override
+  String get name => _name;
 }
