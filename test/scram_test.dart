@@ -1,11 +1,11 @@
 import 'package:convert/convert.dart' as convert;
 
 import 'package:test/test.dart';
+import 'package:whixp/src/client.dart';
 
 import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/sasl/scram.dart';
 import 'package:whixp/src/utils/utils.dart';
-import 'package:whixp/src/whixp.dart';
 
 void main() {
   group('hmacIteration method test', () {
@@ -24,7 +24,7 @@ void main() {
 
   group('deriveKeys method test', () {
     test('must return correct client key value in the output', () {
-      final whixp = Whixp('vsevex@localhost', '', provideHivePath: true);
+      final whixp = Whixp();
       final result = Scram(whixp).deriveKeys(
         password: 'pencil',
         salt: 'QSXCR+Q6sek8bf92',
