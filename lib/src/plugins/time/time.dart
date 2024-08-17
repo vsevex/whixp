@@ -1,13 +1,7 @@
-import 'package:meta/meta.dart';
-
-import 'package:whixp/src/plugins/base.dart';
-
 part '_methods.dart';
 
-class DateTimeProfile extends PluginBase {
-  DateTimeProfile()
-      : super('time', description: 'XEP-0082: XMPP Date and Time Profiles');
-
+class DateTimeProfile {
+  const DateTimeProfile();
   /// Converts a [String] into a [DateTime] object.
   ///
   /// In the context of ISO 8601 date and time representaiton, the "Z" at the
@@ -46,16 +40,4 @@ class DateTimeProfile extends PluginBase {
   /// object through the [asString] boolean.
   dynamic date({int? year, int? month, int? day, bool asString = true}) =>
       _date(year: year, month: month, day: day, asString: asString);
-
-  /// Do not implement.
-  @override
-  void pluginEnd() {}
-
-  /// Do not implement.
-  @override
-  void pluginInitialize() {}
-
-  /// Do not implement.
-  @override
-  void sessionBind(String? jid) {}
 }
