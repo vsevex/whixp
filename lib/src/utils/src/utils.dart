@@ -41,7 +41,7 @@ class WhixpUtils {
   /// By creating a single instance of [xml.XmlBuilder] and reusing it, the code
   /// can avoid the overhead of creating new [xml.XmlBuilder] instances for each
   /// XML document it generates.
-  static xml.XmlBuilder _makeGenerator() => _xmlGenerator;
+  static xml.XmlBuilder makeGenerator() => _xmlGenerator;
 
   /// Generates an XML element with optional attributes and nested text.
   ///
@@ -103,7 +103,7 @@ class WhixpUtils {
     /// Finally, it returns the resulting XML node. If the `name` argument is
     /// empty or contains only whitespace, or if the `attributes` argument is
     /// not a valid type, the method returns `null`.
-    final builder = _makeGenerator();
+    final builder = makeGenerator();
     builder.element(
       name,
       nest: () {
@@ -166,6 +166,22 @@ class WhixpUtils {
   /// For more information refer to [xmlUnescape] method in [Escaper] class.
   static String xmlUnescape(String text) => Escaper().xmlUnescape(text);
 
+  /// Generates a namespaced element string.
+  ///
+  /// This method takes an XML element and returns a string in the format
+  /// `{namespace}localName`, where `namespace` is the value of the `xmlns`
+  /// attribute of the element and `localName` is the local name of the element.
+  ///
+  /// - [element]: The XML element from which to extract the namespace and
+  /// local name.
+  ///
+  /// Returns a string representing the namespaced element.
+  static String generateNamespacedElement(xml.XmlElement element) {
+    final namespace = element.getAttribute('xmlns');
+    final localName = element.localName;
+    return '{$namespace}$localName';
+  }
+
   /// This method takes an XML [element] and seralizes it into string
   /// representation of the XML. It uses the `serialize` function to recusively
   /// iterate through all child elements of the input [element] and construct
@@ -213,7 +229,7 @@ class WhixpUtils {
   /// This method takes a [String] argument [value] and returns a [String]
   /// in UTF-8. It works by iterating through each character in the input string
   /// and converting each character to its UTF-8 equivalent.
-  static String utf16to8(String value) {
+  String utf16to8(String value) {
     String out = '';
     final length = value.length;
 
@@ -259,10 +275,10 @@ class WhixpUtils {
   /// the counter is used as the unique id.
   ///
   /// Returns the generated ID.
-  static String getUniqueId([dynamic suffix]) {
+  static String generateUniqueID([dynamic suffix]) {
     /// It follows the format specified by the UUID version 4 standart.
-    final uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
-        .replaceAllMapped(RegExp('[xy]'), (match) {
+    final uuid =
+        'xxxxx-2113-yxxx-xxxxxxxx'.replaceAllMapped(RegExp('[xy]'), (match) {
       final r = math.Random.secure().nextInt(16);
       final v = match.group(0) == 'x' ? r : (r & 0x3 | 0x8);
       return v.toRadixString(16);
@@ -424,80 +440,43 @@ class WhixpUtils {
   /// WhixpUtils.addNamespace('CLIENT', 'jabber:client');
   /// ```
   static void addNamespace(String name, String key) => _namespace[name] = key;
+}
 
-  /// Checks if an object has a specified property using reflection.
-  ///
-  /// Uses Dart's reflection capabilities to inspect the structure of an
-  /// [object] at runtime and determine whether it has a property with the given
-  /// [property].
-  ///
-  /// ### Example:
-  /// ```dart
-  /// final object = SomeClass();
-  /// if (WhixpUtils.hasAttr(object, 'property')) {
-  ///   log('property exists!');
-  /// } else {
-  ///   /// ...otherwise do something
-  /// }
-  /// ```
-  /// **Warning:**
-  /// * Reflection can be affected by certain build configurations, and the
-  /// effectiveness of this function may vary in those cases.
-  // static bool hasAttr(Object? object, String property) {
-  //   final instanceMirror = mirrors.reflect(object);
-  //   return instanceMirror.type.instanceMembers.containsKey(Symbol(property));
-  // }
+class Tuple2<F, S> {
+  const Tuple2(this.firstValue, this.secondValue);
 
-  /// Gets the value of an attribute from an object using reflection.
-  ///
-  /// This function uses Dart's reflection capabilities to inspect the structure
-  /// of an object at runtime and retrieves the value of an attribute with the
-  /// specified name.
-  ///
-  /// ### Example:
-  /// ```dart
-  /// final exampleObject = Example();
-  /// final name = WhixpUtils.getAttr(exampleObject, 'name');
-  /// log(name); /// outputs name
-  /// ```
-  ///
-  /// **Warning:**
-  /// * Reflection can be affected by certain build configurations, and the
-  /// effectiveness of this function may vary in those cases.
-  // static dynamic getAttr(Object? object, String attribute) {
-  //   final instanceMirror = mirrors.reflect(object);
+  final F firstValue;
+  final S secondValue;
 
-  //   try {
-  //     final value = instanceMirror.getField(Symbol(attribute)).reflectee;
-  //     return value;
-  //   } catch (error) {
-  //     return null;
-  //   }
-  // }
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Tuple2 &&
+        other.firstValue == firstValue &&
+        other.secondValue == secondValue;
+  }
 
-  /// Sets the value of an attribute on an object using reflection.
-  ///
-  /// Uses Dart's reflection capabilities to inspect the structure of an object
-  /// at runtime and sets the value of an attribute with the specified name.
-  ///
-  /// ### Example:
-  /// ```dart
-  /// final exampleObject = Example();
-  /// final name = WhixpUtils.setAttr(exampleObject, 'name', 'hert');
-  /// ```
-  /// **Warning:**
-  /// * Reflection can be affected by certain build configurations, and the
-  /// effectiveness of this function may vary in those cases.
-  // static void setAttr(Object? object, String attribute, dynamic value) {
-  //   if (value is Function) {
-  //     throw ArgumentError("Setting methods dynamically is not supported.");
-  //   }
-  //   final instanceMirror = mirrors.reflect(object);
-  //   try {
-  //     instanceMirror.setField(Symbol(attribute), value);
-  //   } catch (error) {
-  //     /// Handle cases where the attribute does not exist
-  //     throw ArgumentError("Attribute '$attribute' not found");
-  //   }
-  // }
+  @override
+  int get hashCode => firstValue.hashCode ^ secondValue.hashCode;
+}
+
+class Tuple3<F, S, T> {
+  const Tuple3(this.firstValue, this.secondValue, this.thirdValue);
+
+  final F firstValue;
+  final S secondValue;
+  final T thirdValue;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Tuple3 &&
+        other.firstValue == firstValue &&
+        other.secondValue == secondValue &&
+        other.thirdValue == thirdValue;
+  }
+
+  @override
+  int get hashCode =>
+      firstValue.hashCode ^ secondValue.hashCode ^ thirdValue.hashCode;
 }
