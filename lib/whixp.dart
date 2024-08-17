@@ -9,7 +9,6 @@ export 'src/jid/jid.dart';
 export 'src/log/log.dart';
 export 'src/plugins/plugins.dart';
 export 'src/reconnection.dart';
-export 'src/stanza/atom.dart';
 export 'src/stanza/error.dart';
 export 'src/stanza/iq.dart';
 export 'src/stanza/message.dart';
