@@ -1,13 +1,13 @@
 import 'dart:io';
 
-import 'package:dartz/dartz.dart';
-
 import 'package:memoize/memoize.dart';
 
 import 'package:whixp/src/escaper/escaper.dart';
 import 'package:whixp/src/jid/src/exception.dart';
 import 'package:whixp/src/utils/src/stringprep.dart';
+import 'package:whixp/src/utils/utils.dart';
 
+// ignore: avoid_classes_with_only_static_members
 /// A private utility class for parsing, formatting, and validating Jabber IDs.
 class _Jabbered {
   const _Jabbered();
@@ -185,9 +185,9 @@ class JabberID {
   JabberID([String? jid]) {
     if (jid == null) return;
     final jabberID = _Jabbered._parse(jid);
-    _node = jabberID.value1;
-    _domain = jabberID.value2;
-    _resource = jabberID.value3;
+    _node = jabberID.firstValue;
+    _domain = jabberID.secondValue;
+    _resource = jabberID.thirdValue;
     _bare = '';
     _full = '';
 
@@ -230,9 +230,9 @@ class JabberID {
 
   set bare(String bare) {
     final jid = _Jabbered._parse(bare);
-    assert(jid.value2.isNotEmpty);
-    _node = jid.value1;
-    _domain = jid.value2;
+    assert(jid.secondValue.isNotEmpty);
+    _node = jid.firstValue;
+    _domain = jid.secondValue;
     _updateBareFull();
   }
 
@@ -253,9 +253,9 @@ class JabberID {
 
   set full(String value) {
     final jid = _Jabbered._parse(value);
-    _node = jid.value1;
-    _domain = jid.value2;
-    _resource = jid.value3;
+    _node = jid.firstValue;
+    _domain = jid.secondValue;
+    _resource = jid.thirdValue;
     _updateBareFull();
   }
 
