@@ -1,54 +1,37 @@
 import 'dart:async' as async;
 import 'dart:io' as io;
-import 'dart:math' as math;
 
 import 'package:connecta/connecta.dart';
-import 'package:dartz/dartz.dart';
 import 'package:dnsolve/dnsolve.dart';
-import 'package:memoize/memoize.dart';
-import 'package:meta/meta.dart';
+import 'package:synchronized/extension.dart';
 
+import 'package:whixp/src/enums.dart';
+import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/handler/eventius.dart';
 import 'package:whixp/src/handler/handler.dart';
+import 'package:whixp/src/handler/router.dart';
 import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/log/log.dart';
-import 'package:whixp/src/stanza/handshake.dart';
-import 'package:whixp/src/stanza/root.dart';
-import 'package:whixp/src/stream/base.dart';
+import 'package:whixp/src/parser.dart';
+import 'package:whixp/src/plugins/features.dart';
+import 'package:whixp/src/reconnection.dart';
+import 'package:whixp/src/stanza/iq.dart';
+import 'package:whixp/src/stanza/message.dart';
+import 'package:whixp/src/stanza/mixins.dart';
+import 'package:whixp/src/stanza/presence.dart';
+import 'package:whixp/src/stanza/stanza.dart';
+import 'package:whixp/src/stream.dart';
 import 'package:whixp/src/utils/utils.dart';
-import 'package:whixp/src/whixp.dart';
 
 import 'package:xml/xml.dart' as xml;
-import 'package:xml/xml_events.dart' as parser;
-
-/// Filterization types of incoming and outgoing stanzas.
-enum FilterMode { iN, out, outSync }
-
-/// A synchronous filter function for processing [StanzaBase] objects.
-///
-/// This filter is a typedef representing a function that takes a [StanzaBase]
-/// object as input, processes it synchronously, and returns a modified or
-/// processed [StanzaBase].
-///
-/// It is typically used for applying synchronous transformations or filters to
-/// stanza objects.
-@internal
-typedef SyncFilter = StanzaBase Function(StanzaBase stanza);
-
-/// An asynchronous filter function for processing [StanzaBase] objects.
-///
-/// An AsyncFilter is a typedef representing a function that takes a
-/// [StanzaBase] object as input, processes it asynchronously, and returns a
-/// modified or processed [StanzaBase] wrapped in [Future].
-@internal
-typedef AsyncFilter = Future<StanzaBase> Function(StanzaBase stanza);
 
 /// Designed to simplify the complexities associated with establishing a
-/// connection to as server, as well as sending and receiving XML "stanzas".
+/// connection to a server, as well as sending and receiving XML stanzas.
 ///
-/// The class manages two streams, each responsible for communication in a
-/// specific direction over the same socket.
+/// Establishes a socket connection, accepts and sends data over this socket.
 class Transport {
+  static Transport? _instance;
+
   /// Typically, stanzas are first processed by a [Transport] event handler
   /// which will then trigger ustom events to continue further processing,
   /// especially since custom event handlers may run in individual threads.
@@ -63,25 +46,22 @@ class Transport {
   /// ### Example:
   /// ```dart
   /// final transport = Transport('xmpp.is', port: 5223, useTLS: true);
-  /// transport.connect();  /// this will connect to the "xmpp.is" on port 5223 over DirectTLS
+  /// /// it will connect to the "xmpp.is" on port 5223 over DirectTLS
+  /// transport.connect();
   /// ```
-  Transport(
-    /// The hostname that the client needs to establish a connection with
-    this._host, {
+  factory Transport(
+    /// Hostname that the client needs to establish a connection with
+    String host, {
     /// Defaults to 5222
     int port = 5222,
 
     /// The JabberID (JID) used by this connection, as set after session
     /// binding. This may even be a different bare JID than what was requested
-    required this.boundJID,
+    JabberID? boundJID,
 
     /// The service name to check with DNS SRV records. For example, setting this
     /// to "xmpp-client" would query the "_xmpp-clilent._tcp" service.
     String? dnsService,
-
-    /// The distinction between clients and components can be important, primarily
-    /// for choosing how to handle the `to` and `from` [JabberID]s of stanzas
-    this.isComponent = false,
 
     /// If set to `true`, attempt to use IPv6
     bool useIPv6 = false,
@@ -101,16 +81,11 @@ class Transport {
 
     /// If `true`, periodically send a whitespace character over the wire to
     /// keep the connection alive
-    this.whitespaceKeepAlive = true,
+    bool pingKeepAlive = true,
 
-    /// The default interval between keepalive signals when [whitespaceKeepAlive]
-    /// is enabled. Represents in seconds. Defaults to `300`
-    this.whitespaceKeepAliveInterval = 300,
-
-    /// The maximum number of reconnection attempts that the [Transport] will
-    /// make in case the connection with the server is lost or cannot be
-    /// established initially. Defaults to 3
-    this.maxReconnectionAttempt = 3,
+    /// The default interval between keepalive signals when [pingKeepAlive] is
+    /// enabled. Represents in seconds. Defaults to `180`
+    int pingKeepAliveInterval = 180,
 
     /// Optional [io.SecurityContext] which is going to be used in socket
     /// connections
@@ -123,10 +98,47 @@ class Transport {
     bool Function(io.X509Certificate)? onBadCertificateCallback,
 
     /// Represents the duration in milliseconds for which the system will wait
-    /// for a connection to be established before raising a [TimeoutException].
+    /// for a connection to be established before raising a
+    /// [async.TimeoutException].
     ///
-    /// Defaults to 2000 milliseconds
-    this.connectionTimeout = 2000,
+    /// Defaults to `4000` milliseconds
+    int connectionTimeout = 4000,
+    required ReconnectionPolicy reconnectionPolicy,
+  }) {
+    if (_instance != null) return _instance!;
+    return _instance = Transport._internal(
+      host,
+      boundJID: boundJID,
+      port: port,
+      dnsService: dnsService,
+      useIPv6: useIPv6,
+      useTLS: useTLS,
+      disableStartTLS: disableStartTLS,
+      pingKeepAlive: pingKeepAlive,
+      pingKeepAliveInterval: pingKeepAliveInterval,
+      context: context,
+      onBadCertificateCallback: onBadCertificateCallback,
+      connectionTimeout: connectionTimeout,
+      reconnectionPolicy: reconnectionPolicy,
+    );
+  }
+
+  factory Transport.instance() => _instance!;
+
+  Transport._internal(
+    this.host, {
+    required int port,
+    required this.boundJID,
+    required String? dnsService,
+    required bool useIPv6,
+    required bool useTLS,
+    required bool disableStartTLS,
+    required this.pingKeepAlive,
+    required this.pingKeepAliveInterval,
+    required io.SecurityContext? context,
+    required bool Function(io.X509Certificate)? onBadCertificateCallback,
+    required this.connectionTimeout,
+    required ReconnectionPolicy reconnectionPolicy,
   }) {
     _port = port;
 
@@ -135,7 +147,7 @@ class Transport {
     _useIPv6 = useIPv6;
     _dnsService = dnsService;
 
-    endSessionOnDisconnect = false;
+    endSessionOnDisconnect = true;
 
     streamHeader = '<stream>';
     streamFooter = '<stream/>';
@@ -144,11 +156,13 @@ class Transport {
 
     _onBadCertificateCallback = onBadCertificateCallback;
 
+    _reconnectionPolicy = reconnectionPolicy;
+
     _setup();
   }
 
   /// The host that [Whixp] has to connect to.
-  final String _host;
+  final String host;
 
   /// The port that [Whixp] has to connect to.
   late int _port;
@@ -159,15 +173,11 @@ class Transport {
   /// The JabberID (JID) used by this connection, as set after session binding.
   ///
   /// This may even be a different bare JID than what was requested.
-  late JabberID boundJID;
+  JabberID? boundJID;
 
   /// Will hold host that [Whixp] is connected to and will work in the
   /// association of [SASL].
   late String serviceName;
-
-  /// The distinction between clients and components can be important, primarily
-  /// for choosing how to handle the `to` and `from` [JabberID]s of stanzas.
-  bool isComponent;
 
   /// [Connecta] instance that will be declared when there is a connection
   /// attempt to the server.
@@ -192,27 +202,24 @@ class Transport {
   /// a TLS connection on the client side.
   late bool _disableStartTLS;
 
-  /// Flag that indicates to if the session has been started or not.
-  late bool sessionStarted;
-
   /// If set to `true`, attempt to use IPv6.
   late bool _useIPv6;
 
   /// If `true`, periodically send a whitespace character over the wire to keep
   /// the connection alive.
-  final bool whitespaceKeepAlive;
+  final bool pingKeepAlive;
+
+  /// The default interval between keepalive signals when [pingKeepAliveInterval]
+  /// is enabled.
+  final int pingKeepAliveInterval;
 
   /// Controls if the session can be considered ended if the connection is
   /// terminated.
   late bool endSessionOnDisconnect;
 
-  /// The default interval between keepalive signals when [whitespaceKeepAlive]
-  /// is enabled.
-  final int whitespaceKeepAliveInterval;
-
-  /// Default [Timer] for [whitespaceKeepAliveInterval]. This will be assigned
-  /// when there is a [Timer] attached after connection established.
-  async.Timer? _whitespaceKeepAliveTimer;
+  /// Default [Timer] for [pingKeepAliveInterval]. This will be assigned when
+  /// there is a [Timer] attached after connection established.
+  async.Timer? _keepAliveTimer;
 
   /// The service name to check with DNS SRV records. For example, setting this
   /// to "xmpp-client" would query the "_xmpp-clilent._tcp" service.
@@ -222,34 +229,28 @@ class Transport {
   /// for a connection to be established before raising a [TimeoutException].
   final int connectionTimeout;
 
-  /// The maximum number of reconnection attempts that the [Transport] will
-  /// make in case the connection with the server is lost or cannot be
-  /// established initially. Defaults to 3.
-  late int maxReconnectionAttempt;
-
   /// Optional [io.SecurityContext] which is going to be used in socket
   /// connections.
   late io.SecurityContext? _context;
 
   /// [StreamController] for [_waitingQueue].
-  final _waitingQueueController =
-      async.StreamController<Tuple2<StanzaBase, bool>>.broadcast();
-  final _queuedStanzas = <Tuple2<StanzaBase, bool>>[];
-
-  late async.Completer<dynamic>? _runOutFilters;
+  late async.StreamController<Packet> _waitingQueueController;
+  final _queuedStanzas = <Packet>[];
 
   /// [Completer] of current connection attempt. After the connection, this
   /// [Completer] should be equal to null.
   async.Completer<void>? _currentConnectionAttempt;
 
-  /// Current connection attempt count. It works with [maxReconnectionAttempt].
-  int _currentConnectionAttemptCount = 0;
+  /// Actual [StreamParser] instance to manipulate incoming data from the
+  /// socket.
+  late StreamParser _parser;
 
-  /// This variable is used to keep track of stream header and footer. If stream
-  /// is opened without closing that, it will keep its state at "1". When there
-  /// is a closing tag, that means it should be equal to zero and close the
-  /// connection.
-  late int _xmlDepth;
+  /// [StreamParser] parser should add list of [StreamObject] to this
+  /// controller.
+  late async.StreamController<String> _streamController;
+
+  /// [StreamParser] parser will communicate with this [async.Stream];
+  late async.Stream<List<StreamObject>> _stream;
 
   /// [Iterator] of DNS results that have not yet been tried.
   Iterator<Tuple3<String, String, int>>? _dnsAnswers;
@@ -260,20 +261,13 @@ class Transport {
   /// The default closing tag for the stream element.
   late String streamFooter;
 
-  /// [Task] [List] to keep track of [Task]s that are going to be sent slowly.
-  final _slowTasks = <Task>[];
-
   /// [io.ConnectionTask] keeps current connection task and can be used to
   /// cancel if there is a need.
   io.ConnectionTask<io.Socket>? _connectionTask;
 
-  /// The backoff of the connection attempt (increases exponentially after each
-  /// failure). Represented in milliseconds;
-  late int _connectFutureWait;
-
   /// The event to trigger when the [_connect] succeeds. It can be "connected"
   /// or "tlsSuccess" depending on the step we are at.
-  late String _eventWhenConnected;
+  late TransportState _eventWhenConnected;
 
   /// The domain to try when querying DNS records.
   String _defaultDomain = '';
@@ -290,18 +284,6 @@ class Transport {
   /// Indicates to the default langauge of the last peer.
   String? peerDefaultLanguage;
 
-  /// List of [Handler]s.
-  final _handlers = <Handler>[];
-
-  /// List of [StanzaBase] stanzas that incoming stanzas can built from.
-  final _rootStanza = <StanzaBase>[];
-
-  /// Indicates session bind.
-  late bool sessionBind;
-
-  /// Used when wrapping incoming xml stream.
-  late bool _startStreamHandlerCalled;
-
   /// To avoid processing on bad certification you can use this callback.
   ///
   /// Passes [io.X509Certificate] instance when returning boolean value which
@@ -312,81 +294,75 @@ class Transport {
   /// the redirection (see-other-host).
   late int _redirectAttempts;
 
-  /// [Map] to keep "in", "out", and "outSync" type filters to use when there
-  /// is a need for stanza filtering.
-  final _filters = <FilterMode, List<Tuple2<SyncFilter?, AsyncFilter?>>>{};
+  /// Indicates if session is started or not.
+  bool _sessionStarted = false;
 
-  /// The reason why whixp disconnects from the server.
-  String? _disconnectReason;
+  /// Policy for reconnection, indicates delay between disconnection and
+  /// reconnection.
+  late final ReconnectionPolicy _reconnectionPolicy;
 
-  /// Indicates if stream compressed or not.
-  late bool streamCompressed;
+  /// The list of callbacks that will be triggered before the stanza send.
+  final callbacksBeforeStanzaSend =
+      <async.FutureOr<void> Function(dynamic data)>[];
 
   void _setup() {
     _reset();
 
-    addEventHandler<String>('disconnected', (_) {
-      if (_whitespaceKeepAliveTimer != null) {
-        _whitespaceKeepAliveTimer!.cancel();
+    _reconnectionPolicy.performReconnect = () async {
+      await _rescheduleConnectionAttempt();
+      emit<TransportState>('state', data: TransportState.reconnecting);
+    };
+
+    addEventHandler<TransportState>('state', (state) async {
+      if (state == TransportState.disconnected ||
+          state == TransportState.killed) {
+        if (_keepAliveTimer != null) {
+          Log.instance.warning('Stopping Ping keep alive...');
+          _keepAliveTimer?.cancel();
+        }
+        StreamFeatures.supported.clear();
+        await _waitingQueueController.close();
       }
-      _setDisconnected();
     });
-    addEventHandler('sessionStart', (_) {
+    addEventHandler('startSession', (_) async {
       _setSessionStart();
       _startKeepAlive();
+      _sessionStarted = true;
+      await _reconnectionPolicy.setShouldReconnect(true);
     });
+    addEventHandler('endSession', (_) => _sessionStarted = false);
+    addEventHandler('streamNegotiated', (_) => _parser.reset());
   }
 
   void _reset() {
     serviceName = '';
-    _address = Tuple2(_host, _port);
+    _address = Tuple2(host, _port);
 
     _eventius = Eventius();
 
-    sessionBind = false;
-    sessionStarted = false;
-    _startStreamHandlerCalled = false;
+    _keepAliveTimer = null;
 
-    _runOutFilters = null;
-
-    _whitespaceKeepAliveTimer = null;
-
-    _eventWhenConnected = 'connected';
+    _eventWhenConnected = TransportState.connected;
     _redirectAttempts = 0;
-    _connectFutureWait = 0;
-    _xmlDepth = 0;
 
     defaultNamespace = '';
 
-    _handlers.clear();
-    _rootStanza.clear();
-    _slowTasks.clear();
-
     defaultLanguage = null;
     peerDefaultLanguage = null;
-
-    _filters
-      ..clear()
-      ..addAll({
-        FilterMode.iN: <Tuple2<SyncFilter?, AsyncFilter?>>[],
-        FilterMode.out: <Tuple2<SyncFilter?, AsyncFilter?>>[],
-        FilterMode.outSync: <Tuple2<SyncFilter?, AsyncFilter?>>[],
-      });
 
     _connecta = null;
     _connectionTask = null;
 
     _scheduledEvents = <String, async.Timer>{};
-
-    streamCompressed = false;
   }
 
   /// Begin sending whitespace periodically to keep the connection alive.
   void _startKeepAlive() {
-    if (whitespaceKeepAlive) {
-      _whitespaceKeepAliveTimer = async.Timer.periodic(
-        Duration(seconds: whitespaceKeepAliveInterval),
-        (_) => sendRaw(''),
+    Log.instance.info('Starting Ping keep alive...');
+    if (pingKeepAlive) {
+      _keepAliveTimer = async.Timer.periodic(
+        Duration(seconds: pingKeepAliveInterval),
+        (_) => send(const SMRequest()),
       );
     }
   }
@@ -395,36 +371,72 @@ class Transport {
   ///
   /// The parameters needed to establish a connection in order are passed
   /// beforehand when creating [Transport] instance.
-  @internal
   void connect() {
-    if (_runOutFilters == null || _runOutFilters!.isCompleted) {
-      _runOutFilters = async.Completer<dynamic>()..complete(runFilters());
-    }
+    _waitingQueueController = async.StreamController<Packet>.broadcast();
+    callbacksBeforeStanzaSend.clear();
 
-    _disconnectReason = null;
+    _run();
     _cancelConnectionAttempt();
-    _connectFutureWait = 0;
 
-    _defaultDomain = _address.value1;
+    _defaultDomain = _address.firstValue;
 
-    emit('connecting');
+    emit<TransportState>('state', data: TransportState.connecting);
     _currentConnectionAttempt = async.Completer()..complete(_connect());
   }
 
-  Future<void> _connect() async {
-    _currentConnectionAttemptCount++;
-    _eventWhenConnected = 'connected';
+  void _initParser() {
+    _parser = StreamParser();
+    _streamController = async.StreamController<String>();
+    _stream = _streamController.stream.transform(_parser);
+    _stream.listen((objects) async {
+      for (final object in objects) {
+        if (object is StreamHeader) {
+          startStreamHandler(object.attributes);
+        } else if (object is StreamElement) {
+          final element = object.element;
+          if (element.getAttribute('xmlns') == null) {
+            if (element.localName == 'message' ||
+                element.localName == 'presence' ||
+                element.localName == 'iq') {
+              element.setAttribute('xmlns', WhixpUtils.getNamespace('CLIENT'));
+            } else {
+              element.setAttribute(
+                'xmlns',
+                WhixpUtils.getNamespace('JABBER_STREAM'),
+              );
+            }
+          }
 
-    if (_connectFutureWait > 0) {
-      await Future.delayed(Duration(seconds: _connectFutureWait));
+          await _spawnEvent(element);
+        } else {
+          Log.instance.info('End of stream received.');
+          abort();
+        }
+      }
+    });
+  }
+
+  Future<void> _connect() async {
+    _eventWhenConnected = TransportState.connected;
+    _initParser();
+
+    await _reconnectionPolicy.reset();
+    await _reconnectionPolicy.setShouldReconnect(true);
+    _parser.reset();
+
+    Tuple3<String, String, int>? record;
+
+    try {
+      record = await _pickDNSAnswer(_defaultDomain, service: _dnsService);
+    } on async.TimeoutException catch (error) {
+      Log.instance.warning('Could not pick any SRV record');
+      await _handleError(error);
     }
 
-    final record = await _pickDNSAnswer(_defaultDomain, service: _dnsService);
-
     if (record != null) {
-      final host = record.value1;
-      final address = record.value2;
-      final port = record.value3;
+      final host = record.firstValue;
+      final address = record.secondValue;
+      final port = record.thirdValue;
 
       _address = Tuple2(address, port);
       serviceName = host;
@@ -435,122 +447,148 @@ class Transport {
     if (_useTLS) {
       _connecta = Connecta(
         ConnectaToolkit(
-          hostname: _address.value1,
-          port: _address.value2,
+          hostname: _address.firstValue,
+          port: _address.secondValue,
           context: _context,
           timeout: connectionTimeout,
           connectionType: ConnectionType.tls,
           onBadCertificateCallback: _onBadCertificateCallback,
-          supportedProtocols: ['xmpp'],
+          supportedProtocols: ['TLSv1.2', 'TLSv1.3'],
         ),
       );
     } else {
       _connecta = Connecta(
         ConnectaToolkit(
-          hostname: _address.value1,
-          port: _address.value2,
+          hostname: _address.firstValue,
+          port: _address.secondValue,
           timeout: connectionTimeout,
           context: _context,
           onBadCertificateCallback: _onBadCertificateCallback,
           connectionType: _disableStartTLS
               ? ConnectionType.tcp
               : ConnectionType.upgradableTcp,
-          supportedProtocols: ['xmpp'],
+          supportedProtocols: ['TLSv1.2', 'TLSv1.3'],
         ),
       );
     }
 
     try {
       Log.instance.info(
-        'Trying to connect to ${_address.value1} on port ${_address.value2}',
+        'Trying to connect to ${_address.firstValue} on port ${_address.secondValue}',
       );
 
       _connectionTask = await _connecta!.createTask(
         ConnectaListener(
           onData: _dataReceived,
-          onError: (error, trace) async {
+          onError: (exception, trace) async {
             Log.instance.error(
               'Connection error occured.',
-              error: error,
+              exception: exception,
               stackTrace: trace as StackTrace,
             );
-            final result = _rescheduleConnectionAttempt();
-            if (!result) {
-              await disconnect(consume: false);
-            }
+            await _handleError(exception);
           },
           onDone: _connectionLost,
           combineWhile: _combineWhile,
         ),
       );
 
-      _connectionMade();
-    } on ConnectaException catch (error) {
-      emit<Object>('connectionFailed', data: error.message);
-      final result = _rescheduleConnectionAttempt();
-      if (!result) {
-        await disconnect(consume: false);
-      }
+      await _connectionMade();
     } on Exception catch (error) {
-      emit<Object>('connectionFailed', data: error);
-      final result = _rescheduleConnectionAttempt();
-      if (!result) {
-        await disconnect(consume: false);
-      }
+      await _handleError(error, connectionFailure: true);
+      return;
     }
 
     _isConnectionSecured = _connecta!.isConnectionSecure;
   }
 
-  /// Called when the TCP connection has been established with the server.
-  void _connectionMade([bool clearAnswers = false]) {
-    emit(_eventWhenConnected);
-    _currentConnectionAttempt = null;
-    sendRaw(streamHeader);
-    _initParser();
-    if (clearAnswers) {
-      _dnsAnswers = null;
+  Future<void> _handleError(
+    dynamic exception, {
+    bool connectionFailure = false,
+  }) async {
+    if (exception is Exception) {
+      if (exception is ConnectaException) {
+        emit<Object>('connectionFailure', data: exception.message);
+      } else {
+        emit<Object>('connectionFailure', data: exception);
+      }
     }
+    if (connectionFailure) {
+      emit<TransportState>('state', data: TransportState.connectionFailure);
+    }
+
+    if (!(_currentConnectionAttempt?.isCompleted ?? false)) {
+      await disconnect(consume: false, sendFooter: false);
+      _currentConnectionAttempt = null;
+      try {
+        _connecta?.destroy();
+      } catch (_) {}
+      return;
+    }
+
+    if (await _reconnectionPolicy.canTriggerFailure()) {
+      await _reconnectionPolicy.onFailure();
+    } else {
+      Log.instance.warning('Reconnection is not set');
+    }
+  }
+
+  Future<void> _rescheduleConnectionAttempt() async {
+    if (_currentConnectionAttempt == null) {
+      Log.instance.warning('Current connection attempt is null, aborting...');
+      return;
+    }
+
+    _currentConnectionAttempt = async.Completer()..complete(_connect());
+    return;
+  }
+
+  /// Called when the TCP connection has been established with the server.
+  Future<void> _connectionMade([bool clearAnswers = false]) async {
+    emit<TransportState>('state', data: _eventWhenConnected);
+    _currentConnectionAttempt = null;
+
+    sendRaw(streamHeader);
+
+    await _reconnectionPolicy.onSuccess();
+    if (clearAnswers) _dnsAnswers = null;
   }
 
   /// On any kind of disconnection, initiated by us or not. This signals the
   /// closure of connection.
-  void _connectionLost() {
-    Log.instance.info('Connection lost.');
-    _connecta = null;
+  Future<void> _connectionLost() async {
+    Log.instance.warning('Connection lost');
 
     if (endSessionOnDisconnect) {
-      emit('sessionEnd');
-      Log.instance.debug('Cancelling slow send tasks.');
-      for (final task in _slowTasks) {
-        task.voided;
-      }
-      _slowTasks.clear();
+      emit('endSession');
+      Log.instance.debug('Session ended');
     }
-    _setDisconnected();
-    emit<String>('disconnected', data: _disconnectReason);
+    await disconnect(sendFooter: false);
   }
 
   /// Performs a handshake for TLS.
   ///
   /// If the handshake is successful, the XML stream will need to be restarted.
-  @internal
   Future<bool> startTLS() async {
     if (_connecta == null) return false;
+
     if (_disableStartTLS) {
       Log.instance.info('Disable StartTLS is enabled.');
       return false;
     }
-    _eventWhenConnected = 'tlsSuccess';
+    _eventWhenConnected = TransportState.tlsSuccess;
     try {
       await _connecta!.upgradeConnection(
         listener: ConnectaListener(
           onData: _dataReceived,
-          onError: (error, trace) => Log.instance.error(
-            'Connection error occured.',
-            error: error,
-            stackTrace: trace as StackTrace,
-          ),
+          onError: (exception, trace) async {
+            Log.instance.error(
+              'Connection error occured.',
+              exception: exception,
+              stackTrace: trace as StackTrace,
+            );
+            await _handleError(exception, connectionFailure: true);
+          },
           onDone: _connectionLost,
           combineWhile: _combineWhile,
         ),
@@ -572,23 +610,10 @@ class Transport {
   /// Combines while the given condition is true. Works with [Connecta].
   bool _combineWhile(List<int> bytes) {
     const messageEof = <String>{'</iq>'};
-    late String data;
-    if (streamCompressed) {
-      final List<int> decompressed;
-      try {
-        decompressed = io.zlib.decode(bytes);
-      } on Exception {
-        return false;
-      }
-      data = memo0<String>(() => WhixpUtils.unicode(decompressed)).call();
-    } else {
-      data = memo0<String>(() => WhixpUtils.unicode(bytes)).call();
-    }
+    final data = WhixpUtils.unicode.call(bytes);
 
     for (final eof in messageEof) {
-      if (data.endsWith(eof)) {
-        return true;
-      }
+      if (data.endsWith(eof)) return true;
     }
 
     return false;
@@ -597,263 +622,49 @@ class Transport {
   /// Called when incoming data is received on the socket. We feed that data
   /// to the parser and then see if this produced any XML event. This could
   /// trigger one or more event.
-  Future<void> _dataReceived(List<int> bytes) async {
-    bool wrapped = false;
-    late String data;
-    if (streamCompressed) {
-      late List<int> decompressed;
-      try {
-        decompressed = io.zlib.decode(bytes);
-      } on Exception {
-        decompressed = bytes;
-      }
-      data = memo0<String>(() => WhixpUtils.unicode(decompressed)).call();
-    } else {
-      data = memo0<String>(() => WhixpUtils.unicode(bytes)).call();
-    }
-    if (data.contains('<stream:stream') && !data.contains('</stream:stream>')) {
-      data = _streamWrapper(data);
-      wrapped = true;
-    }
-
-    void onStartElement(parser.XmlStartElementEvent event) {
-      if (event.isSelfClosing ||
-          (event.name == 'stream:stream' && _startStreamHandlerCalled)) return;
-      if (_xmlDepth == 0) {
-        /// We have received the start of the root element.
-        Log.instance.info('RECEIVED: $data');
-        _disconnectReason = 'End of the stream';
-        startStreamHandler(event.attributes);
-        _startStreamHandlerCalled = true;
-      }
-      _xmlDepth++;
-    }
-
-    Future<void> onEndElement(parser.XmlEndElementEvent event) async {
-      if (event.name == 'stream:stream' && wrapped) return;
-      _xmlDepth--;
-      if (_xmlDepth == 0) {
-        /// The stream's root element has closed, terminating the stream.
-        Log.instance.info('End of stream received.');
-        abort();
-        return;
-      } else if (_xmlDepth == 1) {
-        int index = data.lastIndexOf('<${event.name}');
-
-        if (index > event.stop!) {
-          index = data.indexOf('<${event.name}');
-        }
-
-        final substring = data.substring(index, event.stop);
-        if (substring.isEmpty) return;
-
-        late xml.XmlElement element;
-        try {
-          element = xml.XmlDocument.parse(substring).rootElement;
-        } on Exception {
-          final fallbackSubstring =
-              data.substring(data.indexOf('<${event.name}'), event.stop);
-          try {
-            element = xml.XmlDocument.parse(fallbackSubstring).rootElement;
-          } on Exception {
-            return;
-          }
-        }
-
-        if (element.getAttribute('xmlns') == null) {
-          if (element.localName == 'message' ||
-              element.localName == 'presence' ||
-              element.localName == 'iq') {
-            element.setAttribute('xmlns', WhixpUtils.getNamespace('CLIENT'));
-          } else {
-            element.setAttribute(
-              'xmlns',
-              WhixpUtils.getNamespace('JABBER_STREAM'),
-            );
-          }
-        }
-        await _spawnEvent(element);
-      }
-    }
-
-    Stream.value(data)
-        .toXmlEvents(withLocation: true)
-        .normalizeEvents()
-        .tapEachEvent(
-          onStartElement: onStartElement,
-          onEndElement: onEndElement,
-        )
-        .listen((events) async {
-      if (events.length == 1) {
-        final event = events.first;
-        if (event is parser.XmlStartElementEvent &&
-            event.name == 'stream:stream') {
-          abort();
-          return;
-        } else if (event is parser.XmlEndElementEvent &&
-            event.name == 'stream:stream') {
-          abort();
-          return;
-        }
-      }
-      if (events.length == 1) {
-        final element = xml.XmlDocument.parse(data).rootElement;
-        await _spawnEvent(element);
-      }
-    });
-  }
-
-  /// Helper method to wrap the incoming stanza in order not to get parser
-  /// error.
-  String _streamWrapper(String data) {
-    if (data.contains('<stream:stream')) {
-      return '$data</stream:stream>';
-    }
-    return data;
+  void _dataReceived(List<int> bytes) {
+    final data = WhixpUtils.unicode(bytes);
+    _streamController.add(data);
   }
 
   /// Analyze incoming XML stanzas and convert them into stanza objects if
-  /// applicable and queue steram events to be processed by matching handlers.
+  /// applicable and queue stream events to be processed by matching handlers.
   Future<void> _spawnEvent(xml.XmlElement element) async {
     final stanza = _buildStanza(element);
 
-    bool handled = false;
-    final handlers = <Handler>[];
-    for (final handler in _handlers) {
-      if (handler.match(stanza)) {
-        handlers.add(handler);
-      }
-    }
+    Router.route(stanza);
 
     Log.instance.debug('RECEIVED: $element');
 
-    for (final handler in handlers) {
-      try {
-        await handler.run(stanza);
-      } on Exception catch (excp) {
-        stanza.exception(excp);
-      }
-      handled = true;
-    }
-
-    if (!handled) {
-      stanza.unhandled(this);
+    /// If the session is started and the upcoming stanza is one of these types,
+    /// then increase inbound count for SM.
+    if (stanza is IQ || stanza is Message || stanza is Presence) {
+      if (_sessionStarted) emit('increaseHandled');
     }
   }
 
   /// Create a stanza object from a given XML object.
   ///
   /// If a specialized stanza type is not found for the XML, then a generic
-  /// [StanzaBase] stanza will be returned.
-  StanzaBase _buildStanza(xml.XmlElement element) {
-    StanzaBase stanzaClass = StanzaBase(element: element, receive: true);
-
-    final tag = '{${element.getAttribute('xmlns')}}${element.localName}';
-
-    for (final stanza in _rootStanza) {
-      if (tag == stanza.tag) {
-        stanzaClass = stanza.copy(element: element, receive: true);
-        break;
-      }
-    }
-    if (stanzaClass['lang'] == null && peerDefaultLanguage != null) {
-      stanzaClass['lang'] = peerDefaultLanguage;
-    }
-    return stanzaClass;
-  }
-
-  Future<void> _slowSend(
-    Task task,
-    Set<Tuple2<SyncFilter?, AsyncFilter?>> alreadyUsed,
-  ) async {
-    final completer = async.Completer<dynamic>();
-    completer.complete(task.run());
-
-    final data = await completer.future;
-    _slowTasks.remove(task);
-    if (data == null && !completer.isCompleted) {
-      return;
-    }
-    for (final filter in _filters[FilterMode.out]!) {
-      if (alreadyUsed.contains(filter)) {
-        continue;
-      }
-      if (filter.value2 != null) {
-        completer.complete(filter.value2!.call(data as StanzaBase));
-      } else {
-        completer.complete(filter.value1?.call(data as StanzaBase));
-      }
-      if (data == null) {
-        return;
-      }
-    }
-  }
+  /// [Stanza] stanza will be returned.
+  Packet _buildStanza(xml.XmlElement node) =>
+      XMLParser.nextPacket(node, namespace: node.getAttribute('xmlns'));
 
   /// Background [Stream] that processes stanzas to send.
-  @internal
-  Future<void> runFilters() async {
-    _waitingQueueController.stream.listen((data) async {
-      StanzaBase datum = data.value1;
-      final useFilters = data.value2;
-      if (useFilters) {
-        final alreadyRunFilters = <Tuple2<SyncFilter?, AsyncFilter?>>{};
-        for (final filter in _filters[FilterMode.out]!) {
-          alreadyRunFilters.add(filter);
-          if (filter.value2 != null) {
-            final task = Task(() => filter.value2!.call(data.value1));
-            try {
-              datum = await task.timeout(const Duration(seconds: 1)).run();
-            } on async.TimeoutException {
-              /// Handle the case where the timeout occurred
-              Log.instance.error('Slow Future, rescheduling filters...');
-
-              _slowSend(task, alreadyRunFilters);
-            }
-          } else {
-            datum = filter.value1!.call(datum);
-          }
+  void _run() => _waitingQueueController.stream.listen((data) async {
+        for (final callback in callbacksBeforeStanzaSend) {
+          await callback.call(data);
         }
-      }
-
-      if (useFilters) {
-        for (final filter in _filters[FilterMode.outSync]!) {
-          filter.value1!.call(datum);
-        }
-
-        final rawData = datum.toString();
-
-        sendRaw(rawData);
-      }
-    });
-  }
-
-  /// Init the XML parser. The parser must always be reset for each new
-  /// connection.
-  void _initParser() {
-    _xmlDepth = 0;
-    _startStreamHandlerCalled = false;
-  }
+        sendRaw(data.toXMLString());
+      });
 
   /// Forcibly close the connection.
   void abort() {
     if (_connecta != null) {
-      _connecta!.destroy();
-      emit('killed');
+      _connecta?.destroy();
+      emit<TransportState>('state', data: TransportState.killed);
       _cancelConnectionAttempt();
     }
-  }
-
-  /// Calls disconnect(), and once we are disconnected (after the timeout, or
-  /// when the server ack is received), call connect().
-  void reconnect() {
-    Log.instance.info('Reconnecting...');
-    Future<void> handler(String? data) async {
-      await Future.delayed(Duration.zero);
-      connect();
-    }
-
-    _eventius.once<String>('disconnected', handler);
-    disconnect(consume: false);
   }
 
   /// Close the XML stream and wait for ack from the server for at most
@@ -861,105 +672,40 @@ class Transport {
   /// without a response from the server, or when the server successfully
   /// responds with a closure of its own stream, abort() is called.
   Future<void> disconnect({
-    String? reason,
     int timeout = 2000,
     bool consume = true,
+    bool sendFooter = true,
   }) async {
-    Log.instance.warning('Disconnect method is called.');
-
-    /// Run abort() if we do not received the disconnected event after a
-    /// waiting time.
-    ///
-    /// Timeout defaults to 2000 milliseconds.
-    Future<void> endStreamWait() async {
-      try {
-        sendRaw(streamFooter);
-        await _waitUntil('disconnected', timeout: timeout);
-      } on async.TimeoutException {
-        abort();
-      }
-    }
+    Log.instance.warning('Disconnect method is called');
+    if (sendFooter) sendRaw(streamFooter);
 
     Future<void> consumeSend() async {
       try {
         await _waitingQueueController.done
             .timeout(Duration(milliseconds: timeout));
-      } on async.TimeoutException {
-        /// pass;
+      } on Exception {
+        /// pass
+      } finally {
+        _connecta?.destroy();
+        _cancelConnectionAttempt();
+        emit<TransportState>('state', data: TransportState.disconnected);
       }
-      _disconnectReason = reason;
-      await endStreamWait();
     }
 
     if (_connecta != null && consume) {
-      _disconnectReason = reason;
-      await consumeSend();
-
-      return _cancelConnectionAttempt();
+      return consumeSend();
     } else {
-      emit<String>('disconnected', data: reason);
-      return;
+      emit<TransportState>('state', data: TransportState.disconnected);
+      return _connecta?.destroy();
     }
   }
-
-  /// Utility method to wake on the next firing of an event.
-  Future<dynamic> _waitUntil(String event, {int timeout = 15000}) async {
-    final completer = async.Completer<dynamic>();
-
-    void handler(String? data) {
-      if (completer.isCompleted) {
-        Log.instance
-            .debug('Completer registered on event "$event" is already done.');
-      } else {
-        completer.complete(data);
-      }
-    }
-
-    addEventHandler<String>(event, handler, once: true);
-
-    /// Emit disconnected while consuming.
-    emit<String>('disconnected');
-
-    return completer.future.timeout(Duration(milliseconds: timeout));
-  }
-
-  /// Adds a stanza class as a known root stanza.
-  ///
-  /// A root stanza is one that appears as a direct child of the stream's root
-  /// element.
-  ///
-  /// Stanzas that appear as substanzas of a root stanza do not need to be
-  /// registered here. That is done using [registerPluginStanza] from [XMLBase].
-  void registerStanza(StanzaBase stanza) => _rootStanza.add(stanza);
-
-  /// Removes a stanza from being a known root stanza.
-  ///
-  /// A root stanza is one that appears as a direct child of the stream's root
-  /// element.
-  ///
-  /// Stanzas that are not registered will not be converted into stanza objects,
-  /// but may still be processed using handlers and matchers.
-  void removeStanza(StanzaBase stanza) => _rootStanza.remove(stanza);
 
   /// Add a stream event handler that will be executed when a matching stanza
   /// is received.
-  void registerHandler(Handler handler) {
-    if (handler.transport == null) {
-      handler.transport = this;
-      _handlers.add(handler);
-    }
-  }
+  void registerHandler(Handler handler) => Router.addHandler(handler);
 
   /// Removes any transport callback handlers with the given [name].
-  bool removeHandler(String name) {
-    for (final handler in _handlers) {
-      if (handler.name == name) {
-        _handlers.remove(handler);
-        return true;
-      }
-    }
-    return false;
-  }
+  void removeHandler(String name) => Router.removeHandler(name);
 
   /// Triggers a custom [event] manually.
   async.FutureOr<void> emit<T>(String event, {T? data}) async =>
@@ -967,7 +713,6 @@ class Transport {
 
   /// Adds a custom [event] handler that will be executed whenever its event is
   /// manually triggered. Works with [Eventius] instance.
-  @internal
   void addEventHandler<B>(
     String event,
     async.FutureOr<void> Function(B? data) listener, {
@@ -1043,29 +788,16 @@ class Transport {
   /// Immediately cancel the current [connect] [Future].
   void _cancelConnectionAttempt() {
     _currentConnectionAttempt = null;
-    if (_connectionTask != null) {
-      _connectionTask!.cancel();
-    }
-    _currentConnectionAttemptCount = 0;
+    _connectionTask?.cancel();
     _connecta = null;
-  }
-
-  bool _rescheduleConnectionAttempt() {
-    if (_currentConnectionAttempt == null ||
-        (maxReconnectionAttempt <= _currentConnectionAttemptCount)) {
-      return false;
-    }
-    _connectFutureWait = math.min(300, _connectFutureWait * 2 + 1);
-    _currentConnectionAttempt = async.Completer()..complete(_connect());
-    return true;
+    _sessionStarted = false;
   }
 
   /// Performs any initialization actions, such as handshakes, once the stream
   /// header has been sent.
   ///
   /// Must be overrided.
-  late void Function([List<parser.XmlEventAttribute>? attributes])
-      startStreamHandler;
+  late void Function(Map<String, String> attributes) startStreamHandler;
 
   /// Pick a server and port from DNS answers.
   ///
@@ -1078,16 +810,26 @@ class Transport {
     String domain, {
     String? service,
   }) async {
-    Log.instance.warning('DNS: Use of IPv6 has been disabled.');
-
     ResolveResponse? response;
     final srvs = <SRVRecord>[];
     final results = <Tuple3<String, String, int>>[];
 
     if (service != null) {
-      response = await DNSolve()
-          .lookup('_$service._tcp.$domain', type: RecordType.srv)
-          .timeout(Duration(milliseconds: connectionTimeout));
+      try {
+        response = await DNSolve()
+            .lookup('_$service._tcp.$domain', type: RecordType.srv)
+            .timeout(
+          Duration(milliseconds: connectionTimeout),
+          onTimeout: () {
+            throw async.TimeoutException(
+              'Connection timed out',
+              Duration(milliseconds: connectionTimeout),
+            );
+          },
+        );
+      } catch (_) {
+        /// pass
+      }
     }
 
     if (response != null &&
@@ -1131,16 +873,29 @@ class Transport {
     }
 
     if (_useIPv6) {
-      response = await DNSolve().lookup(domain, type: RecordType.aaaa);
+      try {
+        response = await DNSolve().lookup(domain, type: RecordType.aaaa);
+      } catch (_) {
+        Log.instance.warning(
+          'DNS lookup: Failed to parse IPv6 records for $domain, processing with provided record',
+        );
+        return null;
+      }
     } else {
-      response = await DNSolve().lookup(domain);
+      Log.instance.warning('DNS lookup: Use of IPv6 has been disabled');
+      try {
+        response = await DNSolve().lookup(domain);
+      } catch (_) {
+        Log.instance.warning(
+          'DNS lookup: Failed to parse records for $domain, processing with provided record',
+        );
+        return null;
+      }
     }
 
     if (response.answer != null && response.answer!.records != null) {
       for (final record in response.answer!.records!) {
-        results.add(
-          Tuple3(domain, record.name, _address.value2),
-        );
+        results.add(Tuple3(domain, record.name, _address.secondValue));
       }
     }
 
@@ -1157,8 +912,10 @@ class Transport {
     return null;
   }
 
-  @internal
-  void handleStreamError(String otherHost, {int maxRedirects = 5}) {
+  Future<void> handleStreamError(
+    String otherHost, {
+    int maxRedirects = 5,
+  }) async {
     if (_redirectAttempts > maxRedirects) {
       return;
     }
@@ -1182,101 +939,110 @@ class Transport {
     _address = Tuple2(host, port);
     _defaultDomain = host;
     _dnsAnswers = null;
-    reconnect();
-  }
-
-  /// Add a filter for incoming or outgoing stnzas.
-  ///
-  /// These filters are applied before incoming stanzas are passed to any
-  /// handlers, and before outgoing stanzas are put in the send queue.
-  ///
-  /// [mode] can be "iN", "out", and "outSync". Either sync or async filter
-  /// can be passed at the same time. You can not assign two type filters once.
-  void addFilter({
-    FilterMode mode = FilterMode.iN,
-    SyncFilter? filter,
-    AsyncFilter? asyncFilter,
-  }) {
-    if (filter != null) {
-      _filters[mode]!.add(Tuple2(filter, null));
-    } else if (asyncFilter != null) {
-      _filters[mode]!.add(Tuple2(null, asyncFilter));
-    }
-  }
-
-  /// Removes an incoming or outgoing filter.
-  void removeFilter({
-    FilterMode mode = FilterMode.iN,
-    SyncFilter? filter,
-    AsyncFilter? asyncFilter,
-  }) {
-    if (_filters[mode] != null) {
-      _filters[mode]!.remove(Tuple2(filter, asyncFilter));
-    }
   }
 
   /// Wraps basic send method declared in this class privately. Helps to send
-  /// [StanzaBase] objects.
-  void send(StanzaBase data, {bool useFilters = true}) {
-    if (!sessionStarted) {
+  /// [Extension] objects.
+  void send(Packet data) {
+    if (!_sessionStarted) {
       bool passthrough = false;
 
-      if (data is RootStanza && !passthrough) {
-        if (data.getPlugin('bind', check: true) != null) {
+      if (!passthrough) {
+        if (data.name.startsWith('sasl') ||
+            data.name.startsWith('sm') ||
+            data is IQ) {
           passthrough = true;
-        } else if (data.getPlugin('session', check: true) != null) {
-          passthrough = true;
-        } else if (data.getPlugin('register', check: true) != null) {
-          passthrough = true;
+        } else {
+          switch (data.name) {
+            case 'proceed':
+              passthrough = true;
+            case 'bind':
+              passthrough = true;
+            case 'session':
+              passthrough = true;
+            case 'register':
+              passthrough = true;
+          }
         }
-      } else if (data is Handshake) {
-        passthrough = true;
       }
 
-      if (data is RootStanza && !passthrough) {
-        _queuedStanzas.add(Tuple2(data, useFilters));
-        return;
-      }
+      if (!passthrough) return _queuedStanzas.add(data);
     }
-    _waitingQueueController.add(Tuple2(data, useFilters));
+
+    _waitingQueueController.add(data);
+  }
+
+  Future<Packet?> sendAwait<S, F>(
+    String handlerName,
+    Packet data,
+    String successPacket, {
+    int timeout = 3,
+    String? failurePacket,
+  }) async {
+    final completer = async.Completer<Packet?>();
+
+    final handler = Handler(
+      handlerName,
+      (stanza) async {
+        if (stanza is S) {
+          await Future.microtask(() {
+            if (!completer.isCompleted) completer.complete(stanza);
+          }).timeout(Duration(seconds: timeout));
+          removeHandler(handlerName);
+        } else if (stanza is F) {
+          await Future.microtask(() {
+            if (!completer.isCompleted) completer.complete(null);
+          }).timeout(Duration(seconds: timeout));
+          removeHandler(handlerName);
+        }
+      },
+    );
+
+    if (failurePacket?.isNotEmpty ?? false) {
+      handler.sf(Tuple2(successPacket, failurePacket!));
+    } else {
+      handler.packet(successPacket);
+    }
+
+    registerHandler(handler);
+
+    void callbackTimeout() {
+      async.runZonedGuarded(
+        () {
+          if (!completer.isCompleted) {
+            completer.complete(null);
+            throw StanzaException.timeout(null);
+          }
+        },
+        (error, trace) => Log.instance.warning(error.toString()),
+      );
+      removeHandler(handlerName);
+    }
+
+    schedule(handlerName, callbackTimeout, seconds: timeout);
+    send(data);
+
+    return synchronized(() => completer.future);
   }
 
   /// Send raw data accross the socket.
   ///
   /// [data] can be either [List] of integers or [String].
-  void sendRaw(dynamic data) {
-    List<int> rawData;
-    if (data is String) {
-      rawData = WhixpUtils.utf8Encode(data);
-    } else if (data is List<int>) {
-      rawData = data;
-    } else {
-      throw ArgumentError(
-        'Passed data to be sent is neither List<int> nor String',
-      );
-    }
+  void sendRaw(String data) {
+    final raw = WhixpUtils.utf8Encode(data);
 
-    Log.instance.debug('SEND: ${WhixpUtils.unicode(rawData)}');
+    Log.instance.debug('SEND: ${WhixpUtils.unicode(raw)}');
 
-    if (_connecta != null) {
-      if (streamCompressed) {
-        _connecta!.send(io.zlib.encode(rawData));
-      } else {
-        _connecta!.send(rawData);
-      }
-    }
+    if (_connecta != null) _connecta?.send(raw);
   }
 
   /// On session start, queue all pending stanzas to be sent.
   void _setSessionStart() {
-    sessionStarted = true;
     for (final stanza in _queuedStanzas) {
       _waitingQueueController.add(stanza);
     }
     _queuedStanzas.clear();
   }
-
-  void _setDisconnected() => sessionStarted = false;
 
   /// Host and port keeper. First value refers to host and the second to port.
   Tuple2<String, int> get address => _address;
