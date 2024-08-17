@@ -1,267 +1,185 @@
-part of 'dataforms.dart';
+part of 'form.dart';
 
-class FormField extends XMLBase {
-  FormField({
-    super.pluginTagMapping,
-    super.pluginAttributeMapping,
-    super.getters,
-    super.setters,
-    super.deleters,
-    super.element,
-    super.parent,
-  }) : super(
-          name: 'field',
-          namespace: WhixpUtils.getNamespace('FORMS'),
-          includeNamespace: false,
-          pluginAttribute: 'field',
-          pluginMultiAttribute: 'fields',
-          interfaces: {
-            'answer',
-            'desc',
-            'required',
-            'value',
-            'label',
-            'type',
-            'var',
-          },
-          subInterfaces: {'desc'},
-        ) {
-    addGetters(<Symbol, dynamic Function(dynamic args, XMLBase base)>{
-      const Symbol('answer'): (args, base) => answer,
-      const Symbol('options'): (args, base) => options,
-      const Symbol('required'): (args, base) => required,
-    });
+/// Represents a field that can be used in a form.
+class Field {
+  /// Default constructor for creating a [Field] object.
+  Field({
+    this.variable,
+    this.label,
+    this.description,
+    this.required = false,
+    this.type,
+    List<String>? values,
+    List<FieldOption>? options,
+  }) {
+    this.values = values ?? <String>[];
+    this.options = options ?? <FieldOption>[];
+  }
 
-    addSetters(
-      <Symbol, void Function(dynamic value, dynamic args, XMLBase base)>{
-        const Symbol('type'): (value, args, base) => setType(value as String),
-        const Symbol('answer'): (value, args, base) =>
-            setAnswer(value as String),
-        const Symbol('false'): (value, args, base) => setFalse(),
-        const Symbol('options'): (value, args, base) =>
-            setOptions(value as List),
-        const Symbol('required'): (value, args, base) =>
-            setRequired(value as bool),
-        const Symbol('true'): (value, args, base) => setTrue(),
-        const Symbol('value'): (value, args, base) => setValue(value),
+  /// The variable associated with the field.
+  final String? variable;
+
+  /// The label of the field.
+  final String? label;
+
+  /// The description of the field.
+  final String? description;
+
+  /// Indicates whether the field is required or not.
+  final bool required;
+
+  /// The type of the field.
+  final FieldType? type;
+
+  /// A list of possible values for the field.
+  List<String> values = [];
+
+  /// A list of options for the field.
+  List<FieldOption> options = [];
+
+  /// Factory constructor to create a [Field] object from an XML element.
+  factory Field.fromXML(xml.XmlElement node) {
+    String? variable;
+    String? label;
+    FieldType? type;
+    String? description;
+    final values = <String>[];
+    bool required = false;
+    final options = <FieldOption>[];
+
+    for (final attribute in node.attributes) {
+      switch (attribute.localName) {
+        case 'var':
+          variable = attribute.value;
+        case 'label':
+          label = attribute.value;
+        case 'type':
+          switch (attribute.value) {
+            case "boolean":
+              type = FieldType.boolean;
+            case "fixed":
+              type = FieldType.fixed;
+            case "hidden":
+              type = FieldType.hidden;
+            case "jid-multi":
+              type = FieldType.jidMulti;
+            case "jid-single":
+              type = FieldType.jidSingle;
+            case "list-multi":
+              type = FieldType.listMulti;
+            case "list-single":
+              type = FieldType.listSingle;
+            case "text-multi":
+              type = FieldType.textMulti;
+            case "text-private":
+              type = FieldType.textPrivate;
+            case "text-single":
+              type = FieldType.textSingle;
+          }
+      }
+    }
+
+    for (final child in node.children.whereType<xml.XmlElement>()) {
+      switch (child.localName) {
+        case 'desc':
+          description = child.innerText;
+        case 'value':
+          values.add(child.innerText);
+        case 'required':
+          required = true;
+        case 'option':
+          options.add(FieldOption.fromXML(child));
+      }
+    }
+
+    return Field(
+      variable: variable,
+      label: label,
+      description: description,
+      required: required,
+      type: type,
+      values: values,
+      options: options,
+    );
+  }
+
+  /// Converts the [Field] object to an XML element.
+  xml.XmlElement toXML() {
+    final builder = WhixpUtils.makeGenerator();
+    final dictionary = HashMap<String, String>();
+
+    if (variable?.isNotEmpty ?? false) dictionary['var'] = variable!;
+    if (label?.isNotEmpty ?? false) dictionary['label'] = label!;
+    if (type != null) dictionary['type'] = _enum2String(type!);
+
+    builder.element(
+      'field',
+      attributes: dictionary,
+      nest: () {
+        if (description?.isNotEmpty ?? false) {
+          builder.element('desc', nest: () => builder.text(description!));
+        }
+        if (values.isNotEmpty) {
+          for (final value in values) {
+            builder.element('value', nest: () => builder.text(value));
+          }
+        }
+        if (required) builder.element('required');
       },
     );
 
-    addDeleters(<Symbol, void Function(dynamic args, XMLBase base)>{
-      const Symbol('options'): (args, base) => deleteOptions(),
-      const Symbol('required'): (args, base) => removeRequired(),
-      const Symbol('value'): (args, base) => removeValue(),
-    });
+    final root = builder.buildDocument().rootElement;
 
-    registerPlugin(FieldOption(), iterable: true);
-  }
-
-  String? _type;
-  final _optionTypes = <String>{'list-multi', 'list-single'};
-  final _trueValues = <dynamic>{true, 'true', '1'};
-  final _multivalueTypes = <String>{
-    'hidden',
-    'jid-multi',
-    'list-multi',
-    'text-multi',
-  };
-
-  @override
-  bool setup([xml.XmlElement? element]) {
-    final result = super.setup(element);
-    if (result) {
-      _type = null;
-    } else {
-      _type = this['type'] as String;
-    }
-
-    return result;
-  }
-
-  void setType(String value) {
-    setAttribute('type', value);
-    if (value.isNotEmpty) {
-      _type = value;
-    }
-  }
-
-  List<Map<String, String>> get options {
-    final options = <Map<String, String>>[];
-
-    final optionsElement =
-        element!.findAllElements('option', namespace: namespace);
-    for (final option in optionsElement) {
-      final opt = FieldOption(element: option);
-      options.add({
-        'label': opt['label'] as String,
-        'value': opt['value'] as String,
-      });
-    }
-    return options;
-  }
-
-  void addOption({String label = '', String value = ''}) {
-    if (_type == null || _optionTypes.contains(_type)) {
-      final option = FieldOption();
-      option['label'] = label;
-      option['value'] = value;
-      add(option);
-    } else {
-      Log.instance.warning('Cannot add options to ${this['type']} field.');
-    }
-  }
-
-  void setOptions(List<dynamic> options) {
-    for (final value in options) {
-      if (value is Map<String, String>) {
-        addOption(value: value['value']!, label: value['label']!);
-      } else {
-        addOption(value: value as String);
+    if (options.isNotEmpty) {
+      for (final option in options) {
+        root.children.add(option.toXML().copy());
       }
     }
+
+    return root;
   }
-
-  void deleteOptions() {
-    final options = element!.findAllElements('option', namespace: namespace);
-    for (final option in options) {
-      element!.children.remove(option);
-    }
-  }
-
-  bool get required {
-    final requiredElement =
-        element!.getElement('required', namespace: namespace);
-    return requiredElement != null;
-  }
-
-  void setRequired(bool required) {
-    final exists = this['required'] as bool;
-    if (!exists && required) {
-      element!.children.add(WhixpUtils.xmlElement('required'));
-    } else if (exists && !required) {
-      delete('required');
-    }
-  }
-
-  void removeRequired() {
-    final required = element!.getElement('required', namespace: namespace);
-    if (required != null) {
-      element!.children.remove(required);
-    }
-  }
-
-  String get answer => this['value'] as String;
-
-  void setAnswer(String answer) => this['value'] = answer;
-
-  void setFalse() => this['value'] = false;
-
-  void setTrue() => this['value'] = true;
-
-  dynamic value({bool convert = true}) {
-    final values = element!.findAllElements('value', namespace: namespace);
-    if (values.isEmpty) {
-      return null;
-    } else if (_type == 'boolean') {
-      if (convert) {
-        return _trueValues.contains(values.first.innerText);
-      }
-      return values.first.innerText;
-    } else if (_multivalueTypes.contains(_type) || values.length > 1) {
-      dynamic vals = <String>[];
-      for (final value in values) {
-        (vals as List<String>).add(value.innerText);
-      }
-      if (_type == 'text-multi' && convert) {
-        vals = values.join('\n');
-      }
-      return vals;
-    } else {
-      if (values.first.innerText.isEmpty) {
-        return '';
-      }
-      return values.first.innerText;
-    }
-  }
-
-  void setValue(dynamic value) {
-    delete('value');
-
-    if (_type == 'boolean') {
-      if (_trueValues.contains(value)) {
-        final valueElement = WhixpUtils.xmlElement('value');
-        valueElement.innerText = '1';
-        element!.children.add(valueElement);
-      } else {
-        final valueElement = WhixpUtils.xmlElement('value');
-        valueElement.innerText = '0';
-        element!.children.add(valueElement);
-      }
-    } else if (_multivalueTypes.contains(_type) ||
-        (_type == null || _type!.isEmpty)) {
-      dynamic val = value;
-      if (val is bool) {
-        val = [val];
-      }
-      if (val is! List) {
-        val = (val as String).replaceAll('\r', '');
-        val = val.split('\n');
-      }
-      for (final value in val as List<String>) {
-        String val = value;
-        if ((_type == null || _type!.isEmpty) && _trueValues.contains(value)) {
-          val = '1';
-        }
-        final valueElement = WhixpUtils.xmlElement('value');
-        valueElement.innerText = val;
-        element!.children.add(valueElement);
-      }
-    } else {
-      if (value is List) {
-        Log.instance
-            .warning('Cannot add multiple values to a ${this['type']} field.');
-      }
-      element!.children
-          .add(WhixpUtils.xmlElement('value')..innerText = value as String);
-    }
-  }
-
-  void removeValue() {
-    final value = element!.findAllElements('value', namespace: namespace);
-    if (value.isNotEmpty) {
-      for (final val in value) {
-        element!.children.remove(val);
-      }
-    }
-  }
-
-  @override
-  FormField copy({xml.XmlElement? element, XMLBase? parent}) => FormField(
-        pluginTagMapping: pluginTagMapping,
-        pluginAttributeMapping: pluginAttributeMapping,
-        getters: getters,
-        setters: setters,
-        deleters: deleters,
-        element: element,
-        parent: parent,
-      );
 }
 
-class FieldOption extends XMLBase {
-  FieldOption({super.element, super.parent})
-      : super(
-          name: 'option',
-          namespace: WhixpUtils.getNamespace('FORMS'),
-          includeNamespace: false,
-          pluginAttribute: 'option',
-          pluginMultiAttribute: 'options',
-          interfaces: {'label', 'value'},
-          subInterfaces: {'value'},
-        );
+/// Represents an option for a field.
+class FieldOption {
+  /// Creates a [FieldOption] with the provided label and value.
+  const FieldOption(this.label, this.value);
+
+  /// The label of the option.
+  final String? label;
+
+  /// The value of the option.
+  final String? value;
+
+  /// Factory constructor to create a [FieldOption] from an XML element.
+  factory FieldOption.fromXML(xml.XmlElement node) {
+    final label = node.getAttribute('label');
+    final value = node.getElement('value')?.innerText;
+    return FieldOption(label, value);
+  }
+
+  /// Converts the [FieldOption] object to an XML element.
+  xml.XmlElement toXML() {
+    final dictionary = HashMap<String, String>();
+
+    if (label != null) dictionary['label'] = label!;
+    final element = WhixpUtils.xmlElement('option', attributes: dictionary);
+    if (value != null) {
+      element.children
+          .add(xml.XmlElement(xml.XmlName('value'), [], [xml.XmlText(value!)]));
+    }
+
+    return element;
+  }
 
   @override
-  FieldOption copy({xml.XmlElement? element, XMLBase? parent}) => FieldOption(
-        element: element,
-        parent: parent,
-      );
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FieldOption &&
+          runtimeType == other.runtimeType &&
+          label == other.label &&
+          value == other.value;
+
+  @override
+  int get hashCode => label.hashCode ^ value.hashCode;
 }
