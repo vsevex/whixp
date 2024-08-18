@@ -20,7 +20,6 @@ part 'stanza.dart';
 //   dynamic results,
 // ]);
 
-// ignore: avoid_classes_with_only_static_members
 ///  XMPP's Adhoc Commands provides a generic workflow mechanism for interacting
 /// with applications.
 ///

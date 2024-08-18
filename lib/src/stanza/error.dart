@@ -93,8 +93,8 @@ class ErrorStanza extends Stanza {
     for (final child in node.children.whereType<xml.XmlElement>()) {
       if (child.localName == "text") {
         error.text = child.innerText;
-      } else {
-        error.reason = child.localName;
+      } else if (child.localName == 'reason') {
+        error.reason = child.innerText;
       }
     }
     return error;

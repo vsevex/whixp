@@ -8,13 +8,13 @@ import 'package:xml/xml.dart' as xml;
 /// Represents an XML node.
 class Node {
   /// Constructs an empty XML node.
-  Node(this.name);
+  Node(this.name, {this.content});
 
   /// Name of the XML node.
   final String name;
 
   /// Contents of the XML node.
-  String? content;
+  final String? content;
 
   /// List of child nodes.
   late final nodes = <Node>[];
@@ -27,13 +27,11 @@ class Node {
 
   /// Constructs an XML node from an XML element node.
   factory Node.fromXML(xml.XmlElement node) {
-    final nod = Node(node.localName);
+    final nod = Node(node.localName, content: node.innerText);
 
     for (final attribute in node.attributes) {
       nod.attributes[attribute.localName] = attribute.value;
     }
-
-    nod.content = node.innerText;
 
     for (final child in node.children.whereType<xml.XmlElement>()) {
       try {
@@ -51,6 +49,10 @@ class Node {
   /// Converts the XML node to its XML representation.
   xml.XmlElement toXML() {
     final element = WhixpUtils.xmlElement(xmlName, attributes: attributes);
+
+    if (content?.isNotEmpty ?? false) {
+      element.children.add(xml.XmlText(content!));
+    }
 
     if (nodes.isNotEmpty) {
       for (final node in nodes) {
