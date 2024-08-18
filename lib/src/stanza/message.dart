@@ -1,5 +1,4 @@
 import 'package:whixp/src/exception.dart';
-import 'package:whixp/src/log/log.dart';
 import 'package:whixp/src/stanza/error.dart';
 import 'package:whixp/src/stanza/mixins.dart';
 import 'package:whixp/src/stanza/node.dart';
@@ -110,15 +109,13 @@ class Message extends Stanza with Attributes {
             final stanza = Stanza.payloadFromXML(tag, child);
 
             payloads.add(stanza);
-          } on WhixpException catch (exception) {
+          } on WhixpException {
             if (child.localName.isNotEmpty && child.attributes.isNotEmpty) {
               final extension = MessageExtension(child.localName);
               for (final attribute in child.attributes) {
                 extension.addAttribute(attribute.localName, attribute.value);
               }
               extensions.add(extension);
-            } else {
-              Log.instance.error(exception.message);
             }
           }
           break;
