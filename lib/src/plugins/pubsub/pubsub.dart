@@ -20,7 +20,6 @@ part 'vcard4.dart';
 
 enum PubSubNodeType { leaf, collection }
 
-// ignore: avoid_classes_with_only_static_members
 /// # PubSub
 ///
 /// [PubSub] is designed to facilitate the integration of XMPP's

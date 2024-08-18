@@ -86,7 +86,6 @@ class StringPreparation {
     );
 }
 
-// ignore: avoid_classes_with_only_static_members
 class StandaloneStringPreparation {
   const StandaloneStringPreparation();
   static const String _rtlChars = r'\u0591-\u07FF\uFB1D-\uFDFD\uFE70-\uFEFC';

@@ -4,7 +4,6 @@ import 'package:whixp/src/log/log.dart';
 import 'package:whixp/src/session.dart';
 import 'package:whixp/src/stanza/stanza.dart';
 
-// ignore: avoid_classes_with_only_static_members
 /// Manages interaction with a Hive storage box for storing key-value pairs.
 class HiveController {
   /// Constructs a [HiveController].

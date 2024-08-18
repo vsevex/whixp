@@ -4,7 +4,6 @@ import 'package:whixp/src/stanza/mixins.dart';
 import 'package:whixp/src/transport.dart';
 import 'package:whixp/whixp.dart';
 
-// ignore: avoid_classes_with_only_static_members
 /// A router for handling incoming packets by matching them with registered
 /// handlers.
 class Router {

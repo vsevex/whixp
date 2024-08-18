@@ -7,7 +7,6 @@ import 'package:whixp/src/jid/src/exception.dart';
 import 'package:whixp/src/utils/src/stringprep.dart';
 import 'package:whixp/src/utils/utils.dart';
 
-// ignore: avoid_classes_with_only_static_members
 /// A private utility class for parsing, formatting, and validating Jabber IDs.
 class _Jabbered {
   const _Jabbered();

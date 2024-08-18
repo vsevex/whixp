@@ -6,7 +6,6 @@ import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/idna/punycode.dart';
 import 'package:whixp/src/stringprep/stringprep.dart';
 
-// ignore: avoid_classes_with_only_static_members
 class IDNA {
   const IDNA();
 

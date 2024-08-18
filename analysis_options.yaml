@@ -11,6 +11,9 @@
 # (the recommended set includes the core lints).
 # The core lints are also what is used by pub.dev for scoring packages.
 
+analyzer:
+  errors:
+    avoid_classes_with_only_static_members: ignore
 include: package:lint/analysis_options.yaml
 # Uncomment the following section to specify additional rules.
 

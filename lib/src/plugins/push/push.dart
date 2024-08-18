@@ -11,7 +11,6 @@ import 'package:xml/xml.dart' as xml;
 
 part 'stanza.dart';
 
-// ignore: avoid_classes_with_only_static_members
 /// Provides static methods to enable and disable push notifications for a
 /// specific Jabber ID (JID) and node.
 class Push {

@@ -9,7 +9,6 @@ import "package:whixp/src/utils/utils.dart";
 
 import "package:xml/xml.dart" as xml;
 
-// ignore: avoid_classes_with_only_static_members
 /// A utility class for parsing XML elements and decoding them into
 /// corresponding XMPP stanzas.
 class XMLParser {
