@@ -113,7 +113,7 @@ class Scram {
   /// algorithm with a given `password`, `salt`, `iterations`, and
   /// `hash function`. Returns a map containing the derived client and server
   /// keys, as [String].
-  Map<String, String> deriveKeys({
+  static Map<String, String> deriveKeys({
     /// The password to use for key derivation.
     required String password,
 
