@@ -2,15 +2,16 @@ import 'package:whixp/whixp.dart';
 
 void main() {
   final whixp = Whixp(
-    'vsevex@example.com/desktop',
-    'passwd',
-    host: 'example.com',
-    logger: Log(enableError: true, enableWarning: true),
+    jabberID: 'vsevex@localhost',
+    password: 'vesevu13',
+    logger: Log(enableWarning: true, enableError: true, includeTimestamp: true),
+    internalDatabasePath: 'whixp',
+    reconnectionPolicy: RandomBackoffReconnectionPolicy(1, 3),
   );
 
-  whixp.connect();
-  whixp.addEventHandler('sessionStart', (_) {
-    whixp.getRoster();
-    whixp.sendPresence();
+  /// Reconnect on disconnection.
+  whixp.addEventHandler<TransportState>('state', (state) {
+    if (state == TransportState.disconnected) whixp.connect();
   });
+  whixp.connect();
 }
