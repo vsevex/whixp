@@ -9,7 +9,6 @@ import 'package:whixp/src/transport.dart';
 import 'package:whixp/whixp.dart';
 
 part '_extensions.dart';
-// part 'component.dart';
 
 abstract class WhixpBase {
   /// Adapts the generic [Transport] class for use with XMPP. It also provides
@@ -70,11 +69,15 @@ abstract class WhixpBase {
     int maxRedirects = 5,
 
     /// The default interval between keepalive signals when
-    /// [pingKeepAliveInterval] is enabled. Represents in seconds. Defaults to `300`
+    /// [pingKeepAliveInterval] is enabled. Represents in seconds. Defaults to
+    /// `300`
     int pingKeepAliveInterval = 300,
 
     /// [Log] instance to print out various log messages properly
     Log? logger,
+
+    /// Whether to end session on disconnect method or not. Defaults to `true`.
+    bool endSessionOnDisconnect = true,
     String internalDatabasePath = '/',
     ReconnectionPolicy? reconnectionPolicy,
   }) {
@@ -145,11 +148,11 @@ abstract class WhixpBase {
       connectionTimeout: connectionTimeout,
       pingKeepAlive: pingKeepAlive,
       pingKeepAliveInterval: pingKeepAliveInterval,
-      reconnectionPolicy:
-          reconnectionPolicy ?? RandomBackoffReconnectionPolicy(0, 2),
+      endSessionOnDisconnect: endSessionOnDisconnect,
+      reconnectionPolicy: reconnectionPolicy,
     );
 
-    /// Initialize PubSub instance
+    /// Initialize PubSub instance.
     PubSub.initialize();
 
     /// Set up the transport with XMPP's root stanzas & handlers.
@@ -170,89 +173,9 @@ abstract class WhixpBase {
         }
       }
       ..registerHandler(Handler('IM', _handleMessage)..packet('message'))
-      // ..registerHandler(
-      //   Handler('Presence', _handlePresence),
-      //   CallbackHandler(
-      //     'Presence',
-      //     _handlePresence,
-      //     matcher: XPathMatcher('{$_defaultNamespace}presence'),
-      //   ),
-      // )
-      // ..registerHandler(
-      //   CallbackHandler(
-      //     'Presence',
-      //     _handlePresence,
-      //     matcher: XPathMatcher('{null}presence'),
-      //   ),
-      // )
-      // ..registerHandler(
-      //   CallbackHandler(
-      //     'IMError',
-      //     (stanza) => _handleMessageError(stanza as Message),
-      //     matcher: XPathMatcher(
-      //       '{$defaultNamespace}message/${defaultNamespace}error',
-      //     ),
-      //   ),
-      // )
       ..registerHandler(
         Handler('Stream Error', _handleStreamError)..packet('stream_error'),
       );
-
-    /// Initialize [RosterManager].
-    // roster = rost.RosterManager(this);
-
-    /// Add current user jid to the roster.
-    // roster.add(boundJID.toString());
-
-    /// Get current user's roster from the roster manager.
-    // clientRoster = roster[boundJID.toString()] as rost.RosterNode;
-
-    // transport
-    //   ..addEventHandler<String>('disconnected', (_) => _handleDisconnected())
-    //   ..addEventHandler<Presence>(
-    //     'presenceDnd',
-    //     (presence) => _handleAvailable(presence!),
-    //   )
-    //   ..addEventHandler<Presence>(
-    //     'presenceXa',
-    //     (presence) => _handleAvailable(presence!),
-    //   )
-    //   ..addEventHandler<Presence>(
-    //     'presenceChat',
-    //     (presence) => _handleAvailable(presence!),
-    //   )
-    //   ..addEventHandler<Presence>(
-    //     'presenceAway',
-    //     (presence) => _handleAvailable(presence!),
-    //   )
-    //   ..addEventHandler<Presence>(
-    //     'presenceAvailable',
-    //     (presence) => _handleAvailable(presence!),
-    //   )
-    //   ..addEventHandler<Presence>(
-    //     'presenceUnavailable',
-    //     (presence) => _handleUnavailable(presence!),
-    //   )
-    //   ..addEventHandler<Presence>(
-    //     'presenceSubscribe',
-    //     (presence) => _handleSubscribe(presence!),
-    //   )
-    //   ..addEventHandler<Presence>(
-    //     'presenceSubscribed',
-    //     (presence) => _handleSubscribed(presence!),
-    //   )
-    //   ..addEventHandler<Presence>(
-    //     'presenceUnsubscribe',
-    //     (presence) => _handleUnsubscribe(presence!),
-    //   )
-    //   ..addEventHandler<Presence>(
-    //     'presenceUnsubscribed',
-    //     (presence) => _handleUnsubscribed(presence!),
-    //   )
-    //   ..addEventHandler<Presence>(
-    //     'rosterSubscriptionRequest',
-    //     (presence) => _handleNewSubscription(presence!),
-    //   );
   }
 
   late final Transport _transport;
@@ -287,10 +210,6 @@ abstract class WhixpBase {
   /// Map holder for the given user properties for the connection.
   Map<String, String> _credentials = <String, String>{};
 
-  /// [rost.RosterManager] instance to make communication with roster easier.
-  // late final rost.RosterManager roster;
-  // late rost.RosterNode clientRoster;
-
   final _streamFeatureHandlers =
       <String, Tuple2<FutureOr<bool> Function(Packet features), bool>>{};
 
@@ -307,15 +226,6 @@ abstract class WhixpBase {
     _streamFeatureOrder.add(Tuple2(order, name));
     _streamFeatureOrder.sort((a, b) => a.firstValue.compareTo(b.firstValue));
   }
-
-  /// Unregisters a stream feature handler.
-  // void _unregisterFeature(String name, {int order = 5000}) {
-  //   if (_streamFeatureHandlers.containsKey(name)) {
-  //     _streamFeatureHandlers.remove(name);
-  //   }
-  //   _streamFeatureOrder.remove(Tuple2(order, name));
-  //   _streamFeatureOrder.sort((a, b) => a.firstValue.compareTo(b.firstValue));
-  // }
 
   /// Create, initialize, and send a new [Presence].
   void sendPresence({
@@ -491,68 +401,13 @@ abstract class WhixpBase {
     return message;
   }
 
-  /// Creates a stanza of type `get`.
-  // IQ makeIQGet({
-  //   IQ? iq,
-  //   String? queryXMLNS,
-  //   JabberID? iqTo,
-  //   JabberID? iqFrom,
-  // }) {
-  //   iq ??= IQ();
-  //   iq.type = StanzaType.get;
-  //   iq.query = queryXMLNS;
-
-  //   if (iqTo != null) iq.to = iqTo;
-  //   if (iqFrom != null) iq.from = iqFrom;
-
-  //   return iq;
-  // }
-
-  /// Creates a stanza of type `set`.
-  ///
-  /// Optionally, a substanza may be given to use as the stanza's payload.
-  // IQ makeIQSet({IQ? iq, JabberID? iqTo, JabberID? iqFrom, dynamic sub}) {
-  //   iq ??= IQ();
-  //   iq.type = StanzaType.set;
-
-  //   if (sub != null) iq.add(sub);
-  //   if (iqTo != null) iq.to = iqTo;
-  //   if (iqFrom != null) iq.from = iqFrom;
-
-  //   return iq;
-  // }
-
-  /// Request the roster from the server.
-  // void getRoster<T>({
-  //   FutureOr<T> Function(IQ iq)? callback,
-  //   FutureOr<void> Function(StanzaError error)? failureCallback,
-  //   FutureOr<void> Function()? timeoutCallback,
-  //   int timeout = 10,
-  // }) {
-  //   final iq = makeIQGet();
-
-  //   if (features.contains('rosterver')) {
-  //     (iq['roster'] as Roster)['ver'] = clientRoster.version;
-  //   }
-
-  //   iq.sendIQ(
-  //     callback: (iq) {
-  //       transport.emit<IQ>('rosterUpdate', data: iq);
-  //       callback?.call(iq);
-  //     },
-  //     failureCallback: failureCallback,
-  //     timeoutCallback: timeoutCallback,
-  //     timeout: timeout,
-  //   );
-  // }
-
   /// Close the XML stream and wait for ack from the server.
   ///
   /// Calls the primary method from [Transport].
   Future<void> disconnect({bool consume = true}) =>
       Transport.instance().disconnect(consume: consume);
 
-  // /// Process incoming message stanzas.
+  /// Processes incoming message stanzas.
   void _handleMessage(Packet message) {
     if (message is! Message) return;
     final to = message.to;
@@ -563,104 +418,6 @@ abstract class WhixpBase {
 
     transport.emit<Message>('message', data: message);
   }
-
-  // /// Handles error occured while messaging
-  // void _handleMessageError(Message message) {
-  //   if (!isComponent && (message.to == null || message.to!.bare.isEmpty)) {
-  //     message.to = transport.boundJID;
-  //   }
-
-  //   transport.emit<Message>('message', data: message);
-  // }
-
-  // void _handlePresence(Stanza stanza) {
-  //   final presence = Presence(xml: stanza.xml);
-
-  //   if (((roster[presence.from as String]) as rost.RosterNode).ignoreUpdates) {
-  //     return;
-  //   }
-
-  //   if (!isComponent && (presence.to?.bare.isNotEmpty ?? false)) {
-  //     presence.to = transport.boundJID;
-  //   }
-
-  //   transport.emit<Presence>('presence', data: presence);
-  //   transport.emit<Presence>(
-  //     'presence${presence.typeRaw.capitalize()}',
-  //     data: presence,
-  //   );
-
-  //   if ({'subscribe', 'subscribed', 'unsubscribe', 'unsubscribed'}
-  //       .contains(presence.typeRaw)) {
-  //     transport.emit<Presence>('changedSubscription', data: presence);
-  //     return;
-  //   } else if (!{'available', 'unavailable'}.contains(presence.typeRaw)) {
-  //     return;
-  //   }
-  // }
-
-  // void _handleDisconnected() {
-  //   roster.reset();
-  //   transport.sessionBind = false;
-  // }
-
-  // void _handleAvailable(Presence presence) {
-  //   ((roster[presence['to'] as String]
-  //           as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
-  //       .handleAvailable(presence);
-  // }
-
-  // void _handleUnavailable(Presence presence) {
-  //   ((roster[presence['to'] as String]
-  //           as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
-  //       .handleUnavailable(presence);
-  // }
-
-  // void _handleSubscribe(Presence presence) {
-  //   ((roster[presence['to'] as String]
-  //           as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
-  //       .handleSubscribe(presence);
-  // }
-
-  // void _handleSubscribed(Presence presence) {
-  //   ((roster[presence['to'] as String]
-  //           as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
-  //       .handleSubscribed(presence);
-  // }
-
-  // void _handleUnsubscribe(Presence presence) {
-  //   ((roster[presence['to'] as String]
-  //           as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
-  //       .handleUnsubscribe(presence);
-  // }
-
-  // void _handleUnsubscribed(Presence presence) {
-  //   ((roster[presence['to'] as String]
-  //           as rost.RosterNode)[presence['from'] as String] as rost.RosterItem)
-  //       .handleUnsubscribed(presence);
-  // }
-
-  // /// Attempt to automatically handle subscription requests.
-  // ///
-  // /// Subscriptions will be approved if the request is from a whitelisted JID,
-  // /// of `autoAuthorize` is true.
-  // void _handleNewSubscription(Presence presence) {
-  //   final roster = this.roster[presence['to'] as String] as rost.RosterNode;
-  //   final rosterItem = roster[presence['from'] as String] as rost.RosterItem;
-  //   if (rosterItem['whitelisted'] as bool) {
-  //     rosterItem.authorize();
-  //     if (roster.autoAuthorize) {
-  //       rosterItem.subscribe();
-  //     }
-  //   } else if (roster.autoAuthorize) {
-  //     rosterItem.authorize();
-  //     if (roster.autoSubscribe) {
-  //       rosterItem.subscribe();
-  //     }
-  //   } else if (!roster.autoAuthorize) {
-  //     rosterItem.unauthorize();
-  //   }
-  // }
 
   void _handleStreamError(Packet error) {
     if (error is! StreamError) return;

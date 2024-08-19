@@ -25,6 +25,8 @@ import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
 
+part 'connection.dart';
+
 /// Designed to simplify the complexities associated with establishing a
 /// connection to a server, as well as sending and receiving XML stanzas.
 ///
@@ -97,13 +99,18 @@ class Transport {
     /// indicates to proceed on bad certificate or not.
     bool Function(io.X509Certificate)? onBadCertificateCallback,
 
+    /// Whether to end session on disconnect method or not. Defaults to `true`.
+    bool endSessionOnDisconnect = true,
+
     /// Represents the duration in milliseconds for which the system will wait
     /// for a connection to be established before raising a
     /// [async.TimeoutException].
     ///
-    /// Defaults to `4000` milliseconds
-    int connectionTimeout = 4000,
-    required ReconnectionPolicy reconnectionPolicy,
+    /// Defaults to `2000` milliseconds
+    int connectionTimeout = 2000,
+
+    /// Reconnection strategy if there is an network interruption or disconnect.
+    ReconnectionPolicy? reconnectionPolicy,
   }) {
     if (_instance != null) return _instance!;
     return _instance = Transport._internal(
@@ -114,6 +121,7 @@ class Transport {
       useIPv6: useIPv6,
       useTLS: useTLS,
       disableStartTLS: disableStartTLS,
+      endSessionOnDisconnect: endSessionOnDisconnect,
       pingKeepAlive: pingKeepAlive,
       pingKeepAliveInterval: pingKeepAliveInterval,
       context: context,
@@ -126,7 +134,7 @@ class Transport {
   factory Transport.instance() => _instance!;
 
   Transport._internal(
-    this.host, {
+    String host, {
     required int port,
     required this.boundJID,
     required String? dnsService,
@@ -138,34 +146,45 @@ class Transport {
     required io.SecurityContext? context,
     required bool Function(io.X509Certificate)? onBadCertificateCallback,
     required this.connectionTimeout,
-    required ReconnectionPolicy reconnectionPolicy,
+    required this.endSessionOnDisconnect,
+    required ReconnectionPolicy? reconnectionPolicy,
   }) {
-    _port = port;
+    connection = Connection(
+      ConnectionConfiguration(
+        host: host,
+        port: port,
+        useTLS: useTLS,
+        disableStartTLS: disableStartTLS,
+        socketOptions: ConnectaListener(
+          onData: _dataReceived,
+          combineWhile: _combineWhile,
+          onDone: _connectionLost,
+          onError: (exception, trace) => _handleError(exception),
+        ),
+        securityContext: context,
+        connectionTimeout: connectionTimeout,
+        useIPv6WhenResolvingDNS: useIPv6,
+        service: dnsService,
+        onBadCertificateCallback: onBadCertificateCallback,
+      ),
+      (state) => emit<TransportState>('state', data: state),
+      onConnectionStartCallback: () {
+        _waitingQueueController = async.StreamController<Packet>();
 
-    _useTLS = useTLS;
-    _disableStartTLS = disableStartTLS;
-    _useIPv6 = useIPv6;
-    _dnsService = dnsService;
+        /// Reinit XML parser.
+        _initParser();
 
-    endSessionOnDisconnect = true;
+        _run();
+        sendRaw(streamHeader);
+      },
+      handleError: (exception) => _handleError(exception),
+    )..initialize(reconnectionPolicy: reconnectionPolicy);
 
     streamHeader = '<stream>';
     streamFooter = '<stream/>';
 
-    _context = context ?? io.SecurityContext.defaultContext;
-
-    _onBadCertificateCallback = onBadCertificateCallback;
-
-    _reconnectionPolicy = reconnectionPolicy;
-
     _setup();
   }
-
-  /// The host that [Whixp] has to connect to.
-  final String host;
-
-  /// The port that [Whixp] has to connect to.
-  late int _port;
 
   /// [Tuple2] type variable that holds both [_host] and [_port].
   late Tuple2<String, int> _address;
@@ -175,71 +194,41 @@ class Transport {
   /// This may even be a different bare JID than what was requested.
   JabberID? boundJID;
 
-  /// Will hold host that [Whixp] is connected to and will work in the
-  /// association of [SASL].
-  late String serviceName;
-
-  /// [Connecta] instance that will be declared when there is a connection
-  /// attempt to the server.
-  Connecta? _connecta;
-
   /// [Eventius] type variable that holds actual event manager.
   late Eventius _eventius;
 
   /// Scheduled callback handler [Map] late initializer.
   late Map<String, async.Timer> _scheduledEvents;
 
-  /// Enable connecting to the server directly over TLS, in particular when the
-  /// service provides two ports: one for non-TLS traffic and another for TLS
-  /// traffic.
-  late bool _useTLS;
-
-  /// Defines whether the client will later call StartTLS or not.
-  ///
-  /// When connecting to the server, there can be StartTLS handshaking and
-  /// when the client and server try to handshake, we need to upgrade our
-  /// connection. This flag disables that handshaking and forbids establishing
-  /// a TLS connection on the client side.
-  late bool _disableStartTLS;
-
-  /// If set to `true`, attempt to use IPv6.
-  late bool _useIPv6;
-
   /// If `true`, periodically send a whitespace character over the wire to keep
   /// the connection alive.
   final bool pingKeepAlive;
 
-  /// The default interval between keepalive signals when [pingKeepAliveInterval]
-  /// is enabled.
+  /// The default interval between keepalive signals when [pinkKeepAlive] is
+  /// enabled.
   final int pingKeepAliveInterval;
 
   /// Controls if the session can be considered ended if the connection is
   /// terminated.
   late bool endSessionOnDisconnect;
 
-  /// Default [Timer] for [pingKeepAliveInterval]. This will be assigned when
-  /// there is a [Timer] attached after connection established.
+  /// Default [async.Timer] for [pingKeepAliveInterval]. This will be assigned
+  /// when there is a [async.Timer] attached after connection established.
   async.Timer? _keepAliveTimer;
 
-  /// The service name to check with DNS SRV records. For example, setting this
-  /// to "xmpp-client" would query the "_xmpp-clilent._tcp" service.
-  String? _dnsService;
-
   /// Represents the duration in milliseconds for which the system will wait
-  /// for a connection to be established before raising a [TimeoutException].
+  /// for a connection to be established before raising a
+  /// [async.TimeoutException].
   final int connectionTimeout;
 
-  /// Optional [io.SecurityContext] which is going to be used in socket
-  /// connections.
-  late io.SecurityContext? _context;
+  late Connection connection;
 
-  /// [StreamController] for [_waitingQueue].
+  /// [async.StreamController] for stanzas to be sent.
   late async.StreamController<Packet> _waitingQueueController;
-  final _queuedStanzas = <Packet>[];
 
-  /// [Completer] of current connection attempt. After the connection, this
-  /// [Completer] should be equal to null.
-  async.Completer<void>? _currentConnectionAttempt;
+  /// [Packet] list of stanzas need to be sent when the connection is
+  /// established.
+  final _queuedStanzas = <Packet>[];
 
   /// Actual [StreamParser] instance to manipulate incoming data from the
   /// socket.
@@ -252,43 +241,14 @@ class Transport {
   /// [StreamParser] parser will communicate with this [async.Stream];
   late async.Stream<List<StreamObject>> _stream;
 
-  /// [Iterator] of DNS results that have not yet been tried.
-  Iterator<Tuple3<String, String, int>>? _dnsAnswers;
-
   /// The default opening tag for the stream element.
   late String streamHeader;
 
   /// The default closing tag for the stream element.
   late String streamFooter;
 
-  /// [io.ConnectionTask] keeps current connection task and can be used to
-  /// cancel if there is a need.
-  io.ConnectionTask<io.Socket>? _connectionTask;
-
-  /// The event to trigger when the [_connect] succeeds. It can be "connected"
-  /// or "tlsSuccess" depending on the step we are at.
-  late TransportState _eventWhenConnected;
-
-  /// The domain to try when querying DNS records.
-  String _defaultDomain = '';
-
-  /// The default namespace of the stream content, not of the stream wrapper it.
-  late String defaultNamespace;
-
-  /// Flag that indicates if the socket connection is secure or not.
-  late bool _isConnectionSecured;
-
-  /// Indicates to the default language of the streaming.
-  String? defaultLanguage;
-
   /// Indicates to the default langauge of the last peer.
   String? peerDefaultLanguage;
-
-  /// To avoid processing on bad certification you can use this callback.
-  ///
-  /// Passes [io.X509Certificate] instance when returning boolean value which
-  /// indicates to proceed on bad certificate or not.
-  bool Function(io.X509Certificate)? _onBadCertificateCallback;
 
   /// Current redirect attempt. Increases when there is an attempt occurs to
   /// the redirection (see-other-host).
@@ -297,21 +257,12 @@ class Transport {
   /// Indicates if session is started or not.
   bool _sessionStarted = false;
 
-  /// Policy for reconnection, indicates delay between disconnection and
-  /// reconnection.
-  late final ReconnectionPolicy _reconnectionPolicy;
-
   /// The list of callbacks that will be triggered before the stanza send.
   final callbacksBeforeStanzaSend =
       <async.FutureOr<void> Function(dynamic data)>[];
 
   void _setup() {
     _reset();
-
-    _reconnectionPolicy.performReconnect = () async {
-      await _rescheduleConnectionAttempt();
-      emit<TransportState>('state', data: TransportState.reconnecting);
-    };
 
     addEventHandler<TransportState>('state', (state) async {
       if (state == TransportState.disconnected ||
@@ -321,38 +272,27 @@ class Transport {
           _keepAliveTimer?.cancel();
         }
         StreamFeatures.supported.clear();
-        await _waitingQueueController.close();
+        _closeStreams();
       }
     });
     addEventHandler('startSession', (_) async {
       _setSessionStart();
       _startKeepAlive();
       _sessionStarted = true;
-      await _reconnectionPolicy.setShouldReconnect(true);
+      await connection.setShouldReconnect(true);
     });
     addEventHandler('endSession', (_) => _sessionStarted = false);
     addEventHandler('streamNegotiated', (_) => _parser.reset());
   }
 
   void _reset() {
-    serviceName = '';
-    _address = Tuple2(host, _port);
-
-    _eventius = Eventius();
-
-    _keepAliveTimer = null;
-
-    _eventWhenConnected = TransportState.connected;
-    _redirectAttempts = 0;
-
-    defaultNamespace = '';
-
-    defaultLanguage = null;
+    /// Reset all.
+    connection.reset();
     peerDefaultLanguage = null;
 
-    _connecta = null;
-    _connectionTask = null;
-
+    _eventius = Eventius();
+    _keepAliveTimer = null;
+    _redirectAttempts = 0;
     _scheduledEvents = <String, async.Timer>{};
   }
 
@@ -372,16 +312,10 @@ class Transport {
   /// The parameters needed to establish a connection in order are passed
   /// beforehand when creating [Transport] instance.
   void connect() {
-    _waitingQueueController = async.StreamController<Packet>.broadcast();
     callbacksBeforeStanzaSend.clear();
 
-    _run();
-    _cancelConnectionAttempt();
-
-    _defaultDomain = _address.firstValue;
-
-    emit<TransportState>('state', data: TransportState.connecting);
-    _currentConnectionAttempt = async.Completer()..complete(_connect());
+    connection.currentConnectionAttempt = async.Completer()
+      ..complete(connection.start());
   }
 
   void _initParser() {
@@ -410,97 +344,16 @@ class Transport {
           await _spawnEvent(element);
         } else {
           Log.instance.info('End of stream received.');
-          abort();
+          connection.abort(callback: _closeStreams);
         }
       }
     });
   }
 
-  Future<void> _connect() async {
-    _eventWhenConnected = TransportState.connected;
-    _initParser();
-
-    await _reconnectionPolicy.reset();
-    await _reconnectionPolicy.setShouldReconnect(true);
-    _parser.reset();
-
-    Tuple3<String, String, int>? record;
-
-    try {
-      record = await _pickDNSAnswer(_defaultDomain, service: _dnsService);
-    } on async.TimeoutException catch (error) {
-      Log.instance.warning('Could not pick any SRV record');
-      await _handleError(error);
-    }
-
-    if (record != null) {
-      final host = record.firstValue;
-      final address = record.secondValue;
-      final port = record.thirdValue;
-
-      _address = Tuple2(address, port);
-      serviceName = host;
-    } else {
-      _dnsAnswers = null;
-    }
-
-    if (_useTLS) {
-      _connecta = Connecta(
-        ConnectaToolkit(
-          hostname: _address.firstValue,
-          port: _address.secondValue,
-          context: _context,
-          timeout: connectionTimeout,
-          connectionType: ConnectionType.tls,
-          onBadCertificateCallback: _onBadCertificateCallback,
-          supportedProtocols: ['TLSv1.2', 'TLSv1.3'],
-        ),
-      );
-    } else {
-      _connecta = Connecta(
-        ConnectaToolkit(
-          hostname: _address.firstValue,
-          port: _address.secondValue,
-          timeout: connectionTimeout,
-          context: _context,
-          onBadCertificateCallback: _onBadCertificateCallback,
-          connectionType: _disableStartTLS
-              ? ConnectionType.tcp
-              : ConnectionType.upgradableTcp,
-          supportedProtocols: ['TLSv1.2', 'TLSv1.3'],
-        ),
-      );
-    }
-
-    try {
-      Log.instance.info(
-        'Trying to connect to ${_address.firstValue} on port ${_address.secondValue}',
-      );
-
-      _connectionTask = await _connecta!.createTask(
-        ConnectaListener(
-          onData: _dataReceived,
-          onError: (exception, trace) async {
-            Log.instance.error(
-              'Connection error occured.',
-              exception: exception,
-              stackTrace: trace as StackTrace,
-            );
-            await _handleError(exception);
-          },
-          onDone: _connectionLost,
-          combineWhile: _combineWhile,
-        ),
-      );
-
-      await _connectionMade();
-    } on Exception catch (error) {
-      await _handleError(error, connectionFailure: true);
-      return;
-    }
-
-    _isConnectionSecured = _connecta!.isConnectionSecure;
-  }
+  /// Will be set to disconnect method in [Connection]. Responsible to consume
+  /// unsent stanzas before disconnection in maximum `5000` milliseconds.
+  Future<void> _consumeCallback() =>
+      _waitingQueueController.done.timeout(const Duration(milliseconds: 5000));
 
   Future<void> _handleError(
     dynamic exception, {
@@ -517,94 +370,27 @@ class Transport {
       emit<TransportState>('state', data: TransportState.connectionFailure);
     }
 
-    if (!(_currentConnectionAttempt?.isCompleted ?? false)) {
-      await disconnect(consume: false, sendFooter: false);
-      _currentConnectionAttempt = null;
-      try {
-        _connecta?.destroy();
-      } catch (_) {}
-      return;
-    }
-
-    if (await _reconnectionPolicy.canTriggerFailure()) {
-      await _reconnectionPolicy.onFailure();
+    if ((await connection._reconnectionPolicy?.canTriggerFailure()) ?? false) {
+      await connection._reconnectionPolicy?.onFailure();
     } else {
       Log.instance.warning('Reconnection is not set');
+      await connection.hangup(consume: false, sendFooter: false);
     }
-  }
-
-  Future<void> _rescheduleConnectionAttempt() async {
-    if (_currentConnectionAttempt == null) {
-      Log.instance.warning('Current connection attempt is null, aborting...');
-      return;
-    }
-
-    _currentConnectionAttempt = async.Completer()..complete(_connect());
-    return;
-  }
-
-  /// Called when the TCP connection has been established with the server.
-  Future<void> _connectionMade([bool clearAnswers = false]) async {
-    emit<TransportState>('state', data: _eventWhenConnected);
-    _currentConnectionAttempt = null;
-
-    sendRaw(streamHeader);
-
-    await _reconnectionPolicy.onSuccess();
-    if (clearAnswers) _dnsAnswers = null;
   }
 
   /// On any kind of disconnection, initiated by us or not. This signals the
   /// closure of connection.
   Future<void> _connectionLost() async {
-    Log.instance.warning('Connection lost');
+    Log.instance.warning('Connection is lost');
 
     if (endSessionOnDisconnect) {
       emit('endSession');
       Log.instance.debug('Session ended');
     }
-    await disconnect(sendFooter: false);
-  }
+    await connection.hangup(sendFooter: false);
 
-  /// Performs a handshake for TLS.
-  ///
-  /// If the handshake is successful, the XML stream will need to be restarted.
-  Future<bool> startTLS() async {
-    if (_connecta == null) return false;
-
-    if (_disableStartTLS) {
-      Log.instance.info('Disable StartTLS is enabled.');
-      return false;
-    }
-    _eventWhenConnected = TransportState.tlsSuccess;
-    try {
-      await _connecta!.upgradeConnection(
-        listener: ConnectaListener(
-          onData: _dataReceived,
-          onError: (exception, trace) async {
-            Log.instance.error(
-              'Connection error occured.',
-              exception: exception,
-              stackTrace: trace as StackTrace,
-            );
-            await _handleError(exception, connectionFailure: true);
-          },
-          onDone: _connectionLost,
-          combineWhile: _combineWhile,
-        ),
-      );
-
-      _connectionMade(true);
-      return true;
-    } on ConnectaException catch (error) {
-      Log.instance.error(error.message);
-      if (_dnsAnswers != null && _dnsAnswers!.moveNext()) {
-        await startTLS();
-      } else {
-        rethrow;
-      }
-      return false;
-    }
+    /// Close all open sockets when the connection is lost.
+    _closeStreams();
   }
 
   /// Combines while the given condition is true. Works with [Connecta].
@@ -657,48 +443,6 @@ class Transport {
         }
         sendRaw(data.toXMLString());
       });
-
-  /// Forcibly close the connection.
-  void abort() {
-    if (_connecta != null) {
-      _connecta?.destroy();
-      emit<TransportState>('state', data: TransportState.killed);
-      _cancelConnectionAttempt();
-    }
-  }
-
-  /// Close the XML stream and wait for ack from the server for at most
-  /// [timeout] milliseconds. After the given number of milliseconds have passed
-  /// without a response from the server, or when the server successfully
-  /// responds with a closure of its own stream, abort() is called.
-  Future<void> disconnect({
-    int timeout = 2000,
-    bool consume = true,
-    bool sendFooter = true,
-  }) async {
-    Log.instance.warning('Disconnect method is called');
-    if (sendFooter) sendRaw(streamFooter);
-
-    Future<void> consumeSend() async {
-      try {
-        await _waitingQueueController.done
-            .timeout(Duration(milliseconds: timeout));
-      } on Exception {
-        /// pass
-      } finally {
-        _connecta?.destroy();
-        _cancelConnectionAttempt();
-        emit<TransportState>('state', data: TransportState.disconnected);
-      }
-    }
-
-    if (_connecta != null && consume) {
-      return consumeSend();
-    } else {
-      emit<TransportState>('state', data: TransportState.disconnected);
-      return _connecta?.destroy();
-    }
-  }
 
   /// Add a stream event handler that will be executed when a matching stanza
   /// is received.
@@ -785,132 +529,11 @@ class Transport {
     }
   }
 
-  /// Immediately cancel the current [connect] [Future].
-  void _cancelConnectionAttempt() {
-    _currentConnectionAttempt = null;
-    _connectionTask?.cancel();
-    _connecta = null;
-    _sessionStarted = false;
-  }
-
   /// Performs any initialization actions, such as handshakes, once the stream
   /// header has been sent.
   ///
   /// Must be overrided.
   late void Function(Map<String, String> attributes) startStreamHandler;
-
-  /// Pick a server and port from DNS answers.
-  ///
-  /// And also performs DNS resolution for a given hostname.
-  ///
-  /// Resolution may perform SRV record lookups if a service and protocol are
-  /// specified. The returned addresses will be sorted according to the SRV
-  /// properties and weights.
-  Future<Tuple3<String, String, int>?> _pickDNSAnswer(
-    String domain, {
-    String? service,
-  }) async {
-    ResolveResponse? response;
-    final srvs = <SRVRecord>[];
-    final results = <Tuple3<String, String, int>>[];
-
-    if (service != null) {
-      try {
-        response = await DNSolve()
-            .lookup('_$service._tcp.$domain', type: RecordType.srv)
-            .timeout(
-          Duration(milliseconds: connectionTimeout),
-          onTimeout: () {
-            throw async.TimeoutException(
-              'Connection timed out',
-              Duration(milliseconds: connectionTimeout),
-            );
-          },
-        );
-      } catch (_) {
-        /// pass
-      }
-    }
-
-    if (response != null &&
-        response.answer != null &&
-        (response.answer!.srvs != null && response.answer!.srvs!.isNotEmpty)) {
-      for (final record in SRVRecord.sort(response.answer!.srvs!)) {
-        if (record.target != null) {
-          srvs.add(record);
-        }
-      }
-    }
-
-    if (srvs.isNotEmpty) {
-      for (final srv in srvs) {
-        if (_useIPv6) {
-          final response =
-              await DNSolve().lookup(srv.target!, type: RecordType.aaaa);
-          if (response.answer != null && response.answer!.records != null) {
-            for (final record in response.answer!.records!) {
-              results.add(Tuple3(domain, record.name, srv.port));
-            }
-          }
-        }
-        final response = await DNSolve().lookup(srv.target!);
-        if (response.answer != null) {
-          for (final record in response.answer!.records!) {
-            results.add(Tuple3(domain, record.name, srv.port));
-          }
-        }
-      }
-    }
-
-    if (results.isNotEmpty) {
-      _dnsAnswers = results.iterator;
-
-      try {
-        return _dnsAnswers!.moveNext() ? _dnsAnswers!.current : null;
-      } catch (_) {
-        return null;
-      }
-    }
-
-    if (_useIPv6) {
-      try {
-        response = await DNSolve().lookup(domain, type: RecordType.aaaa);
-      } catch (_) {
-        Log.instance.warning(
-          'DNS lookup: Failed to parse IPv6 records for $domain, processing with provided record',
-        );
-        return null;
-      }
-    } else {
-      Log.instance.warning('DNS lookup: Use of IPv6 has been disabled');
-      try {
-        response = await DNSolve().lookup(domain);
-      } catch (_) {
-        Log.instance.warning(
-          'DNS lookup: Failed to parse records for $domain, processing with provided record',
-        );
-        return null;
-      }
-    }
-
-    if (response.answer != null && response.answer!.records != null) {
-      for (final record in response.answer!.records!) {
-        results.add(Tuple3(domain, record.name, _address.secondValue));
-      }
-    }
-
-    if (results.isNotEmpty) {
-      _dnsAnswers = results.iterator;
-
-      try {
-        return _dnsAnswers!.moveNext() ? _dnsAnswers!.current : null;
-      } catch (_) {
-        return null;
-      }
-    }
-
-    return null;
-  }
 
   Future<void> handleStreamError(
     String otherHost, {
@@ -936,9 +559,7 @@ class Transport {
       port = int.parse(portsec.split(':')[1]);
     }
 
-    _address = Tuple2(host, port);
-    _defaultDomain = host;
-    _dnsAnswers = null;
+    connection.reset(host: host, port: port);
   }
 
   /// Wraps basic send method declared in this class privately. Helps to send
@@ -1025,16 +646,8 @@ class Transport {
     return synchronized(() => completer.future);
   }
 
-  /// Send raw data accross the socket.
-  ///
-  /// [data] can be either [List] of integers or [String].
-  void sendRaw(String data) {
-    final raw = WhixpUtils.utf8Encode(data);
-
-    Log.instance.debug('SEND: ${WhixpUtils.unicode(raw)}');
-
-    if (_connecta != null) _connecta?.send(raw);
-  }
+  /// Converts the passed data to raw data and send it using socket.
+  void sendRaw(String data) => connection.send(data);
 
   /// On session start, queue all pending stanzas to be sent.
   void _setSessionStart() {
@@ -1044,15 +657,22 @@ class Transport {
     _queuedStanzas.clear();
   }
 
+  void _closeStreams() {
+    _waitingQueueController.close();
+    _streamController.close();
+  }
+
+  Future<void> disconnect({bool consume = true, bool sendFooter = false}) =>
+      connection.hangup(
+        consume: consume,
+        sendFooter: sendFooter,
+        streamFooter: streamFooter,
+        consumeCallback: _consumeCallback,
+      );
+
   /// Host and port keeper. First value refers to host and the second to port.
   Tuple2<String, int> get address => _address;
 
-  /// Indicates whether the connection is established or not.
-  bool get isConnected => _connecta != null;
-
   /// Indicates whether the connection is secured or not.
-  bool get isConnectionSecured => _isConnectionSecured;
-
-  /// Indicates that if disable startTLS is activated or not.
-  bool get disableStartTLS => _disableStartTLS;
+  bool get isConnectionSecured => connection.isConnectionSecure;
 }
