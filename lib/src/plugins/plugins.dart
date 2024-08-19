@@ -4,6 +4,8 @@ export 'disco/info.dart';
 export 'disco/items.dart';
 export 'form/form.dart';
 export 'id/id.dart';
+export 'mam/mam.dart';
 export 'pubsub/pubsub.dart';
 export 'push/push.dart';
+export 'rsm/rsm.dart';
 export 'time/time.dart';
