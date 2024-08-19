@@ -1,4 +1,5 @@
 enum TransportState {
+  pickingAddress,
   connecting,
   connectionFailure,
   reconnecting,
