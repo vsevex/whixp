@@ -1,98 +1,86 @@
-// import 'package:test/test.dart';
+import 'package:test/test.dart';
 
-// import 'package:whixp/src/plugins/rsm/rsm.dart';
+import 'package:whixp/src/plugins/plugins.dart';
 
-// import 'package:xml/xml.dart' as xml;
+import 'package:xml/xml.dart' as xml;
 
-// import 'test_base.dart';
+import 'test_base.dart';
 
-// void main() {
-//   late RSMStanza rsm;
+void main() {
+  group('Result Set Management plugin stanza test cases', () {
+    test('must properly set max item size', () {
+      const rsm = RSMSet(max: 10);
+      final fromXML = RSMSet.fromXML(rsm.toXML());
 
-//   setUp(() => rsm = RSMStanza());
+      check(
+        rsm,
+        fromXML,
+        '<set xmlns="http://jabber.org/protocol/rsm"><max>10</max></set>',
+      );
 
-//   group('Result Set Management plugin stanza test cases', () {
-//     test('must properly set first index', () {
-//       rsm['first'] = 'id';
-//       rsm.setFirstIndex('10');
+      expect(fromXML.max, isNotNaN);
+      expect(fromXML.max, equals(10));
+      expect(fromXML.after, isNull);
+      expect(fromXML.before, isNull);
+      expect(fromXML.count, isNull);
+    });
 
-//       check(
-//         rsm,
-//         '<set xmlns="http://jabber.org/protocol/rsm"><first index="10">id</first></set>',
-//       );
-//     });
+    test('must properly set && get first item && index', () {
+      const firstItem = 'id';
+      const firstIndex = 10;
+      const rsm = RSMSet(firstItem: firstItem, firstIndex: firstIndex);
+      final fromXML = RSMSet.fromXML(rsm.toXML());
 
-//     test('must properly get first index', () {
-//       const elementString =
-//           '<set xmlns="http://jabber.org/protocol/rsm"><first index="10">id</first></set>';
+      check(
+        rsm,
+        fromXML,
+        '<set xmlns="http://jabber.org/protocol/rsm"><max>10</max><first index=\'10\'>id</first></set>',
+      );
 
-//       final stanza =
-//           RSMStanza(element: xml.XmlDocument.parse(elementString).rootElement)
-//               .firstIndex;
-//       expect(stanza, equals('10'));
-//     });
+      expect(fromXML.firstItem, isNotNull);
+      expect(fromXML.firstItem, equals('id'));
+      expect(fromXML.firstIndex, isNotNull);
+      expect(fromXML.firstIndex, equals(10));
+    });
 
-//     test('must properly delete first index', () {
-//       const elementString =
-//           '<set xmlns="http://jabber.org/protocol/rsm"><first index="10">id</first></set>';
+    test('must properly set before interface', () {
+      const rsm = RSMSet(before: '');
 
-//       final stanza =
-//           RSMStanza(element: xml.XmlDocument.parse(elementString).rootElement)
-//             ..deleteFirstIndex();
+      check(
+        rsm,
+        RSMSet.fromXML(rsm.toXML()),
+        '<set xmlns="http://jabber.org/protocol/rsm"><max>0</max><before/></set>',
+      );
+    });
 
-//       check(
-//         stanza,
-//         '<set xmlns="http://jabber.org/protocol/rsm"><first>id</first></set>',
-//       );
-//     });
+    test('must return true if there is not any text associated', () {
+      const elementString =
+          '<set xmlns="http://jabber.org/protocol/rsm"><max>10</max><before/></set>';
 
-//     test('must properly set before interface', () {
-//       rsm.setBefore(true);
+      final rsm =
+          RSMSet.fromXML(xml.XmlDocument.parse(elementString).rootElement);
 
-//       check(rsm, '<set xmlns="http://jabber.org/protocol/rsm"><before/></set>');
-//     });
+      expect(rsm.isBefore, isTrue);
+    });
 
-//     test('must return true if there is not any text associated', () {
-//       const elementString =
-//           '<set xmlns="http://jabber.org/protocol/rsm"><before/></set>';
+    test('must properly set before interface with value', () {
+      const rsm = RSMSet(before: 'value');
 
-//       final stanza =
-//           RSMStanza(element: xml.XmlDocument.parse(elementString).rootElement);
+      check(
+        rsm,
+        RSMSet.fromXML(rsm.toXML()),
+        '<set xmlns="http://jabber.org/protocol/rsm"><max>0</max><before>value</before></set>',
+      );
+    });
 
-//       expect(stanza.before, isTrue);
-//     });
+    test('must return proper text associated', () {
+      const elementString =
+          '<set xmlns="http://jabber.org/protocol/rsm"><before>value</before></set>';
 
-//     test('remove before interface', () {
-//       const elementString =
-//           '<set xmlns="http://jabber.org/protocol/rsm"><before/></set>';
+      final rsm =
+          RSMSet.fromXML(xml.XmlDocument.parse(elementString).rootElement);
 
-//       final stanza =
-//           RSMStanza(element: xml.XmlDocument.parse(elementString).rootElement)
-//             ..delete('before');
-
-//       check(
-//         stanza,
-//         '<set xmlns="http://jabber.org/protocol/rsm"></set>',
-//       );
-//     });
-
-//     test('must properly set before interface with value', () {
-//       rsm['before'] = 'value';
-
-//       check(
-//         rsm,
-//         '<set xmlns="http://jabber.org/protocol/rsm"><before>value</before></set>',
-//       );
-//     });
-
-//     test('must return proper text associated', () {
-//       const elementString =
-//           '<set xmlns="http://jabber.org/protocol/rsm"><before>value</before></set>';
-
-//       final stanza =
-//           RSMStanza(element: xml.XmlDocument.parse(elementString).rootElement);
-
-//       expect(stanza['before'], equals('value'));
-//     });
-//   });
-// }
+      expect(rsm.before, equals('value'));
+    });
+  });
+}
