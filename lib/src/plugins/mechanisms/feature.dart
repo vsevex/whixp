@@ -93,7 +93,7 @@ class FeatureMechanisms {
       } else if (param == 'host') {
         results[param] = whixp.requestedJID.domain;
       } else if (param == 'service-name') {
-        results[param] = Transport.instance().serviceName;
+        results[param] = Transport.instance().connection.serviceName;
       } else if (param == 'service') {
         results[param] = credentials[param] ?? 'xmpp';
       } else if (credentials.keys.contains(param)) {
