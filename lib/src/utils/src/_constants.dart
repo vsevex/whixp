@@ -18,6 +18,7 @@ part of 'utils.dart';
 /// * _[FORMS]_ - XMPP Forms namespace.
 /// * _[BIND]_ - XMPP Binding namespace from RFC 3920 and RFC 6120.
 /// * _[RSM]_ - Result Set Management namespace.
+/// * _[MAM]_ - Message Archive Management
 /// * _[STARTTLS]_ - XMPP StartTLS namespace.
 /// * _[SESSION]_ - XMPP Session namespace from RFC 3920.
 /// * _[VER]_ - Roster Versioning namespace.
@@ -44,6 +45,7 @@ final _namespace = <String, String>{
   'FRAMING': "urn:ietf:params:xml:ns:xmpp-framing",
   'BIND': "urn:ietf:params:xml:ns:xmpp-bind",
   'RSM': "http://jabber.org/protocol/rsm",
+  'MAM': "urn:xmpp:mam:2",
   'STARTTLS': "urn:ietf:params:xml:ns:xmpp-tls",
   'SESSION': "urn:ietf:params:xml:ns:xmpp-session",
   'VER': "urn:xmpp:features:rosterver",
