@@ -2,8 +2,8 @@ import 'package:whixp/whixp.dart';
 
 void main() {
   final whixp = Whixp(
-    jabberID: 'vsevex@localhost',
-    password: 'vesevu13',
+    jabberID: 'vsevex@localhost/resource',
+    password: 'passwd',
     logger: Log(enableWarning: true, enableError: true, includeTimestamp: true),
     internalDatabasePath: 'whixp',
     reconnectionPolicy: RandomBackoffReconnectionPolicy(1, 3),

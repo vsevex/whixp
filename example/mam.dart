@@ -3,7 +3,7 @@ import 'package:whixp/whixp.dart';
 void main() {
   final whixp = Whixp(
     jabberID: 'vsevex@localhost',
-    password: 'vesevu13',
+    password: 'passwd',
     logger: Log(enableWarning: true, enableError: true, includeTimestamp: true),
     internalDatabasePath: 'whixp',
   );
