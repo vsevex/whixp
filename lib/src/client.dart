@@ -14,8 +14,7 @@ class Whixp extends WhixpBase {
   ///
   /// [jabberID] associated with the client. This is a required parameter and
   /// should be a valid [JabberID]. Alongside the [jabberID] the [password] for
-  /// authenticating the client. This is a required parameter and should be the
-  /// password associated with the provided [jabberID].
+  /// authenticating the client.
   ///
   /// [host] is a server's host address. This parameter is optional and defaults
   /// to the value defined in the [WhixpBase].
@@ -29,11 +28,12 @@ class Whixp extends WhixpBase {
   /// Timeout for establishing the connection (in milliseconds) is represented
   /// by the [connectionTimeout] parameter. Defaults to `2000`.
   ///
-  /// If [whitespaceKeepAlive] is true, then socket periodically send a
+  /// If [pingKeepAlive] is true, then socket periodically sends a
   /// whitespace character over the wire to keep the connection alive.
   ///
-  /// The default interval between keepalive signals when [whitespaceKeepAlive]
-  /// is enabled. Represents in seconds. Defaults to `300`.
+  /// [pingKeepAliveInterval] indicates the default interval between keepalive
+  /// signals when [pingKeepAlive] is enabled. Represents in seconds. Defaults
+  /// to `300`.
   ///
   /// If [useIPv6] is set to `true`, attempts to use IPv6 when connecting.
   ///
@@ -52,16 +52,19 @@ class Whixp extends WhixpBase {
   ///
   /// [logger] is a [Log] instance to print out various log messages properly.
   ///
-  /// [context] is a [io.SecurityContext] instance that is responsible for
+  /// [context] is a [SecurityContext] instance that is responsible for
   /// certificate exchange.
   ///
-  /// [onBadCertificateCallback] passes [io.X509Certificate] instance when
+  /// [onBadCertificateCallback] passes [X509Certificate] instance when
   /// returning boolean value which indicates to proceed on bad certificate or
   /// not.
   ///
+  /// If [reconnectionPolicy] is defined, then [Whixp] tries to reconnect
+  /// whenever there is an error (internal, network, etc.). Defaults to `null`.
+  ///
   /// ### Example:
   /// ```dart
-  /// final whixp = Whixp('vsevex@example.com', 'passwd');
+  /// final whixp = Whixp('vsevex@localhost', 'passwd');
   /// whixp.connect();
   /// ```
   Whixp({
@@ -79,12 +82,13 @@ class Whixp extends WhixpBase {
     super.context,
     super.onBadCertificateCallback,
     super.internalDatabasePath,
+    super.endSessionOnDisconnect,
     super.reconnectionPolicy,
     String language = 'en',
   }) {
     _language = language;
 
-    /// Automatically calls the `_setup()` method to configure the XMPP client.
+    /// Automatically calls the setup callback to configure the XMPP client.
     _setup();
 
     if (password?.isNotEmpty ?? false) {
@@ -99,7 +103,7 @@ class Whixp extends WhixpBase {
     registerFeature(
       'starttls',
       (_) async {
-        await transport.startTLS();
+        await transport.connection.startTLS();
         final result = StartTLS.handleStartTLS();
         return result;
       },
@@ -115,7 +119,7 @@ class Whixp extends WhixpBase {
     late String host;
 
     if (transport.boundJID == null) {
-      host = transport.host;
+      host = transport.connection.configuration.host;
     } else {
       host = transport.boundJID!.host;
     }
@@ -147,41 +151,6 @@ class Whixp extends WhixpBase {
         'increaseHandled',
         (_) => session?.increaseInbound(fullJID),
       );
-
-    //   ..addEventHandler<JabberID>(
-    //     'sessionBind',
-    //     (jid) => _handleSessionBind(jid!),
-    //   )
-    //   ..addEventHandler<IQ>('rosterUpdate', (iq) => _handleRoster(iq!));
-    // ..registerHandler(
-    //   CallbackHandler(
-    //     'Roster Update',
-    //     (iq) {
-    //       final JabberID? from;
-    //       try {
-    //         from = iq.from;
-    //         if (from != null &&
-    //             from.toString().isNotEmpty &&
-    //             from.toString() != transport.boundJID.bare) {
-    //           final reply = (iq as IQ).replyIQ();
-    //           reply['type'] = 'error';
-    //           final error = reply['error'] as StanzaError;
-    //           error['type'] = 'cancel';
-    //           error['code'] = 503;
-    //           error['condition'] = 'service-unavailable';
-    //           reply.sendIQ();
-    //           return;
-    //         }
-    //         transport.emit<IQ>('rosterUpdate', data: iq as IQ);
-    //       } on Exception {
-    //         transport.emit<IQ>('rosterUpdate', data: iq as IQ);
-    //       }
-    //     },
-    //     matcher: StanzaPathMatcher('iq@type=set/roster'),
-    //   ),
-    // );
-
-    transport.defaultLanguage = _language;
   }
 
   void _reset() => streamFeatureHandlers.clear();
@@ -200,10 +169,12 @@ class Whixp extends WhixpBase {
 
   Future<bool> _handleStreamFeatures(Packet features) async {
     if (features is! StreamFeatures) return false;
-    if (transport.disableStartTLS && features.tlsRequired) {
+    if (transport.connection.configuration.disableStartTLS &&
+        features.tlsRequired) {
       AuthenticationException.requiresTLS();
     }
-    if (!transport.disableStartTLS && !features.tlsRequired) {
+    if (!transport.connection.configuration.disableStartTLS &&
+        !features.tlsRequired) {
       AuthenticationException.disabledTLS();
     }
 
@@ -238,11 +209,6 @@ class Whixp extends WhixpBase {
 
         final result = await handler.call(features);
 
-        /// Using delay, 'cause establishing connection may require time,
-        /// and if there is something to do with event handling, we should have
-        /// time to do necessary things. (e.g. registering user before sending
-        /// auth challenge to the server)
-        // await Future.delayed(const Duration(milliseconds: 150));
         if (result) return true;
       }
     }
@@ -251,91 +217,6 @@ class Whixp extends WhixpBase {
     transport.emit('streamNegotiated');
     return false;
   }
-
-  // void _handleSessionBind(JabberID jid) =>
-  //     clientRoster = roster[jid.bare] as rost.RosterNode;
-
-  // /// Adds or changes a roster item.
-  // ///
-  // /// [jid] is the entry to modify.
-  // FutureOr<IQ?> updateRoster<T>(
-  //   String jid, {
-  //   String? name,
-  //   String? subscription,
-  //   List<String>? groups,
-  //   FutureOr<T> Function(IQ iq)? callback,
-  //   FutureOr<void> Function(StanzaError error)? failureCallback,
-  //   FutureOr<void> Function()? timeoutCallback,
-  //   int timeout = 10,
-  // }) {
-  //   final current = clientRoster[jid] as rost.RosterItem;
-
-  //   name ??= current['name'] as String;
-  //   subscription ??= current['subscription'] as String;
-  //   groups ??= (current['groups'] as List).isEmpty
-  //       ? null
-  //       : current['groups'] as List<String>;
-
-  //   return clientRoster.update(
-  //     jid,
-  //     name: name,
-  //     groups: groups,
-  //     subscription: subscription,
-  //     callback: callback,
-  //     failureCallback: failureCallback,
-  //     timeoutCallback: timeoutCallback,
-  //     timeout: timeout,
-  //   );
-  // }
-
-  // void _handleRoster(IQ iq) {
-  //   if (iq['type'] == 'set') {
-  //     final JabberID? from;
-  //     try {
-  //       from = iq.from;
-  //       if (from != null &&
-  //           from.bare.isNotEmpty &&
-  //           from.bare != transport.boundJID.bare) {
-  //         throw StanzaException.serviceUnavailable(iq);
-  //       }
-  //     } on Exception {
-  //       /// pass;
-  //     }
-  //   }
-
-  //   if (((iq['roster'] as Roster).copy()['ver'] as String).isNotEmpty) {
-  //     clientRoster.version = (iq['roster'] as Roster)['ver'] as String;
-  //   }
-  //   final items =
-  //       (iq['roster'] as Roster)['items'] as Map<String, Map<String, dynamic>>;
-
-  //   final validSubscriptions = <String>{'to', 'from', 'both', 'none', 'remove'};
-  //   for (final item in items.entries) {
-  //     final value = item.value;
-  //     final rosterItem = clientRoster[item.key] as rost.RosterItem;
-  //     if (validSubscriptions.contains(value['subscription'])) {
-  //       rosterItem['name'] = value['name'];
-  //       rosterItem['groups'] = value['groups'];
-  //       rosterItem['from'] =
-  //           <String>{'from', 'both'}.contains(value['subscription'] as String);
-  //       rosterItem['to'] =
-  //           <String>{'to', 'both'}.contains(value['subscription'] as String);
-  //       rosterItem['pending_out'] = value['ask'] == 'subscribe';
-
-  //       rosterItem.save(remove: value['subscription'] == 'remove');
-  //     }
-  //   }
-
-  //   if (iq['type'] == 'set') {
-  //     final response = IQ(
-  //       stanzaType: 'result',
-  //       stanzaTo: iq.from ?? transport.boundJID,
-  //       stanzaID: iq['id'] as String,
-  //       transport: transport,
-  //     )..enable('roster');
-  //     response.sendIQ();
-  //   }
-  // }
 
   /// Connects to the XMPP server.
   ///
