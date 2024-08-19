@@ -2,6 +2,7 @@ part '_methods.dart';
 
 class DateTimeProfile {
   const DateTimeProfile();
+
   /// Converts a [String] into a [DateTime] object.
   ///
   /// In the context of ISO 8601 date and time representaiton, the "Z" at the
