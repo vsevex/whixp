@@ -124,7 +124,7 @@ class Session {
 
     if ((numAcked > unackeds.length) || numAcked < 0) {
       Log.instance.error(
-        'Inconsistent sequence numbers from the server, ignoring and replacing ours with them.',
+        'Inconsistent sequence numbers from the server, ignoring and replacing ours with them',
       );
       numAcked = unackeds.length;
     }
@@ -191,7 +191,7 @@ class Session {
   bool get isSessionOpen => bindJID != null;
 }
 
-// Class holding Stream Management information.
+// Holds Stream Management information.
 class SMState {
   final String id;
   final int sequence;

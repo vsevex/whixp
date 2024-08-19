@@ -9,7 +9,7 @@ class HiveController {
   /// Constructs a [HiveController].
   HiveController();
 
-  /// The static storage box for key-value pairs.
+  /// Static storage box for key-value pairs.
   static Box<Map<dynamic, dynamic>>? _smBox;
 
   /// Static storage box for unacked stanza records.

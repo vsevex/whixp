@@ -58,9 +58,8 @@ abstract class ReconnectionPolicy {
       _lock.synchronized(() => _shouldAttemptReconnection = value);
 }
 
-/// A simple reconnection strategy: Make the reconnection delays exponentially longer
-/// for every failed attempt.
-/// NOTE: This ReconnectionPolicy may be broken
+/// A simple reconnection strategy: Make the reconnection delays exponentially
+/// longer for every failed attempt.
 class RandomBackoffReconnectionPolicy extends ReconnectionPolicy {
   RandomBackoffReconnectionPolicy(
     this._minBackoffTime,
