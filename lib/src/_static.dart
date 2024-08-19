@@ -38,6 +38,7 @@ const String errorContinue = 'continue';
 const String errorModify = 'modify';
 const String errorWait = 'wait';
 
+/// Tags for incoming stanza filtering.
 String get discoInformationTag =>
     '{${WhixpUtils.getNamespace('DISCO_INFO')}}query';
 String get discoItemsTag => '{${WhixpUtils.getNamespace('DISCO_ITEMS')}}query';
@@ -59,3 +60,9 @@ String get disableTag => '{urn:xmpp:push:0}disable';
 String get delayTag => '{urn:xmpp:delay}delay';
 String get stanzaIDTag => '{urn:xmpp:sid:0}stanza-id';
 String get originIDTag => '{urn:xmpp:sid:0}origin-id';
+String get rsmSetTag => '{http://jabber.org/protocol/rsm}set';
+String get mamQueryTag => '{urn:xmpp:mam:2}query';
+String get mamFinTag => '{urn:xmpp:mam:2}fin';
+String get mamResultTag => '{urn:xmpp:mam:2}result';
+String get mamMetadataTag => '{urn:xmpp:mam:2}metadata';
+String get forwardedTag => '{urn:xmpp:forward:0}forwarded';
