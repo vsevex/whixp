@@ -1,7 +1,6 @@
 import 'package:convert/convert.dart' as convert;
 
 import 'package:test/test.dart';
-import 'package:whixp/src/client.dart';
 
 import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/sasl/scram.dart';
@@ -24,8 +23,7 @@ void main() {
 
   group('deriveKeys method test', () {
     test('must return correct client key value in the output', () {
-      final whixp = Whixp();
-      final result = Scram(whixp).deriveKeys(
+      final result = Scram.deriveKeys(
         password: 'pencil',
         salt: 'QSXCR+Q6sek8bf92',
         hashName: 'SHA-1',
