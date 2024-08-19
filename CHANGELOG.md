@@ -1,4 +1,23 @@
-# 2.0.1 - Partially Stable
+# 2.1.0 - 2024-08-20
+
+• Removed External Components Support: The external components section has been removed to streamline the core package functionality. If you rely on components, refer to the provided examples and code documentation for updated usage patterns.
+
+• Updated Documentation: Expanded documentation to cover new extension support and breaking changes. Refer to the updated examples for proper implementation of new features and adjustments.
+
+- **Breaking Changes**
+  • External Components: The support for external components has been deprecated and removed. If you were using this feature, you will need to refactor your implementation. Updated examples are provided in the documentation to guide you through these changes.
+  • Protocol Extensions: Some existing extensions have undergone refactoring to align with the new architecture. Users should review their implementation of protocol extensions and refer to the updated documentation and examples to ensure compatibility.
+  • Connection Management and Stanza Handling: The internal handling of connection states and stanzas has been revised. Users may need to update their event handling logic, particularly around connection re-establishment and custom stanza handling.
+
+- **Deprecated**
+  • Legacy vCard Support: The legacy vCard _(vCard-temp)_ support has been deprecated in favor of **vCard4 over PubSub**. Users are encouraged to migrate to the new implementation for better performance and flexibility.
+
+- **Documentation**
+  • Migration Guide: Included a migration guide in the documentation to help users transition from older versions to this release.
+
+Ensure that you review the updated examples and documentation to adjust your implementation accordingly. If you encounter any issues, please report them via GitHub, and I will address them promptly.
+
+## 2.0.1 - Partially Stable
 
 - Added support for XMPP components.
 - Added extension support to pubsub, pep, vcard-temp, and in-band registration as well as tune, ping, delay, stream management, etc.
