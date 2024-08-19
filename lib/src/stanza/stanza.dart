@@ -3,6 +3,7 @@ import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/plugins/features.dart';
 import 'package:whixp/src/plugins/plugins.dart';
 import 'package:whixp/src/plugins/version.dart';
+import 'package:whixp/src/stanza/forwarded.dart';
 import 'package:whixp/src/stanza/mixins.dart';
 import 'package:whixp/src/utils/utils.dart';
 
@@ -50,6 +51,18 @@ abstract class Stanza with Packet {
       return Disable.fromXML(node);
     } else if (tag == delayTag) {
       return DelayStanza.fromXML(node);
+    } else if (tag == rsmSetTag) {
+      return RSMSet.fromXML(node);
+    } else if (tag == mamQueryTag) {
+      return MAMQuery.fromXML(node);
+    } else if (tag == mamFinTag) {
+      return MAMFin.fromXML(node);
+    } else if (tag == mamMetadataTag) {
+      return MAMMetadata.fromXML(node);
+    } else if (tag == mamResultTag) {
+      return MAMResult.fromXML(node);
+    } else if (tag == forwardedTag) {
+      return Forwarded.fromXML(node);
     } else {
       throw WhixpInternalException.stanzaNotFound(
         node.localName,
