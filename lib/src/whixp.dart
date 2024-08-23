@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io' as io;
 
-import 'package:whixp/src/database/controller.dart';
 import 'package:whixp/src/handler/handler.dart';
 import 'package:whixp/src/session.dart';
 import 'package:whixp/src/stanza/mixins.dart';
@@ -131,9 +130,6 @@ abstract class WhixpBase {
       dnsService = null;
     }
 
-    /// Initialize internal used database for Whixp.
-    HiveController.initialize(internalDatabasePath);
-
     /// Declare [Transport] with the passed params.
     _transport = Transport(
       address,
@@ -147,6 +143,7 @@ abstract class WhixpBase {
       onBadCertificateCallback: onBadCertificateCallback,
       connectionTimeout: connectionTimeout,
       pingKeepAlive: pingKeepAlive,
+      internalDatabasePath: internalDatabasePath,
       pingKeepAliveInterval: pingKeepAliveInterval,
       endSessionOnDisconnect: endSessionOnDisconnect,
       reconnectionPolicy: reconnectionPolicy,
