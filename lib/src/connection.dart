@@ -23,7 +23,7 @@ class Connection {
 
   /// The function which is going to be invoked when the connection is
   /// established.
-  final void Function() onConnectionStartCallback;
+  final Future<void> Function() onConnectionStartCallback;
 
   /// Error handler callback whenever there is a connection error occured.
   final void Function(dynamic exception) handleError;
@@ -129,7 +129,7 @@ class Connection {
     /// If there is new connection attempt will take place, then this variable
     /// should be null.
     currentConnectionAttempt = null;
-    onConnectionStartCallback.call();
+    await onConnectionStartCallback.call();
 
     await _reconnectionPolicy?.onSuccess();
     if (clearAnswers) _dnsAnswers = null;

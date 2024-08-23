@@ -4,6 +4,7 @@ import 'dart:io' as io;
 import 'package:connecta/connecta.dart';
 import 'package:dnsolve/dnsolve.dart';
 import 'package:synchronized/extension.dart';
+import 'package:whixp/src/database/controller.dart';
 
 import 'package:whixp/src/enums.dart';
 import 'package:whixp/src/exception.dart';
@@ -99,6 +100,9 @@ class Transport {
     /// indicates to proceed on bad certificate or not.
     bool Function(io.X509Certificate)? onBadCertificateCallback,
 
+    /// Must be declared internal database path.
+    String internalDatabasePath = '',
+
     /// Whether to end session on disconnect method or not. Defaults to `true`.
     bool endSessionOnDisconnect = true,
 
@@ -127,6 +131,7 @@ class Transport {
       context: context,
       onBadCertificateCallback: onBadCertificateCallback,
       connectionTimeout: connectionTimeout,
+      internalDatabasePath: internalDatabasePath,
       reconnectionPolicy: reconnectionPolicy,
     );
   }
@@ -147,6 +152,7 @@ class Transport {
     required bool Function(io.X509Certificate)? onBadCertificateCallback,
     required this.connectionTimeout,
     required this.endSessionOnDisconnect,
+    required String internalDatabasePath,
     required ReconnectionPolicy? reconnectionPolicy,
   }) {
     connection = Connection(
@@ -168,7 +174,9 @@ class Transport {
         onBadCertificateCallback: onBadCertificateCallback,
       ),
       (state) => emit<TransportState>('state', data: state),
-      onConnectionStartCallback: () {
+      onConnectionStartCallback: () async {
+        /// Initialize internal used database for Whixp.
+        await HiveController.initialize(internalDatabasePath);
         _waitingQueueController = async.StreamController<Packet>();
 
         /// Reinit XML parser.
