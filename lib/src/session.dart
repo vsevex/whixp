@@ -117,6 +117,10 @@ class Session {
 
     int numAcked = ((packet.h ?? 0) - (state?.lastAck ?? 0)) % _seq;
     final unackeds = StreamManagement.unackeds;
+    if (unackeds == null) {
+      state = state?.copyWith(lastAck: packet.h);
+      return saveSMState(full, state);
+    }
 
     Log.instance.warning(
       'Acked: ${packet.h}, Last acked: ${state?.lastAck}, Unacked: ${unackeds.length}, Num acked: $numAcked, Remaining: ${unackeds.length - numAcked}',

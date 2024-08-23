@@ -40,11 +40,10 @@ class StreamManagement {
     return await HiveController.readFromSMBox(jid!);
   }
 
-  static Future<void> saveUnackedToLocal(int sequence, Stanza stanza) {
-    return HiveController.writeUnackeds(sequence, stanza);
-  }
+  static Future<void>? saveUnackedToLocal(int sequence, Stanza stanza) =>
+      HiveController.writeUnackeds(sequence, stanza);
 
-  static Map<dynamic, String> get unackeds => HiveController.unackeds;
+  static Map<dynamic, String>? get unackeds => HiveController.unackeds;
 
   static String? popFromUnackeds() => HiveController.popUnacked();
 

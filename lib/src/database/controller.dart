@@ -21,14 +21,10 @@ class HiveController {
   /// path.
   static Future<void> initialize([String? path]) async {
     if (_smBox != null) {
-      Log.instance.warning(
-        'Tried to reinitialize sm box, but it is already initialized',
-      );
+      Log.instance.warning('Tried to reinitialize sm box');
     }
     if (_unackeds != null) {
-      Log.instance.warning(
-        'Tried to reinitialize unacked stanzas box, but it is already initialized',
-      );
+      Log.instance.warning('Tried to reinitialize unacked stanzas box');
     }
     _smBox = await Hive.openBox<Map<dynamic, dynamic>>('sm', path: path);
     _unackeds = await Hive.openBox<String>('unacked', path: path);
@@ -38,17 +34,17 @@ class HiveController {
   /// Writes a key-value pair to the storage box.
   ///
   /// [jid] is the key associated with the provided [state].
-  static Future<void> writeToSMBox(String jid, Map<String, dynamic> state) =>
-      _smBox!.put(jid, state);
+  static Future<void>? writeToSMBox(String jid, Map<String, dynamic> state) =>
+      _smBox?.put(jid, state);
 
   /// Writes a key-value pair to the storage box.
   ///
   /// [sequence] is the key associated with the provided unacked [stanza].
-  static Future<void> writeUnackeds(int sequence, Stanza stanza) =>
-      _unackeds!.put(sequence, stanza.toXMLString());
+  static Future<void>? writeUnackeds(int sequence, Stanza stanza) =>
+      _unackeds?.put(sequence, stanza.toXMLString());
 
   /// All available key-value pairs for lcaolly saved unacked stanzas.
-  static Map<dynamic, String> get unackeds => _unackeds!.toMap();
+  static Map<dynamic, String>? get unackeds => _unackeds?.toMap();
 
   /// Pops from the unacked stanzas list.
   static String? popUnacked() {

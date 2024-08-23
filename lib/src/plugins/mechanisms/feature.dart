@@ -55,9 +55,9 @@ class FeatureMechanisms {
   late final bool _unencryptedPlain;
   late final bool _unencryptedScram;
 
-  final mechanisms = <String>[];
+  final mechanisms = <String>{};
 
-  late final attemptedMechanisms = <String>[];
+  final attemptedMechanisms = <String>{};
   late Mechanism _mech;
 
   void pluginInitialize() {
@@ -134,7 +134,7 @@ class FeatureMechanisms {
   bool handleSASLAuth(Packet features) {
     if (StreamFeatures.supported.contains('mechanisms')) return false;
     if (features is! StreamFeatures) return false;
-    mechanisms.addAll(features.mechanisms?.list ?? <String>[]);
+    mechanisms.addAll(features.mechanisms?.list ?? <String>{});
 
     return _sendAuthentication();
   }

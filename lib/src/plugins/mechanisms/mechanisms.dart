@@ -13,7 +13,7 @@ class SASLMechanisms {
   SASLMechanisms();
 
   /// List of supported mechanisms.
-  final list = <String>[];
+  final list = <String>{};
 
   /// Constructs a [SASLMechanisms] instance from XML.
   factory SASLMechanisms.fromXML(xml.XmlElement node) {
@@ -37,7 +37,13 @@ class SASLMechanisms {
     );
 
     for (final mech in list) {
-      element.children.add(xml.XmlText(mech).copy());
+      element.children.add(
+        xml.XmlElement(
+          xml.XmlName('mechanism'),
+          [],
+          [xml.XmlText(mech).copy()],
+        ),
+      );
     }
 
     return element;
