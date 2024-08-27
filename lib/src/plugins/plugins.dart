@@ -1,4 +1,5 @@
 export 'command/command.dart';
+export 'csi.dart';
 export 'delay/delay.dart';
 export 'disco/info.dart';
 export 'disco/items.dart';
