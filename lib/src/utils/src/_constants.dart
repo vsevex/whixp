@@ -48,6 +48,7 @@ final _namespace = <String, String>{
   'MAM': "urn:xmpp:mam:2",
   'STARTTLS': "urn:ietf:params:xml:ns:xmpp-tls",
   'SESSION': "urn:ietf:params:xml:ns:xmpp-session",
+  'MARKERS': "urn:xmpp:chat-markers:0",
   'VER': "urn:xmpp:features:rosterver",
   'VERSION': "jabber:iq:version",
   'STANZAS': "urn:ietf:params:xml:ns:xmpp-stanzas",
