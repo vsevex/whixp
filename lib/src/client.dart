@@ -1,5 +1,6 @@
 import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/handler/handler.dart';
+import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/log/log.dart';
 import 'package:whixp/src/plugins/features.dart';
 import 'package:whixp/src/session.dart';
@@ -130,13 +131,9 @@ class Whixp extends WhixpBase {
           "<stream:stream to='$host' xmlns:stream='$streamNamespace' xmlns='$defaultNamespace' xml:lang='$_language' version='1.0'>"
       ..streamFooter = "</stream:stream>";
 
-    final fullJID = session?.bindJID?.full ?? transport.boundJID?.full ?? '';
+    final fullJID = session?.bindJID?.full ?? transport.boundJID!.full;
 
     transport
-      ..registerHandler(
-        Handler('Stream Features', _handleStreamFeatures)
-          ..packet('stream:features'),
-      )
       ..registerHandler(
         Handler('SM Request', (packet) => session?.sendAnswer())
           ..packet('sm:request'),
@@ -146,7 +143,7 @@ class Whixp extends WhixpBase {
           ..packet('sm:answer'),
       )
       ..addEventHandler('startSession', (_) => session?.enabledOut = true)
-      ..addEventHandler('endSession', (_) => session?.enabledOut = false)
+      ..addEventHandler('endSession', (_) => session?.clearSession())
       ..addEventHandler(
         'increaseHandled',
         (_) => session?.increaseInbound(fullJID),
@@ -162,7 +159,7 @@ class Whixp extends WhixpBase {
   Future<void> _onStreamEnabled(Packet packet) async {
     if (packet is! SMEnabled) return;
     await session?.saveSMState(
-      session?.bindJID?.full ?? transport.boundJID?.full,
+      session?.bindJID?.full ?? transport.boundJID!.full,
       SMState(packet.id!, 0, 0, 0),
     );
   }
@@ -188,7 +185,7 @@ class Whixp extends WhixpBase {
       registerFeature(
         'sm',
         (_) => session!.resume(
-          session?.bindJID?.full ?? transport.boundJID?.full,
+          session?.bindJID?.full ?? transport.boundJID!.full,
           onResumeDone: () => transport
             ..removeHandler('SM Resume Handler')
             ..removeHandler('SM Enable Handler'),
@@ -214,6 +211,7 @@ class Whixp extends WhixpBase {
     }
 
     Log.instance.info('Finished processing stream features.');
+
     transport.emit('streamNegotiated');
     return false;
   }
@@ -222,5 +220,10 @@ class Whixp extends WhixpBase {
   ///
   /// When no address is given, a SRV lookup for the server will be attempted.
   /// If that fails, the server user in the JID will be used.
-  void connect() => transport.connect();
+  void connect() => transport
+    ..registerHandler(
+      Handler('Stream Features', _handleStreamFeatures)
+        ..packet('stream:features'),
+    )
+    ..connect();
 }
