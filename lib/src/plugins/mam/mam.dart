@@ -24,15 +24,20 @@ class MAM {
   /// wrapped into a <fin/> element qualified by the 'urn:xmpp:mam:2' namespace,
   /// indicating the UID of the first and last message of the (possibly limited)
   /// result set. This allows clients to accurately page through messages.
+  ///
+  /// It is important to note that flipping a page does not affect what results
+  /// are returned in response to the query. It only affects the order in which
+  /// they are transmitted from the server to the client.
   static async.FutureOr<IQ> queryArchive<T>({
     Form? filter,
     RSMSet? pagination,
+    bool flipPage = false,
     async.FutureOr<T> Function(IQ result)? callback,
     async.FutureOr<void> Function(ErrorStanza error)? failureCallback,
     async.FutureOr<void> Function()? timeoutCallback,
     int timeout = 5,
   }) {
-    final query = MAMQuery(form: filter, rsm: pagination);
+    final query = MAMQuery(form: filter, rsm: pagination, flipPage: flipPage);
 
     final iq = IQ(generateID: true)
       ..type = iqTypeSet
