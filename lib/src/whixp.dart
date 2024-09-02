@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' as io;
 
 import 'package:whixp/src/handler/handler.dart';
+import 'package:whixp/src/plugins/markers/markers.dart';
 import 'package:whixp/src/session.dart';
 import 'package:whixp/src/stanza/mixins.dart';
 import 'package:whixp/src/transport.dart';
@@ -89,10 +90,9 @@ abstract class WhixpBase {
     /// Requested [JabberID] from the passed jabber ID.
     if (jabberID != null) _requestedJID = JabberID(jabberID);
 
-    /// [JabberID] from the passed jabber ID.
-    JabberID? boundJID;
     if (jabberID != null) {
-      boundJID = JabberID(jabberID);
+      /// [JabberID] from the passed jabber ID.
+      _boundJID = JabberID(jabberID);
     }
 
     /// Equals passed maxRedirect count to the local variable.
@@ -104,7 +104,7 @@ abstract class WhixpBase {
     late String address;
     late String? dnsService;
 
-    if (host == null && boundJID == null) {
+    if (host == null && _boundJID == null) {
       throw WhixpInternalException.setup(
         'You need to declare either host or jid to connect to the server.',
       );
@@ -113,8 +113,8 @@ abstract class WhixpBase {
     if (!_isComponent) {
       /// Check if this class is not used for component initialization, and try
       /// to point [host] and [port] properly.
-      if (host == null && boundJID != null) {
-        address = boundJID.host;
+      if (host == null && _boundJID != null) {
+        address = _boundJID.host;
 
         if (useTLS) {
           dnsService = 'xmpps-client';
@@ -126,7 +126,7 @@ abstract class WhixpBase {
         dnsService = null;
       }
     } else {
-      address = host ?? boundJID!.host;
+      address = host ?? _boundJID!.host;
       dnsService = null;
     }
 
@@ -136,7 +136,7 @@ abstract class WhixpBase {
       port: port,
       useIPv6: useIPv6,
       disableStartTLS: disableStartTLS,
-      boundJID: boundJID,
+      boundJID: _boundJID,
       dnsService: dnsService,
       useTLS: useTLS,
       context: context,
@@ -200,6 +200,9 @@ abstract class WhixpBase {
   /// The distinction between clients and components can be important, primarily
   /// for choosing how to handle the `to` and `from` JIDs of stanzas.
   final bool _isComponent = false;
+
+  /// Must be parsed from passed [jabberID].
+  late final JabberID? _boundJID;
 
   /// Session initializer.
   Session? _session;
@@ -283,6 +286,9 @@ abstract class WhixpBase {
 
     /// List of payloads to be inserted
     List<Stanza>? payloads,
+
+    /// Requests "is message displayed" information in-message
+    bool requestDisplayedInformation = false,
   }) =>
       Transport.instance().send(
         _makeMessage(
@@ -294,6 +300,7 @@ abstract class WhixpBase {
           messageNick: nick,
           extensions: extensions,
           payloads: payloads,
+          requestDisplayedInformation: requestDisplayedInformation,
         ),
       );
 
@@ -375,6 +382,7 @@ abstract class WhixpBase {
     JabberID? messageFrom,
     String? messageNick,
     List<MessageExtension>? extensions,
+    required bool requestDisplayedInformation,
     List<Stanza>? payloads,
   }) {
     final message =
@@ -395,7 +403,23 @@ abstract class WhixpBase {
       }
     }
 
+    if (requestDisplayedInformation) return message.makeMarkable;
+
     return message;
+  }
+
+  /// Sends a message to the [messageTo] sender to inform that the message is
+  /// displayed by the receiver. [messageID] must be attached.
+  void sendDisplayedMessage(
+    JabberID messageTo, {
+    required String messageID,
+    JabberID? messageFrom,
+  }) {
+    final message = Message()
+      ..to = messageTo
+      ..from = messageFrom;
+
+    Transport.instance().send(message.makeDisplayed(messageID));
   }
 
   /// Close the XML stream and wait for ack from the server.
