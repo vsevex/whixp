@@ -30,7 +30,11 @@ class Router {
   }
 
   /// Adds a [handler] to the list of registered handlers.
-  static void addHandler(Handler handler) => _handlers.add(handler);
+  static void addHandler(Handler handler) {
+    final found = _handlers.indexWhere((hndlr) => hndlr.name == handler.name);
+    if (found == -1) return _handlers.add(handler);
+    _handlers[found] = handler;
+  }
 
   /// Removes a [handler] from the registered handlers list.
   static void removeHandler(String name) =>

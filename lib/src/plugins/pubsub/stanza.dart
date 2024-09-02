@@ -129,7 +129,7 @@ class PubSubEvent extends MessageStanza {
             items[attributeNode]?.add(_Item.fromXML(child));
           }
           if (child.localName == 'retract') {
-            final node = retracts[attributeNode] ?? <_Item>[];
+            final node = retracts[attributeNode] ?? <_Retract>[];
             node.add(_Retract.fromXML(child));
           }
         }

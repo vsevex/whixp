@@ -1,6 +1,6 @@
 part of 'whixp.dart';
 
-extension SASLExtension on WhixpBase {
+extension PrivateExtension on WhixpBase {
   /// Requested [JabberID] from the passed jabber ID.
   JabberID get requestedJID => _requestedJID;
 

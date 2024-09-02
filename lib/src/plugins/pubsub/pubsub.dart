@@ -61,10 +61,12 @@ class PubSub {
     if (items?.isEmpty ?? true) return;
 
     for (final item in items!.entries) {
-      final payload = item.value.last.payload;
-      if (payload != null) {
-        Transport.instance()
-            .emit<Stanza>(item.key, data: item.value.last.payload);
+      if (item.value.isNotEmpty) {
+        final payload = item.value.last.payload;
+        if (payload != null) {
+          Transport.instance()
+              .emit<Stanza>(item.key, data: item.value.last.payload);
+        }
       }
     }
   }
