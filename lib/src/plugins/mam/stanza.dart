@@ -1,16 +1,26 @@
 part of 'mam.dart';
 
 class MAMQuery extends IQStanza {
-  const MAMQuery({this.rsm, this.form});
+  const MAMQuery({this.rsm, this.form, this.flipPage = false});
 
   final RSMSet? rsm;
   final Form? form;
+
+  /// When fetching a page, the client may prefer for the server to send the
+  /// results within that page in reverse order. For example, if a client
+  /// implements a user interface that automatically fetches older messages as a
+  /// user scrolls backward, it may want to receive and display the newest
+  /// messages first, instead of waiting for the whole page to be received.
+  final bool flipPage;
 
   @override
   xml.XmlElement toXML() {
     final element = WhixpUtils.xmlElement(name, namespace: namespace);
     if (form != null) element.children.add(form!.toXML().copy());
     if (rsm != null) element.children.add(rsm!.toXML().copy());
+    if (flipPage) {
+      element.children.add(xml.XmlElement(xml.XmlName('flip-page')));
+    }
 
     return element;
   }
