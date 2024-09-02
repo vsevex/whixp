@@ -115,26 +115,24 @@ class Transport {
 
     /// Reconnection strategy if there is an network interruption or disconnect.
     ReconnectionPolicy? reconnectionPolicy,
-  }) {
-    if (_instance != null) return _instance!;
-    return _instance = Transport._internal(
-      host,
-      boundJID: boundJID,
-      port: port,
-      dnsService: dnsService,
-      useIPv6: useIPv6,
-      useTLS: useTLS,
-      disableStartTLS: disableStartTLS,
-      endSessionOnDisconnect: endSessionOnDisconnect,
-      pingKeepAlive: pingKeepAlive,
-      pingKeepAliveInterval: pingKeepAliveInterval,
-      context: context,
-      onBadCertificateCallback: onBadCertificateCallback,
-      connectionTimeout: connectionTimeout,
-      internalDatabasePath: internalDatabasePath,
-      reconnectionPolicy: reconnectionPolicy,
-    );
-  }
+  }) =>
+      _instance = Transport._internal(
+        host,
+        boundJID: boundJID,
+        port: port,
+        dnsService: dnsService,
+        useIPv6: useIPv6,
+        useTLS: useTLS,
+        disableStartTLS: disableStartTLS,
+        endSessionOnDisconnect: endSessionOnDisconnect,
+        pingKeepAlive: pingKeepAlive,
+        pingKeepAliveInterval: pingKeepAliveInterval,
+        context: context,
+        onBadCertificateCallback: onBadCertificateCallback,
+        connectionTimeout: connectionTimeout,
+        internalDatabasePath: internalDatabasePath,
+        reconnectionPolicy: reconnectionPolicy,
+      );
 
   factory Transport.instance() => _instance!;
 
