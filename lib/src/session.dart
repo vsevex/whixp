@@ -192,6 +192,13 @@ class Session {
     await StreamManagement.saveSMStateToLocal(fullJID!, state);
   }
 
+  /// Clears state whenever the session ends.
+  void clearSession() {
+    bindJID = null;
+    state = null;
+    enabledOut = false;
+  }
+
   bool get isSessionOpen => bindJID != null;
 }
 
