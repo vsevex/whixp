@@ -42,6 +42,7 @@ class Message extends Stanza with Attributes {
     this.thread,
     this.nick,
     this.error,
+    this.isMarked = false,
   });
 
   /// The subject of the message.
@@ -55,6 +56,9 @@ class Message extends Stanza with Attributes {
 
   /// The nick associated with the message.
   final String? nick;
+
+  /// Indicates whether the sender requests displayed marker or not.
+  final bool isMarked;
 
   /// Error stanza associated with this message stanza, if any.
   final ErrorStanza? error;
@@ -88,6 +92,7 @@ class Message extends Stanza with Attributes {
     String? thread;
     String? nick;
     ErrorStanza? error;
+    bool isMarked = false;
     final payloads = <Stanza>[];
     final extensions = <MessageExtension>[];
 
@@ -101,6 +106,8 @@ class Message extends Stanza with Attributes {
           thread = child.innerText;
         case 'nick':
           nick = child.innerText;
+        case 'markable':
+          isMarked = true;
         case 'error':
           error = ErrorStanza.fromXML(child);
         default:
@@ -127,6 +134,7 @@ class Message extends Stanza with Attributes {
       thread: thread,
       nick: nick,
       error: error,
+      isMarked: isMarked,
     );
     message._payloads.addAll(payloads);
     message.extensions.addAll(extensions);
@@ -183,6 +191,16 @@ class Message extends Stanza with Attributes {
   /// Returns a list of payloads of a specific type associated with this message
   /// stanza.
   List<S> get<S extends Stanza>() => _payloads.whereType<S>().toList();
+
+  /// Trys to get [MessageExtension] from message itself. If there is no
+  /// extension under the given [name], then returns null.
+  MessageExtension? getExtension(String name) {
+    if (extensions.isEmpty) return null;
+    final exts = extensions.where((ext) => ext.name == name);
+
+    if (exts.isEmpty) return null;
+    return exts.first;
+  }
 
   /// Returns the name of the message stanza.
   @override
