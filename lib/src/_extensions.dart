@@ -2,7 +2,7 @@ part of 'whixp.dart';
 
 extension PrivateExtension on WhixpBase {
   /// Requested [JabberID] from the passed jabber ID.
-  JabberID get requestedJID => _requestedJID;
+  JabberID? get requestedJID => _requestedJID;
 
   /// The sasl data keeper. Works with [SASL] class and keeps various data(s)
   /// that can be used accross package.
@@ -43,9 +43,9 @@ extension PrivateExtension on WhixpBase {
   }
 
   /// Map holder for the given user properties for the connection.
-  Map<String, String> get credentials => _credentials;
+  Map<String, String?> get credentials => _credentials;
 
   /// Setter for _credentials.
-  set credentials(Map<String, String> credentials) =>
+  set credentials(Map<String, String?> credentials) =>
       _credentials = credentials;
 }
