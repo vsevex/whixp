@@ -19,7 +19,7 @@ part 'stanza/_challenge.dart';
 part 'stanza/_response.dart';
 part 'stanza/_success.dart';
 
-typedef SASLCallback = Map<String, String> Function(
+typedef SASLCallback = Map<String, String?> Function(
   Set<String> required,
   Set<String> optional,
 );
@@ -76,30 +76,34 @@ class FeatureMechanisms {
     securityCallback ??= _defaultSecurity;
   }
 
-  Map<String, String> _defaultCredentials(
+  Map<String, String?> _defaultCredentials(
     Set<String> required,
     Set<String> optional,
   ) {
     final credentials = whixp.credentials;
-    final results = <String, String>{};
+    final results = <String, String?>{};
     final params = <String>{...required, ...optional};
 
     for (final param in params) {
       if (param == 'username') {
-        results[param] = credentials[param] ?? whixp.requestedJID.user;
+        results[param] = credentials[param] ?? whixp.requestedJID?.user;
       } else if (param == 'email') {
-        final jid = whixp.requestedJID.bare;
+        final jid = whixp.requestedJID?.bare;
         results[param] = credentials[param] ?? jid;
       } else if (param == 'host') {
-        results[param] = whixp.requestedJID.domain;
+        results[param] =
+            whixp.requestedJID?.domain ?? whixp.transport.address.firstValue;
       } else if (param == 'service-name') {
         results[param] = Transport.instance().connection.serviceName;
       } else if (param == 'service') {
         results[param] = credentials[param] ?? 'xmpp';
       } else if (credentials.keys.contains(param)) {
-        results[param] = credentials[param]!;
+        results[param] = credentials[param];
       }
     }
+
+    /// Remove all empty values from the results.
+    results.removeWhere((_, param) => param?.isEmpty ?? true);
 
     return results;
   }
@@ -146,7 +150,14 @@ class FeatureMechanisms {
 
     try {
       _mech = sasl.choose(mechList, saslCallback!, securityCallback!);
-    } on SASLException {
+    } on SASLException catch (error) {
+      if (error.message.contains('Missing credential')) {
+        if (error.extra is Mechanism) {
+          _mech = error.extra as Mechanism;
+          return _processFailure();
+        }
+      }
+
       Log.instance
           .error('No appropriate login method found. Aborting connection...');
 
@@ -195,12 +206,23 @@ class FeatureMechanisms {
 
   bool _handleFailure(Packet failure) {
     if (failure is! SASLFailure) return false;
+    return _processFailure(failure: failure);
+  }
+
+  bool _processFailure({Packet? failure}) {
     attemptedMechanisms.add(_mech.name);
-    Log.instance.info(
-      'Authentication failed: ${failure.reason}, mechanism: ${_mech.name}',
+    if (failure != null && failure is SASLFailure) {
+      Log.instance.info(
+        'Authentication failed: ${failure.reason}, mechanism: ${_mech.name}',
+      );
+    } else {
+      Log.instance
+          .info('Authentication failed with the mechanism: ${_mech.name}');
+    }
+    Transport.instance().emit<String>(
+      'failedAuthentication',
+      data: (failure as SASLFailure?)?.reason ?? '${_mech.name} failed',
     );
-    Transport.instance()
-        .emit<String>('failedAuthentication', data: failure.reason);
     _sendAuthentication();
     return true;
   }
