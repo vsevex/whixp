@@ -91,7 +91,7 @@ class SASL {
       final creds = <String>{'username', 'password', 'authzid'};
       for (final required in bestMech._requiredCredentials) {
         if (!credentials.containsKey(required)) {
-          throw SASLException.missingCredentials(required);
+          throw SASLException.missingCredentials(required, mech: bestMech);
         }
       }
 
@@ -102,9 +102,10 @@ class SASL {
       }
 
       for (final credential in credentials.entries) {
-        if (creds.contains(credential.key)) {
+        if (creds.contains(credential.key) &&
+            (credential.value?.isNotEmpty ?? false)) {
           credentials[credential.key] =
-              StringPreparationProfiles().saslPrep(credential.value);
+              StringPreparationProfiles().saslPrep(credential.value!);
         } else {
           credentials[credential.key] = credential.value;
         }
@@ -146,7 +147,10 @@ class _SASLPlain extends Mechanism {
         );
 
   @override
-  void _setup(Map<String, String> credentials, [Set<String>? securityOptions]) {
+  void _setup(
+    Map<String, String?> credentials, [
+    Set<String>? securityOptions,
+  ]) {
     super._setup(credentials, securityOptions);
     if (!_securityOptions.contains('encrypted')) {
       if (!_securityOptions.contains('unencryptedPlain')) {
@@ -166,7 +170,7 @@ class _SASLPlain extends Mechanism {
     final password = _base.credentials['password'];
 
     String auth =
-        (authzid != '$username@${_base.requestedJID.domain}') ? authzid : '';
+        (authzid != '$username@${_base.requestedJID?.domain}') ? authzid : '';
     auth = '$auth\u0000';
     auth = '$auth$username';
     auth = '$auth\u0000';
