@@ -66,3 +66,10 @@ String get mamFinTag => '{urn:xmpp:mam:2}fin';
 String get mamResultTag => '{urn:xmpp:mam:2}result';
 String get mamMetadataTag => '{urn:xmpp:mam:2}metadata';
 String get forwardedTag => '{urn:xmpp:forward:0}forwarded';
+
+Set<String> get presenceTypes => <String>{
+      'subscribe',
+      'subscribed',
+      'unsubscribe',
+      'unsubscribed',
+    };
