@@ -41,8 +41,6 @@ class Message extends Stanza with Attributes {
     this.body,
     this.thread,
     this.nick,
-    this.error,
-    this.isMarked = false,
   });
 
   /// The subject of the message.
@@ -57,11 +55,12 @@ class Message extends Stanza with Attributes {
   /// The nick associated with the message.
   final String? nick;
 
-  /// Indicates whether the sender requests displayed marker or not.
-  final bool isMarked;
+  /// Indicates whether the sender requests displayed marker or not. Always
+  /// 'false' for sent messages.
+  bool _isMarked = false;
 
   /// Error stanza associated with this message stanza, if any.
-  final ErrorStanza? error;
+  ErrorStanza? _error;
 
   /// List of payloads associated with this message stanza.
   final _payloads = <Stanza>[];
@@ -133,9 +132,9 @@ class Message extends Stanza with Attributes {
       body: body,
       thread: thread,
       nick: nick,
-      error: error,
-      isMarked: isMarked,
-    );
+    )
+      .._isMarked = isMarked
+      .._error = error;
     message._payloads.addAll(payloads);
     message.extensions.addAll(extensions);
     message.loadAttributes(node);
@@ -170,7 +169,6 @@ class Message extends Stanza with Attributes {
 
     final root = builder.buildDocument().rootElement;
 
-    if (error != null) root.children.add(error!.toXML().copy());
     for (final payload in _payloads) {
       root.children.add(payload.toXML().copy());
     }
@@ -206,6 +204,13 @@ class Message extends Stanza with Attributes {
   @override
   String get name => _name;
 
+  /// Indicates if the message is marked as "requires display information from
+  /// receiver".
+  bool get isMarked => _isMarked;
+
+  /// Returns the error stanza associated with this message stanza, if any.
+  ErrorStanza? get error => _error;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -215,7 +220,7 @@ class Message extends Stanza with Attributes {
           subject == other.subject &&
           body == other.body &&
           thread == other.thread &&
-          error == other.error &&
+          _error == other._error &&
           _payloads == other._payloads &&
           extensions == other.extensions;
 
@@ -225,7 +230,7 @@ class Message extends Stanza with Attributes {
       id.hashCode ^
       body.hashCode ^
       thread.hashCode ^
-      error.hashCode ^
+      _error.hashCode ^
       _payloads.hashCode ^
       extensions.hashCode;
 }
