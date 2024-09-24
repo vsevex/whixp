@@ -32,7 +32,10 @@ abstract class Mechanism {
   late final Set<String> _optionalCredentials;
   late final Set<String> _securityOptions;
 
-  void _setup(Map<String, String> credentials, [Set<String>? securityOptions]) {
+  void _setup(
+    Map<String, String?> credentials, [
+    Set<String>? securityOptions,
+  ]) {
     if (securityOptions != null) {
       _securityOptions.addAll(securityOptions);
     }
