@@ -1,6 +1,14 @@
-# 2.1.1 - 2024-09-02
+# 2.1.2 - 2024-09-24
+
+- **Documentation**
+  - The documentation [page](https://whixp.dosy.app/) is now live! Explore detailed instructions on how to use the package and its features.
+- **Bug Fixes**
+  - Fixed small bugs related to anonymous server connections.
+
+## 2.1.1 - 2024-09-02
 
 - **Added**
+
   - Message Archive Management (MAM) Support: Implemented support for the MAM extension, allowing users to archive and retrieve chat history more effectively.
   - Displayed Markers Support: Added functionality to handle displayed markers, improving message tracking and read receipt features.
 
