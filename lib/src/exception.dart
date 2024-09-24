@@ -1,3 +1,4 @@
+import 'package:whixp/src/sasl/sasl.dart';
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stanza/stanza.dart';
 
@@ -212,11 +213,21 @@ class StringPreparationException extends WhixpException {
 /// ```
 class SASLException extends WhixpException {
   /// Creates a [SASLException] with the specified error message.
-  SASLException(super.message);
+  SASLException(super.message, {this.extra});
+
+  /// [extra] is an optional parameter that can be used to pass additional
+  /// information about the exception.
+  dynamic extra;
 
   factory SASLException.cancelled(String message) => SASLException(message);
-  factory SASLException.missingCredentials(String credential) =>
-      SASLException('Missing credential in SASL mechanism: $credential');
+  factory SASLException.missingCredentials(
+    String credential, {
+    Mechanism? mech,
+  }) =>
+      SASLException(
+        'Missing credential in SASL mechanism: $credential',
+        extra: mech,
+      );
   factory SASLException.noAppropriateMechanism() =>
       SASLException('No appropriate mechanism was found');
   factory SASLException.unimplementedChallenge(String mechanism) =>
