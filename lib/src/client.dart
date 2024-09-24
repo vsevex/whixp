@@ -93,7 +93,7 @@ class Whixp extends WhixpBase {
     _setup();
 
     if (password?.isNotEmpty ?? false) {
-      credentials.addAll({'password': password!});
+      credentials.addAll({'password': password});
     }
   }
 
@@ -131,7 +131,7 @@ class Whixp extends WhixpBase {
           "<stream:stream to='$host' xmlns:stream='$streamNamespace' xmlns='$defaultNamespace' xml:lang='$_language' version='1.0'>"
       ..streamFooter = "</stream:stream>";
 
-    final fullJID = session?.bindJID?.full ?? transport.boundJID!.full;
+    final fullJID = session?.bindJID?.full ?? transport.boundJID?.full;
 
     transport
       ..registerHandler(
@@ -185,7 +185,7 @@ class Whixp extends WhixpBase {
       registerFeature(
         'sm',
         (_) => session!.resume(
-          session?.bindJID?.full ?? transport.boundJID!.full,
+          session?.bindJID?.full ?? transport.boundJID?.full,
           onResumeDone: () => transport
             ..removeHandler('SM Resume Handler')
             ..removeHandler('SM Enable Handler'),
