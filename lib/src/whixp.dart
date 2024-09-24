@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' as io;
 
+import 'package:whixp/src/_static.dart';
 import 'package:whixp/src/handler/handler.dart';
 import 'package:whixp/src/plugins/markers/markers.dart';
 import 'package:whixp/src/session.dart';
@@ -88,7 +89,11 @@ abstract class WhixpBase {
     _defaultNamespace = defaultNamespace ?? WhixpUtils.getNamespace('CLIENT');
 
     /// Requested [JabberID] from the passed jabber ID.
-    if (jabberID != null) _requestedJID = JabberID(jabberID);
+    if (jabberID != null) {
+      _requestedJID = JabberID(jabberID);
+    } else {
+      _requestedJID = null;
+    }
 
     if (jabberID != null) {
       /// [JabberID] from the passed jabber ID.
@@ -114,7 +119,7 @@ abstract class WhixpBase {
       /// Check if this class is not used for component initialization, and try
       /// to point [host] and [port] properly.
       if (host == null && _boundJID != null) {
-        address = _boundJID.host;
+        address = _boundJID!.host;
 
         if (useTLS) {
           dnsService = 'xmpps-client';
@@ -169,6 +174,9 @@ abstract class WhixpBase {
           _transport.emit('legacyProtocol');
         }
       }
+      ..registerHandler(
+        Handler('Presence', _handlePresence)..packet('presence'),
+      )
       ..registerHandler(Handler('IM', _handleMessage)..packet('message'))
       ..registerHandler(
         Handler('Stream Error', _handleStreamError)..packet('stream_error'),
@@ -184,7 +192,7 @@ abstract class WhixpBase {
   late final String _defaultNamespace;
 
   /// The JabberID (JID) requested for this connection.
-  late final JabberID _requestedJID;
+  late final JabberID? _requestedJID;
 
   /// The maximum number of consecutive `see-other-host` redirections that will
   /// be followed before quitting.
@@ -202,13 +210,13 @@ abstract class WhixpBase {
   final bool _isComponent = false;
 
   /// Must be parsed from passed [jabberID].
-  late final JabberID? _boundJID;
+  JabberID? _boundJID;
 
   /// Session initializer.
   Session? _session;
 
   /// Map holder for the given user properties for the connection.
-  Map<String, String> _credentials = <String, String>{};
+  Map<String, String?> _credentials = <String, String?>{};
 
   final _streamFeatureHandlers =
       <String, Tuple2<FutureOr<bool> Function(Packet features), bool>>{};
@@ -332,6 +340,7 @@ abstract class WhixpBase {
       presenceTo: presenceTo,
       presenceFrom: presenceFrom,
       presenceShow: presenceShow,
+      presenceNick: presenceNick,
       presencePriority: presencePriority,
       presenceStatus: presenceStatus,
     );
@@ -422,6 +431,9 @@ abstract class WhixpBase {
     Transport.instance().send(message.makeDisplayed(messageID));
   }
 
+  /// Sends stanza via [Transport] instance.
+  void send(Stanza stanza) => Transport.instance().send(stanza);
+
   /// Close the XML stream and wait for ack from the server.
   ///
   /// Calls the primary method from [Transport].
@@ -454,6 +466,24 @@ abstract class WhixpBase {
       _transport.handleStreamError(otherHost, maxRedirects: _maxRedirects);
     } else {
       _transport.disconnect(consume: false);
+    }
+  }
+
+  /// Handles the presence packet by emitting appropriate events based on the
+  /// packet type.
+  ///
+  /// [packet] is the incoming presence packet.
+  void _handlePresence(Packet packet) {
+    if (packet is! Presence) return;
+    final type = packet.type;
+
+    transport.emit<Presence>('presence', data: packet);
+    if (type?.isNotEmpty ?? false) {
+      transport.emit<Presence>('presence_$type', data: packet);
+    }
+
+    if (presenceTypes.contains(type)) {
+      transport.emit<Presence>('changed_subscription', data: packet);
     }
   }
 
