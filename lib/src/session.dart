@@ -47,11 +47,11 @@ class Session {
     required void Function() onResumeDone,
     required Future<bool> Function() onResumeFailed,
   }) async {
+    if (fullJID?.isEmpty ?? true) return false;
     if (!features.doesStreamManagement) return false;
     Transport.instance()
         .callbacksBeforeStanzaSend
         .add((stanza) async => _handleOutgoing(fullJID, stanza as Stanza));
-    if (fullJID == null) return false;
     state = await StreamManagement.getSMStateFromLocal(fullJID);
     if (state == null) return onResumeFailed.call();
 
@@ -111,9 +111,10 @@ class Session {
     return Transport.instance().send(request);
   }
 
-  Future<void> handleAnswer(Packet packet, String full) async {
+  Future<void> handleAnswer(Packet packet, String? full) async {
     if (packet is! SMAnswer) return;
     if (packet.h == state?.lastAck) return;
+    if (full?.isEmpty ?? true) return;
 
     int numAcked = ((packet.h ?? 0) - (state?.lastAck ?? 0)) % _seq;
     final unackeds = StreamManagement.unackeds;
@@ -177,8 +178,8 @@ class Session {
     return stanza;
   }
 
-  Future<int?> increaseInbound(String full) async {
-    if (full.isEmpty) return null;
+  Future<int?> increaseInbound(String? full) async {
+    if (full?.isEmpty ?? true) return null;
     final handled = ((state?.handled ?? 0) + 1) % _seq;
 
     await saveSMState(full, state?.copyWith(handled: handled));
