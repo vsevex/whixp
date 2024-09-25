@@ -1,4 +1,9 @@
-# 2.1.2 - 2024-09-24
+# 2.1.2+1
+
+- **Documentation**
+  - The documentation now includes several pages translated into Azerbaijani.
+
+## 2.1.2 - 2024-09-24
 
 - **Documentation**
   - The documentation [page](https://whixp.dosy.app/) is now live! Explore detailed instructions on how to use the package and its features.

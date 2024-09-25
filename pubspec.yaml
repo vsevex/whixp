@@ -1,6 +1,6 @@
 name: whixp
 description: Streamline your XMPP messaging with a lightweight Dart-based XMPP client
-version: 2.1.2
+version: 2.1.2+1
 repository: https://github.com/vsevex/whixp
 issue_tracker: https://github.com/vsevex/whixp/issues
 topics: [xmpp, network, socket]
