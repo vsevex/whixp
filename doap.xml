@@ -22,7 +22,7 @@
         <language>en</language>
 
         <!-- Until https://github.com/ewilderj/doap/pull/68 is merged, we’ll use schema.org instead. -->
-        <schema:logo rdf:resource="https://dosybuck.s3.amazonaws.com/whixp/whixp_logo.svg" />
+        <schema:logo rdf:resource="https://dosybuck.s3.amazonaws.com/whixp/whixp_logo_dark.svg" />
 
         <programming-language>Dart</programming-language>
 
