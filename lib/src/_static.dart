@@ -66,6 +66,9 @@ String get mamFinTag => '{urn:xmpp:mam:2}fin';
 String get mamResultTag => '{urn:xmpp:mam:2}result';
 String get mamMetadataTag => '{urn:xmpp:mam:2}metadata';
 String get forwardedTag => '{urn:xmpp:forward:0}forwarded';
+String get inboxQueryTag => '{erlang-solutions.com:xmpp:inbox:0}inbox';
+String get inboxFinTag => '{erlang-solutions.com:xmpp:inbox:0}fin';
+String get inboxResultTag => '{erlang-solutions.com:xmpp:inbox:0}result';
 
 Set<String> get presenceTypes => <String>{
       'subscribe',
