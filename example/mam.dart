@@ -35,7 +35,9 @@ void main() {
             Log.instance.info(forwarded!.delay!.stamp!);
           }
           Log.instance.info("marked: ${forwarded?.actual?.isMarked}");
-          Log.instance.info("from: ${forwarded?.delay?.from?.username}");
+          Log.instance.info(
+            "from: ${forwarded?.actual?.from?.username} \t to: ${forwarded?.actual?.to?.username}",
+          );
 
           Log.instance.info(
             "type: ${forwarded?.actual?.subject} \t value: ${forwarded?.actual?.body}",
@@ -68,10 +70,10 @@ Future<void> paginationRequest({String? lastItem}) async {
   );
   Log.instance.info("first cursor: $last");
   if (last?.isEmpty ?? true) return;
-  // if (fin != null && !fin.complete && last != null) {
-  //   return paginationRequest(
-  //     lastItem: last,
-  //   );
-  // }
+  if (fin != null && !fin.complete && last != null) {
+    return paginationRequest(
+      lastItem: last,
+    );
+  }
   // return paginationRequest(lastItem: last);
 }
