@@ -7,6 +7,7 @@ export 'form/form.dart';
 export 'id/id.dart';
 export 'inbox/inbox.dart';
 export 'mam/mam.dart';
+export 'markers/markers.dart';
 export 'pubsub/pubsub.dart';
 export 'push/push.dart';
 export 'rsm/rsm.dart';
