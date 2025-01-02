@@ -1,4 +1,9 @@
-# 2.1.2+1
+# 2.1.3
+
+- **MongooseIM**
+  - Add [Inbox](https://esl.github.io/MongooseDocs/latest/open-extensions/inbox/) plugin support
+
+## 2.1.2+1
 
 - **Documentation**
   - The documentation now includes several pages translated into Azerbaijani.
