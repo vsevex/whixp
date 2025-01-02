@@ -53,5 +53,5 @@ final _namespace = <String, String>{
   'VERSION': "jabber:iq:version",
   'STANZAS': "urn:ietf:params:xml:ns:xmpp-stanzas",
   'XML': "http://www.w3.org/XML/1998/namespace",
-  'INBOX': "erlang-solutions.com:xmpp:inbox:0"
+  'INBOX': "erlang-solutions.com:xmpp:inbox:0",
 };
