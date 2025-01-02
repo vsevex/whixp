@@ -1,3 +1,4 @@
+import 'package:whixp/src/plugins/inbox/inbox.dart';
 import 'package:whixp/whixp.dart';
 
 void main() {
@@ -14,20 +15,10 @@ void main() {
 
   whixp
     ..addEventHandler('streamNegotiated', (_) {
-      // for (int i = 1; i <= 2; i++) {
-      //   final message = Message(
-      //     subject: "normal",
-      //     body: "hmm trying something heehe * $i",
-      //   )..to = JabberID("asdfasdf@localhost");
-      //
-      //   whixp.send(message.makeMarkable);
-      // }
-
-      return paginationRequest();
+      return getInbox();
     })
     ..addEventHandler<Message>('message', (message) {
-      final result = message?.get<MAMResult>();
-
+      final result = message?.get<InboxResult>();
       if (result?.isNotEmpty ?? false) {
         for (final stanza in result!) {
           final forwarded = stanza.forwarded;
@@ -36,8 +27,12 @@ void main() {
           }
           Log.instance.info("marked: ${forwarded?.actual?.isMarked}");
           Log.instance.info(
+              "box: ${stanza.box} \t archive: ${stanza.archive} \t mute: ${stanza.mute}");
+          Log.instance.info(
             "from: ${forwarded?.actual?.from?.username} \t to: ${forwarded?.actual?.to?.username}",
           );
+
+          Log.instance.info("unread: ${stanza.unread}");
 
           Log.instance.info(
             "type: ${forwarded?.actual?.subject} \t value: ${forwarded?.actual?.body}",
@@ -48,32 +43,34 @@ void main() {
   whixp.connect();
 }
 
-/// Recursively request messages from the archive.
-Future<void> paginationRequest({String? lastItem}) async {
-  const mam = MAM();
-  final result = await MAM.queryArchive(
+String? globalLast;
+
+Future<void> getInbox({
+  String? lastItem,
+}) async {
+  globalLast = null;
+  final result = await Inbox.queryInbox(
     pagination: RSMSet(
       max: 25,
-      // after: lastItem,
-      before: lastItem ?? "",
+      after: lastItem,
     ),
-    filter: mam.createFilter(
-      wth: "asdfasdf@localhost",
-    ),
-    flipPage: true,
   );
 
-  final fin = result.payload as MAMFin?;
+  final fin = result.payload as InboxFin?;
   final last = fin?.last?.lastItem;
   Log.instance.warning(
-    "complete: ${fin?.complete}",
+    "active-conversations: ${fin?.activeConversation}",
   );
-  Log.instance.info("first cursor: $last");
-  if (last?.isEmpty ?? true) return;
-  if (fin != null && !fin.complete && last != null) {
-    return paginationRequest(
+  Log.instance.warning(
+    "unread: ${fin?.unreadMessages}",
+  );
+  Log.instance.warning(
+    "cursor: $last",
+  );
+
+  if (last != null && last != globalLast) {
+    getInbox(
       lastItem: last,
     );
   }
-  // return paginationRequest(lastItem: last);
 }

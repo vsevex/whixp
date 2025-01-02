@@ -1,12 +1,12 @@
 import 'package:whixp/src/_static.dart';
 import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/plugins/features.dart';
+import 'package:whixp/src/plugins/inbox/inbox.dart';
 import 'package:whixp/src/plugins/plugins.dart';
 import 'package:whixp/src/plugins/version.dart';
 import 'package:whixp/src/stanza/forwarded.dart';
 import 'package:whixp/src/stanza/mixins.dart';
 import 'package:whixp/src/utils/utils.dart';
-
 import 'package:xml/xml.dart' as xml;
 
 /// This class is the base for all stanza types in `Whixp`.
@@ -63,6 +63,12 @@ abstract class Stanza with Packet {
       return MAMResult.fromXML(node);
     } else if (tag == forwardedTag) {
       return Forwarded.fromXML(node);
+    } else if (tag == inboxQueryTag) {
+      return InboxQuery.fromXML(node);
+    } else if (tag == inboxFinTag) {
+      return InboxFin.fromXML(node);
+    } else if (tag == inboxResultTag) {
+      return InboxResult.fromXML(node);
     } else {
       throw WhixpInternalException.stanzaNotFound(
         node.localName,
