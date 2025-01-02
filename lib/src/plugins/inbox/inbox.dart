@@ -6,6 +6,7 @@ import 'package:whixp/src/stanza/forwarded.dart';
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stanza/stanza.dart';
 import 'package:whixp/src/utils/src/utils.dart';
+
 import 'package:xml/xml.dart';
 
 part 'stanza.dart';
@@ -19,16 +20,12 @@ class Inbox {
     RSMSet? pagination,
     int timeout = 5,
   }) {
-    final query = InboxQuery(
-      rsm: pagination,
-    );
+    final query = InboxQuery(rsm: pagination);
 
     final iq = IQ(generateID: true)
       ..type = iqTypeSet
       ..payload = query;
 
-    return iq.send(
-      timeout: timeout,
-    );
+    return iq.send(timeout: timeout);
   }
 }
