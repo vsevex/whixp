@@ -1,7 +1,6 @@
 import 'package:whixp/src/_static.dart';
 import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/plugins/features.dart';
-import 'package:whixp/src/plugins/inbox/inbox.dart';
 import 'package:whixp/src/plugins/plugins.dart';
 import 'package:whixp/src/plugins/version.dart';
 import 'package:whixp/src/stanza/forwarded.dart';
