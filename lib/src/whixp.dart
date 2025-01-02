@@ -3,7 +3,6 @@ import 'dart:io' as io;
 
 import 'package:whixp/src/_static.dart';
 import 'package:whixp/src/handler/handler.dart';
-import 'package:whixp/src/plugins/markers/markers.dart';
 import 'package:whixp/src/session.dart';
 import 'package:whixp/src/stanza/mixins.dart';
 import 'package:whixp/src/transport.dart';
