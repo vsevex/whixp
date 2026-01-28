@@ -12,7 +12,10 @@ void main() {
   whixp
     ..addEventHandler(
       'streamNegotiated',
-      (_) => PubSub.retrieveVCard(JabberID('alyosha@localhost')),
+      (_) => PubSub.retrieveVCard(
+        whixp.transport,
+        JabberID('alyosha@localhost'),
+      ),
     )
     ..connect();
 }
