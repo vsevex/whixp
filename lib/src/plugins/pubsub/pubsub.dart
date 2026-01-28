@@ -49,14 +49,14 @@ class PubSub {
   /// An empty constructor, will not be used.
   const PubSub();
 
-  static void initialize() => Transport.instance().registerHandler(
+  static void initialize(Transport transport) => transport.registerHandler(
         Handler(
           'PubSub Event items',
-          (packet) => _handleEventItems(packet as Message),
+          (packet) => _handleEventItems(packet as Message, transport),
         )..descendant('message/event/items'),
       );
 
-  static void _handleEventItems(Message message) {
+  static void _handleEventItems(Message message, Transport transport) {
     final items = message.get<PubSubEvent>().first.items;
     if (items?.isEmpty ?? true) return;
 
@@ -64,8 +64,7 @@ class PubSub {
       if (item.value.isNotEmpty) {
         final payload = item.value.last.payload;
         if (payload != null) {
-          Transport.instance()
-              .emit<Stanza>(item.key, data: item.value.last.payload);
+          transport.emit<Stanza>(item.key, data: item.value.last.payload);
         }
       }
     }
@@ -115,6 +114,7 @@ class PubSub {
   /// or error from the server after the given seconds, then client stops to
   /// wait for an answer.
   static async.FutureOr<IQ> createNode<T>(
+    Transport transport,
     JabberID jid, {
     String? node,
     Form? config,
@@ -150,6 +150,7 @@ class PubSub {
     iq.payload = pubsub;
 
     return iq.send(
+      transport,
       callback: callback,
       failureCallback: failureCallback,
       timeoutCallback: timeoutCallback,
@@ -159,6 +160,7 @@ class PubSub {
 
   /// Deletes a pubsub [node].
   static async.FutureOr<IQ> deleteNode<T>(
+    Transport transport,
     JabberID jid,
     String node, {
     async.FutureOr<T> Function(IQ iq)? callback,
@@ -177,6 +179,7 @@ class PubSub {
     iq.payload = pubsub;
 
     return iq.send(
+      transport,
       callback: callback,
       failureCallback: failureCallback,
       timeoutCallback: timeoutCallback,
@@ -187,6 +190,7 @@ class PubSub {
   /// Retrieves the configuration for a [node], or the pubsub service's
   /// default configuration for new nodes.
   static async.FutureOr<Form?> getNodeConfig<T>(
+    Transport transport,
     JabberID jid, {
     String? node,
     async.FutureOr<T> Function(IQ iq)? callback,
@@ -207,6 +211,7 @@ class PubSub {
     iq.payload = pubsub;
 
     final result = await iq.send(
+      transport,
       callback: callback,
       failureCallback: failureCallback,
       timeoutCallback: timeoutCallback,
@@ -221,6 +226,7 @@ class PubSub {
 
   /// Sets a [config] to the [node].
   static async.FutureOr<IQ> setNodeConfig<T>(
+    Transport transport,
     JabberID jid,
     String node,
     Form config, {
@@ -245,6 +251,7 @@ class PubSub {
       );
 
     return iq.send(
+      transport,
       callback: callback,
       failureCallback: failureCallback,
       timeoutCallback: timeoutCallback,
@@ -256,7 +263,7 @@ class PubSub {
   ///
   /// When an entity wishes to subscribe to a node, it sends a subscription
   /// request to the pubsub service. The request is an IQ-set where the
-  /// __<pubsub/>__ element contains one and only one __<subscribe/>__ element.
+  /// __pubsub__ element contains one and only one __subscribe__ element.
   ///
   /// The rules for determining the [jid] that is subscribing to the node are:
   /// 1. If [subscribee] is given, use that as provided.
@@ -269,6 +276,7 @@ class PubSub {
   /// For more information, see:
   /// <https://xmpp.org/extensions/xep-0060.html#subscriber-subscribe>
   static async.FutureOr<IQ> subscribe<T>(
+    Transport transport,
     JabberID jid,
     String node, {
     Form? options,
@@ -296,9 +304,9 @@ class PubSub {
         }
       } else {
         if (bare) {
-          sub = Transport.instance().boundJID?.bare;
+          sub = transport.boundJID?.bare;
         } else {
-          sub = Transport.instance().boundJID?.toString();
+          sub = transport.boundJID?.toString();
         }
       }
     }
@@ -311,6 +319,7 @@ class PubSub {
     iq.payload = pubsub;
 
     return iq.send(
+      transport,
       callback: callback,
       failureCallback: failureCallback,
       timeoutCallback: timeoutCallback,
@@ -346,6 +355,7 @@ class PubSub {
   /// </iq>
   /// ```
   static async.FutureOr<IQ> unsubscribe<T>(
+    Transport transport,
     JabberID jid,
     String node, {
     bool bare = true,
@@ -364,9 +374,9 @@ class PubSub {
 
     if (sub == null) {
       if (bare) {
-        sub = Transport.instance().boundJID?.bare;
+        sub = transport.boundJID?.bare;
       } else {
-        sub = Transport.instance().boundJID?.toString();
+        sub = transport.boundJID?.toString();
       }
     }
 
@@ -377,6 +387,7 @@ class PubSub {
     iq.payload = PubSubStanza(nodes: [unsubscribe]);
 
     return iq.send(
+      transport,
       callback: callback,
       failureCallback: failureCallback,
       timeoutCallback: timeoutCallback,
@@ -386,6 +397,7 @@ class PubSub {
 
   /// Retrieves the subscriptions associated with a given [node].
   static async.FutureOr<IQ> getNodeSubscriptions<T>(
+    Transport transport,
     JabberID jid,
     String node, {
     async.FutureOr<T> Function(IQ iq)? callback,
@@ -402,6 +414,7 @@ class PubSub {
       );
 
     return iq.send(
+      transport,
       callback: callback,
       failureCallback: failureCallback,
       timeoutCallback: timeoutCallback,
@@ -411,6 +424,7 @@ class PubSub {
 
   /// Publishes the given [vcard] to the given [jid].
   static async.FutureOr<IQ> publishVCard<T>(
+    Transport transport,
     VCard4 vcard, {
     async.FutureOr<T> Function(IQ iq)? callback,
     async.FutureOr<void> Function(ErrorStanza error)? failureCallback,
@@ -427,6 +441,7 @@ class PubSub {
       );
 
     return iq.send(
+      transport,
       callback: callback,
       failureCallback: failureCallback,
       timeoutCallback: timeoutCallback,
@@ -435,6 +450,7 @@ class PubSub {
   }
 
   static async.FutureOr<IQ> retractVCard<T>(
+    Transport transport,
     String id, {
     async.FutureOr<T> Function(IQ iq)? callback,
     async.FutureOr<void> Function(ErrorStanza error)? failureCallback,
@@ -451,6 +467,7 @@ class PubSub {
       );
 
     return iq.send(
+      transport,
       callback: callback,
       failureCallback: failureCallback,
       timeoutCallback: timeoutCallback,
@@ -463,6 +480,7 @@ class PubSub {
   /// Returns all time published [VCard4] items. For last item in the server,
   /// use .last.payload getter.
   static async.FutureOr<List<_Item?>> retrieveVCard<T>(
+    Transport transport,
     JabberID jid, {
     async.FutureOr<T> Function(IQ iq)? callback,
     async.FutureOr<void> Function(ErrorStanza error)? failureCallback,
@@ -477,6 +495,7 @@ class PubSub {
       );
 
     final result = await iq.send(
+      transport,
       callback: callback,
       failureCallback: failureCallback,
       timeoutCallback: timeoutCallback,
@@ -493,6 +512,7 @@ class PubSub {
 
   /// Subscribes to the vCard updates of the given [jid].
   static async.FutureOr<IQ> subscribeToVCardUpdates<T>(
+    Transport transport,
     JabberID jid, {
     async.FutureOr<T> Function(IQ iq)? callback,
     async.FutureOr<void> Function(ErrorStanza error)? failureCallback,
@@ -500,6 +520,7 @@ class PubSub {
     int timeout = 5,
   }) =>
       subscribe(
+        transport,
         jid,
         'urn:xmpp:vcard4',
         callback: callback,
@@ -510,6 +531,7 @@ class PubSub {
 
   /// Unsubscribes the vCard updates from the given [jid].
   static async.FutureOr<IQ> unsubscribeVCardUpdates<T>(
+    Transport transport,
     JabberID jid, {
     async.FutureOr<T> Function(IQ iq)? callback,
     async.FutureOr<void> Function(ErrorStanza error)? failureCallback,
@@ -517,6 +539,7 @@ class PubSub {
     int timeout = 5,
   }) =>
       unsubscribe(
+        transport,
         jid,
         'urn:xmpp:vcard4',
         callback: callback,
