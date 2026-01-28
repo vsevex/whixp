@@ -1,7 +1,6 @@
 import 'package:whixp/src/_static.dart';
 import 'package:whixp/src/handler/handler.dart';
 import 'package:whixp/src/stanza/mixins.dart';
-import 'package:whixp/src/transport.dart';
 import 'package:whixp/whixp.dart';
 
 /// A router for handling incoming packets by matching them with registered
@@ -19,13 +18,13 @@ class Router {
   /// If no matching handler is found, it checks if the packet is an IQ stanza
   /// with 'get' or 'set' type, and responds with a `feature-not-implemented`
   /// error if necessary.
-  static void route(Packet packet) {
+  static void route(Packet packet, Transport transport) {
     if (_match(packet)) {
       return;
     }
 
     if (packet is IQ && [iqTypeGet, iqTypeSet].contains(packet.type)) {
-      return _notImplemented(packet);
+      return _notImplemented(packet, transport);
     }
   }
 
@@ -55,12 +54,12 @@ class Router {
   }
 
   /// Sends a feature-not-implemented error response for the unhandled [iq].
-  static void _notImplemented(IQ iq) {
+  static void _notImplemented(IQ iq, Transport transport) {
     final error = ErrorStanza();
     error.code = 501;
     error.type = errorCancel;
     error.reason = 'feature-not-implemented';
     iq.makeError(error);
-    Transport.instance().send(iq);
+    transport.send(iq);
   }
 }
