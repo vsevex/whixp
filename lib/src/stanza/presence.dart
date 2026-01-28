@@ -6,14 +6,14 @@ import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
 
-/// XMPP's <presence> stanza allows entities to know the status of other clients
+/// XMPP's presence stanza allows entities to know the status of other clients
 /// and components. Since it is currently the only multi-cast stanza in XMPP,
 /// many extensions and more information to [Presence] stanzas to broadcast
 /// to every entry in the roster, such as capabilities, music choices, or
 /// locations.
 ///
 /// Since [Presence] stanzas are broadcast when an XMPP entity changes its
-/// status, the bulk of the traffic in an XMP network will be from <presence>
+/// status, the bulk of the traffic in an XMP network will be from presence
 /// stanazas. Therefore, do not include more information than necessary in a
 /// status message or within a [Presence] stanza in order to help keep the
 /// network running smoothly.
@@ -99,7 +99,6 @@ class Presence extends Stanza with Attributes {
           } catch (ex) {
             // XMPPLogger.warn(ex);
           }
-          break;
       }
     }
 
