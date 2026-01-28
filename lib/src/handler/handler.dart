@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:whixp/src/handler/matcher.dart';
 import 'package:whixp/src/stanza/mixins.dart';
 import 'package:whixp/src/utils/utils.dart';
@@ -14,7 +12,7 @@ class Handler {
 
   /// The callback function to be executed when a packet matches the handler's
   /// criteria.
-  final FutureOr<void> Function(Packet packet) callback;
+  final void Function(Packet packet) callback;
 
   /// List of matchers added to the handler.
   final _matchers = <Matcher>[];
