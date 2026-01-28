@@ -10,11 +10,32 @@ dartdoc_options.yaml
 # https://dart.dev/guides/libraries/private-files#pubspeclock.
 pubspec.lock
 
-# VsCode related folder
+# Build output
+build/
+
+# Test coverage
+coverage/
+
+# IDE related folders
 .vscode/
+.idea/
+
+# OS related files
+.DS_Store
+Thumbs.db
 
 # Ejabberd configuration files
 .ejabberd/
 
 # Local Certificate Files for Development
 certs/
+
+# Whixp CLI database files
+whixp_cli/
+
+# Whixp database files
+whixp/
+
+# Flutter plugins
+.flutter-plugins
+.flutter-plugins-dependencies
