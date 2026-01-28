@@ -2,8 +2,8 @@ import 'package:whixp/whixp.dart';
 
 void main() {
   final whixp = Whixp(
-    jabberID: 'asdf@localhost',
-    password: 'passwd',
+    jabberID: 'vsevex@localhost',
+    password: 'vesevu13',
     logger: Log(
       enableWarning: true,
       enableError: true,
@@ -23,7 +23,7 @@ void main() {
       //   whixp.send(message.makeMarkable);
       // }
 
-      return paginationRequest();
+      return paginationRequest(whixp.transport);
     })
     ..addEventHandler<Message>('message', (message) {
       final result = message?.get<MAMResult>();
@@ -49,31 +49,60 @@ void main() {
 }
 
 /// Recursively request messages from the archive.
-Future<void> paginationRequest({String? lastItem}) async {
+Future<void> paginationRequest(Transport transport, {String? lastItem}) async {
   const mam = MAM();
-  final result = await MAM.queryArchive(
-    pagination: RSMSet(
-      max: 25,
-      // after: lastItem,
-      before: lastItem ?? "",
-    ),
-    filter: mam.createFilter(
-      wth: "asdfasdf@localhost",
-    ),
-    flipPage: true,
-  );
 
-  final fin = result.payload as MAMFin?;
-  final last = fin?.last?.lastItem;
-  Log.instance.warning(
-    "complete: ${fin?.complete}",
-  );
-  Log.instance.info("first cursor: $last");
-  if (last?.isEmpty ?? true) return;
-  if (fin != null && !fin.complete && last != null) {
-    return paginationRequest(
-      lastItem: last,
+  try {
+    final result = await MAM.queryArchive(
+      transport,
+      pagination: RSMSet(
+        max: 25,
+        // after: lastItem,
+        before: lastItem ?? "",
+      ),
+      filter: mam.createFilter(
+        wth: "vsevex@localhost",
+      ),
+      flipPage: true,
+      failureCallback: (error) {
+        Log.instance.error(
+          'MAM query failed: ${error.reason} - ${error.text ?? "No error text"}',
+        );
+      },
     );
+
+    // Check for errors first
+    if (result.type == 'error' || result.error != null) {
+      Log.instance.error(
+        'MAM query returned error: ${result.error?.reason ?? "unknown"} - ${result.error?.text ?? ""}',
+      );
+      return;
+    }
+
+    // Safe cast: only cast to MAMFin if it's actually a MAMFin
+    final fin = result.payload is MAMFin ? result.payload! as MAMFin : null;
+
+    if (fin == null) {
+      Log.instance.warning(
+        'MAM query did not return MAMFin. Payload type: ${result.payload?.runtimeType}',
+      );
+      return;
+    }
+
+    final last = fin.last?.lastItem;
+    Log.instance.warning(
+      "complete: ${fin.complete}",
+    );
+    Log.instance.info("first cursor: $last");
+    if (last?.isEmpty ?? true) return;
+    if (!fin.complete && last != null) {
+      return paginationRequest(
+        transport,
+        lastItem: last,
+      );
+    }
+  } catch (e, stackTrace) {
+    Log.instance.error('Error in paginationRequest: $e');
+    Log.instance.error('Stack trace: $stackTrace');
   }
-  // return paginationRequest(lastItem: last);
 }
