@@ -39,11 +39,11 @@ class RSM {
   /// the proper value and can be later set to `IQ` stanza.
   static RSMSet limitNumberOfItems(int max) => RSMSet(max: max);
 
-  /// Creates an empty <before/> element, [max] must be declared.
+  /// Creates an empty before element, [max] must be declared.
   static RSMSet pageBackwards(int max) => RSMSet(max: max, before: '');
 
   /// The requesting entity MAY ask for the last page in a result set by
-  /// including in its request an empty <before/> element, and the maximum
+  /// including in its request an empty before element, and the maximum
   /// number of items to return.
   static RSMSet requestLastPage(int max) => RSMSet(max: max, before: '');
 
