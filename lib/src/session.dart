@@ -14,7 +14,9 @@ import 'package:whixp/src/transport.dart';
 final int _seq = math.pow(2, 32) as int;
 
 class Session {
-  Session(this.features);
+  Session(this.features, this.transport);
+
+  final Transport transport;
 
   JabberID? bindJID;
   SMState? state;
@@ -22,7 +24,7 @@ class Session {
   final StreamFeatures features;
 
   Future<bool> bind() async {
-    final resource = Transport.instance().boundJID?.resource;
+    final resource = transport.boundJID?.resource;
     Bind bind = const Bind();
     if (resource?.isNotEmpty ?? false) bind = Bind(resource: resource);
 
@@ -30,49 +32,71 @@ class Session {
     iq.type = iqTypeSet;
     iq.payload = bind;
 
-    final result = await iq.send();
+    final result = await iq.send(transport);
     if (result.payload != null && result.error == null) {
       bindJID = JabberID((result.payload! as Bind).jid);
       if (!features.doesStreamManagement) {
-        Transport.instance().emit('startSession');
+        transport.emit('startSession');
       }
+      return true;
     } else {
       Log.instance.warning('IQ bind result is missing');
+      return false;
     }
-    return false;
   }
 
   Future<bool> resume(
-    String? fullJID, {
+    String? jidKey, {
     required void Function() onResumeDone,
     required Future<bool> Function() onResumeFailed,
   }) async {
-    if (fullJID?.isEmpty ?? true) return false;
+    if (jidKey?.isEmpty ?? true) return false;
     if (!features.doesStreamManagement) return false;
-    Transport.instance()
-        .callbacksBeforeStanzaSend
-        .add((stanza) async => _handleOutgoing(fullJID, stanza as Stanza));
-    state = await StreamManagement.getSMStateFromLocal(fullJID);
-    if (state == null) return onResumeFailed.call();
+    transport.callbacksBeforeStanzaSend
+        .add((stanza) => _handleOutgoing(jidKey, stanza as Stanza));
+    state = await StreamManagement.getSMStateFromLocal(
+      transport.databaseController,
+      jidKey,
+    );
+    // Backward compatibility: older versions stored state keyed by full JID.
+    if (state == null) {
+      final full = transport.boundJID?.full;
+      if (full?.isNotEmpty ?? false) {
+        state = await StreamManagement.getSMStateFromLocal(
+          transport.databaseController,
+          full,
+        );
+      }
+    }
+    if (state == null) {
+      Log.instance.info(
+          'No previous stream state found, will enable stream management');
+      return await onResumeFailed.call();
+    }
 
     final resume = SMResume(h: state?.handled, previd: state?.id);
 
-    final result = await Transport.instance().sendAwait<SMResumed, SMFailed>(
+    Log.instance.info('Attempting to resume stream with previd: ${state?.id}');
+    final result = await transport.sendAwait<SMResumed, SMFailed>(
       'SM Resume Handler',
       resume,
       'sm:resumed',
       failurePacket: 'sm:failed',
+      timeout: 2,
     );
 
     if (result != null) {
       if (result is SMFailed) {
-        Log.instance.warning('SM failed: ${result.cause?.content}');
+        Log.instance.warning('SM resume failed: ${result.cause?.content}');
+        // Fall back to enabling stream management
+        return await onResumeFailed.call();
       } else {
         onResumeDone.call();
-        Transport.instance().emit('startSession');
+        transport.emit('startSession');
+        return true;
       }
-      return false;
     } else {
+      // Timeout - fall back to enabling stream management
       return await onResumeFailed.call();
     }
   }
@@ -81,34 +105,74 @@ class Session {
     Future<void> Function(Packet packet) onEnabled,
   ) async {
     if (!features.doesStreamManagement) return false;
-    const enable = SMEnable(resume: true);
-    if (bindJID == null) await bind.call();
-    final result = await Transport.instance().sendAwait<SMEnabled, SMFailed>(
-      'SM Enable Handler',
-      enable,
-      'sm:enabled',
-      failurePacket: 'sm:failed',
-    );
 
-    if (result != null) {
-      await onEnabled.call(result);
-      state = state?.copyWith(handled: 0);
-
-      Transport.instance().emit('startSession');
+    // Ensure bind is completed before enabling stream management
+    if (bindJID == null) {
+      Log.instance
+          .info('Binding resource before enabling stream management...');
+      await bind.call();
+      if (bindJID == null) {
+        Log.instance.warning(
+          'Failed to bind resource, cannot enable stream management',
+        );
+        return false;
+      }
     }
 
-    return false;
+    Log.instance.info('Enabling stream management...');
+    const enable = SMEnable(resume: true);
+    Log.instance
+        .info('Sending stream management enable request: ${enable.toXML()}');
+
+    try {
+      final result = await transport.sendAwait<SMEnabled, SMFailed>(
+        'SM Enable Handler',
+        enable,
+        'sm:enabled',
+        failurePacket: 'sm:failed',
+        timeout: 5, // Increase timeout to 5 seconds to match error message
+      );
+
+      if (result != null) {
+        if (result is SMFailed) {
+          Log.instance.warning(
+              'Stream management enable failed: ${result.cause?.content}');
+          return false;
+        }
+        Log.instance.info('Stream management enabled successfully');
+        await onEnabled.call(result);
+        state = state?.copyWith(handled: 0);
+
+        transport.emit('startSession');
+        return true;
+      } else {
+        Log.instance.error(
+          'Stream management enable timed out - server did not respond',
+        );
+        // Even on timeout, emit startSession to allow the connection to continue
+        // The server may have enabled SM but not responded, or SM may not be required
+        transport.emit('startSession');
+        return false;
+      }
+    } catch (e) {
+      Log.instance.error(
+        'Exception while enabling stream management: $e',
+      );
+      // Emit startSession even on error to allow connection to continue
+      transport.emit('startSession');
+      return false;
+    }
   }
 
   void sendAnswer() {
     final answer = SMAnswer(h: state?.handled ?? 0);
-    return Transport.instance().send(answer);
+    return transport.send(answer);
   }
 
   void request() {
     Log.instance.warning('Requesting Ack');
     const request = SMRequest();
-    return Transport.instance().send(request);
+    return transport.send(request);
   }
 
   Future<void> handleAnswer(Packet packet, String? full) async {
@@ -117,7 +181,7 @@ class Session {
     if (full?.isEmpty ?? true) return;
 
     int numAcked = ((packet.h ?? 0) - (state?.lastAck ?? 0)) % _seq;
-    final unackeds = StreamManagement.unackeds;
+    final unackeds = StreamManagement.getUnackeds(transport.databaseController);
     if (unackeds == null) {
       state = state?.copyWith(lastAck: packet.h);
       return saveSMState(full, state);
@@ -136,7 +200,8 @@ class Session {
     int sequence = state?.sequence ?? 1;
     for (int i = 0; i < numAcked; i++) {
       /// Pop and update sequence number
-      final unacked = StreamManagement.popFromUnackeds();
+      final unacked =
+          StreamManagement.popFromUnackeds(transport.databaseController);
       if (unacked?.isEmpty ?? true) return;
       sequence = sequence - 1;
 
@@ -150,12 +215,12 @@ class Session {
         } else if (raw.startsWith('<presence')) {
           stanza = Presence.fromString(raw);
         } else {
-          return Transport.instance().emit<String>('ackedRaw', data: raw);
+          return transport.emit<String>('ackedRaw', data: raw);
         }
 
-        Transport.instance().emit<Stanza>('ackedStanza', data: stanza);
+        transport.emit<Stanza>('ackedStanza', data: stanza);
       } catch (_) {
-        Transport.instance().emit<String>('ackedRaw', data: unacked);
+        transport.emit<String>('ackedRaw', data: unacked);
       }
     }
 
@@ -170,8 +235,24 @@ class Session {
     if (stanza is Message || stanza is IQ || stanza is Presence) {
       final sequence = ((state?.sequence ?? 0) + 1) % _seq;
       state = state?.copyWith(sequence: sequence);
-      await StreamManagement.saveUnackedToLocal(sequence, stanza);
-      await saveSMState(fullJID, state);
+      // Never await database writes in the send pipeline.
+      // In CLI apps a blocking stdin read can pause the event loop and make
+      // these awaited futures appear "stuck" (especially with background DB
+      // executors). Persist asynchronously and log on failure.
+      final unackedFuture = StreamManagement.saveUnackedToLocal(
+        transport.databaseController,
+        sequence,
+        stanza,
+      );
+      if (unackedFuture != null) {
+        unackedFuture.catchError((e) {
+          Log.instance
+              .error('Failed to persist unacked stanza (seq=$sequence): $e');
+        });
+      }
+      saveSMState(fullJID, state).catchError((e) {
+        Log.instance.error('Failed to persist SM state: $e');
+      });
       request();
     }
 
@@ -187,10 +268,14 @@ class Session {
     return handled;
   }
 
-  Future<void> saveSMState(String? fullJID, SMState? state) async {
-    if ((fullJID?.isEmpty ?? true) || state == null) return;
+  Future<void> saveSMState(String? jidKey, SMState? state) async {
+    if ((jidKey?.isEmpty ?? true) || state == null) return;
     this.state = state;
-    await StreamManagement.saveSMStateToLocal(fullJID!, state);
+    await StreamManagement.saveSMStateToLocal(
+      transport.databaseController,
+      jidKey!,
+      state,
+    );
   }
 
   /// Clears state whenever the session ends.
