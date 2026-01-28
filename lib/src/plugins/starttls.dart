@@ -51,9 +51,9 @@ class StartTLS extends Stanza {
   }
 
   /// Handle notification that the server supports TLS.
-  static bool handleStartTLS() {
+  static bool handleStartTLS(Transport transport) {
     StreamFeatures.supported.add('starttls');
-    Transport.instance().send(const TLSProceed());
+    transport.send(const TLSProceed());
     return true;
   }
 
