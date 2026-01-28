@@ -5,20 +5,12 @@ import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/stanza/error.dart';
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stanza/stanza.dart';
+import 'package:whixp/src/transport.dart';
 import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
 
-// part '_database.dart';
 part 'stanza.dart';
-
-// const _commandTable = 'commands';
-
-// typedef _Handler = FutureOr<dynamic> Function(
-//   IQ iq,
-//   Map<String, dynamic>? session, [
-//   dynamic results,
-// ]);
 
 ///  XMPP's Adhoc Commands provides a generic workflow mechanism for interacting
 /// with applications.
@@ -36,6 +28,7 @@ class AdHocCommands {
   /// methods contained in the session instead of returning the response stanza
   /// itself. Defaults to `false`.
   static async.FutureOr<IQ> sendCommand<T>(
+    Transport transport,
     JabberID jid,
     String node, {
     JabberID? iqFrom,
@@ -61,6 +54,7 @@ class AdHocCommands {
     iq.payload = command;
 
     return iq.send(
+      transport,
       callback: callback,
       failureCallback: failureCallback,
       timeoutCallback: timeoutCallback,
@@ -70,6 +64,7 @@ class AdHocCommands {
 
   /// Initiate executing a command provided by a remote agent.
   static async.FutureOr<IQ> startCommand(
+    Transport transport,
     JabberID jid,
     String node,
     Map<String, dynamic> session, {
@@ -117,6 +112,6 @@ class AdHocCommands {
 
     iq.payload = command;
 
-    return iq.send();
+    return iq.send(transport);
   }
 }
