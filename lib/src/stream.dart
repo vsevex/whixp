@@ -26,7 +26,7 @@ class StreamHeader extends StreamObject {
   final Map<String, String> attributes;
 }
 
-/// "</stream:stream>" footer indicator object.
+/// "stream:stream" footer indicator object.
 class StreamFooter extends StreamObject {
   StreamFooter();
 }
