@@ -20,11 +20,10 @@ abstract class ReconnectionPolicy {
   /// Indicate if should try to reconnect.
   bool _shouldAttemptReconnection = false;
 
-  Future<bool> canTryReconnecting() async =>
+  Future<bool> canTryReconnecting() =>
       _lock.synchronized(() => !_isReconnecting);
 
-  Future<bool> getIsReconnecting() async =>
-      _lock.synchronized(() => _isReconnecting);
+  Future<bool> getIsReconnecting() => _lock.synchronized(() => _isReconnecting);
 
   Future<void> _resetIsReconnecting() =>
       _lock.synchronized(() => _isReconnecting = false);
@@ -49,9 +48,8 @@ abstract class ReconnectionPolicy {
   /// Caled by the XmppConnection when the reconnection was successful.
   Future<void> onSuccess();
 
-  Future<bool> getShouldReconnect() async {
-    return _lock.synchronized(() => _shouldAttemptReconnection);
-  }
+  Future<bool> getShouldReconnect() =>
+      _lock.synchronized(() => _shouldAttemptReconnection);
 
   /// Set whether a reconnection attempt should be made.
   Future<void> setShouldReconnect(bool value) =>
