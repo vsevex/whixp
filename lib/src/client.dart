@@ -8,6 +8,12 @@ import 'package:whixp/src/stanza/mixins.dart';
 import 'package:whixp/src/whixp.dart';
 
 class Whixp extends WhixpBase {
+  /// Stable key used for Stream Management (XEP-0198) persistence/resumption.
+  ///
+  /// Must NOT include the resource, since the resource may change between
+  /// connections and is not available prior to stream resumption.
+  String? _jidKey() => session?.bindJID?.bare ?? transport.boundJID?.bare;
+
   /// Client class for [Whixp].
   ///
   /// Extends [WhixpBase] class and represents an XMPP client with additional
@@ -83,7 +89,6 @@ class Whixp extends WhixpBase {
     super.context,
     super.onBadCertificateCallback,
     super.internalDatabasePath,
-    super.endSessionOnDisconnect,
     super.reconnectionPolicy,
     String language = 'en',
   }) {
@@ -105,7 +110,7 @@ class Whixp extends WhixpBase {
       'starttls',
       (_) async {
         await transport.connection.startTLS();
-        final result = StartTLS.handleStartTLS();
+        final result = StartTLS.handleStartTLS(transport);
         return result;
       },
       order: 10,
@@ -131,22 +136,21 @@ class Whixp extends WhixpBase {
           "<stream:stream to='$host' xmlns:stream='$streamNamespace' xmlns='$defaultNamespace' xml:lang='$_language' version='1.0'>"
       ..streamFooter = "</stream:stream>";
 
-    final fullJID = session?.bindJID?.full ?? transport.boundJID?.full;
-
     transport
       ..registerHandler(
         Handler('SM Request', (packet) => session?.sendAnswer())
           ..packet('sm:request'),
       )
       ..registerHandler(
-        Handler('SM Answer', (packet) => session?.handleAnswer(packet, fullJID))
+        Handler(
+            'SM Answer', (packet) => session?.handleAnswer(packet, _jidKey()))
           ..packet('sm:answer'),
       )
       ..addEventHandler('startSession', (_) => session?.enabledOut = true)
       ..addEventHandler('endSession', (_) => session?.clearSession())
       ..addEventHandler(
         'increaseHandled',
-        (_) => session?.increaseInbound(fullJID),
+        (_) => session?.increaseInbound(_jidKey()),
       );
   }
 
@@ -158,10 +162,9 @@ class Whixp extends WhixpBase {
   /// Callable function that is triggered when stream is enabled.
   Future<void> _onStreamEnabled(Packet packet) async {
     if (packet is! SMEnabled) return;
-    await session?.saveSMState(
-      session?.bindJID?.full ?? transport.boundJID!.full,
-      SMState(packet.id!, 0, 0, 0),
-    );
+    final key = _jidKey();
+    if (key?.isEmpty ?? true) return;
+    await session?.saveSMState(key, SMState(packet.id!, 0, 0, 0));
   }
 
   Future<bool> _handleStreamFeatures(Packet features) async {
@@ -176,7 +179,7 @@ class Whixp extends WhixpBase {
     }
 
     /// Attach new [Session] manager for this connection.
-    session = Session(features);
+    session = Session(features, transport);
     if (StreamFeatures.supported.contains('mechanisms')) {
       /// If sm is not supported by the server, then add binding feature.
       if (!features.doesStreamManagement) {
@@ -184,16 +187,39 @@ class Whixp extends WhixpBase {
       }
       registerFeature(
         'sm',
-        (_) => session!.resume(
-          session?.bindJID?.full ?? transport.boundJID?.full,
-          onResumeDone: () => transport
-            ..removeHandler('SM Resume Handler')
-            ..removeHandler('SM Enable Handler'),
-          onResumeFailed: () {
-            Log.instance.warning('Stream resumption failed');
-            return session!.enableStreamManagement(_onStreamEnabled);
-          },
-        ),
+        (_) async {
+          // Try stream resumption BEFORE binding.
+          // If resumption succeeds, the previously bound resource is resumed and
+          // re-binding is unnecessary.
+          final key = _jidKey();
+          if (key?.isEmpty ?? true) {
+            Log.instance
+                .warning('Cannot attempt SM resume: no JID key available');
+            return false;
+          }
+
+          return await session!.resume(
+            key,
+            onResumeDone: () => transport
+              ..removeHandler('SM Resume Handler')
+              ..removeHandler('SM Enable Handler'),
+            onResumeFailed: () async {
+              Log.instance.warning(
+                  'Stream resumption failed, enabling stream management...');
+              // For first-time SM enable we need to bind a resource.
+              if (session!.bindJID == null) {
+                Log.instance.info(
+                    'Binding resource before enabling stream management...');
+                await session!.bind();
+              }
+              final result =
+                  await session!.enableStreamManagement(_onStreamEnabled);
+              Log.instance.info(
+                  'Stream management enable completed with result: $result');
+              return result;
+            },
+          );
+        },
         order: 100,
       );
     }
@@ -202,11 +228,24 @@ class Whixp extends WhixpBase {
       final name = feature.secondValue;
 
       if (StreamFeatures.list.contains(name)) {
-        final handler = streamFeatureHandlers[name]!.firstValue;
+        final handlerTuple = streamFeatureHandlers[name]!;
+        final handler = handlerTuple.firstValue;
+        final restart = handlerTuple.secondValue; // restart flag
 
         final result = await handler.call(features);
 
-        if (result) return true;
+        // If handler returns true AND has restart flag, return early
+        // because the stream will restart and we'll get new features
+        // Otherwise, continue processing to emit streamNegotiated
+        if (result && restart) {
+          Log.instance.info(
+              'Feature $name processed successfully, stream will restart');
+          return true;
+        }
+
+        if (result) {
+          Log.instance.info('Feature $name processed successfully');
+        }
       }
     }
 
