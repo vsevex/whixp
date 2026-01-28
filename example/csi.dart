@@ -6,12 +6,13 @@ void main() {
     password: 'passwd',
     logger: Log(enableWarning: true, enableError: true, includeTimestamp: true),
     internalDatabasePath: 'whixp',
+    pingKeepAliveInterval: 10,
     reconnectionPolicy: RandomBackoffReconnectionPolicy(1, 3),
   );
 
   whixp
     ..addEventHandler('streamNegotiated', (_) {
-      CSI.sendInactive();
+      CSI.sendInactive(whixp.transport);
     })
     ..connect();
 }
