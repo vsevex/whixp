@@ -55,7 +55,7 @@ void main() {
     test('must properly handle future test cases', () {
       final handlers = <String>[];
 
-      eventius.on<String>('testAsync', (data) async {
+      eventius.on<String>('testAsync', (data) {
         if (data != null) {
           Future.delayed(const Duration(milliseconds: 1000), () {
             handlers.add('handled future: $data');
@@ -83,7 +83,7 @@ void main() {
       eventius.emit<String>('testAsync', 'cart');
       Future.delayed(
         const Duration(milliseconds: 1000),
-        () async {
+        () {
           expect(
             handlers,
             equals([
