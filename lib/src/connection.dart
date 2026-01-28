@@ -147,7 +147,7 @@ class Connection {
     /// If there is new connection attempt will take place, then this variable
     /// should be null.
     currentConnectionAttempt = null;
-    
+
     try {
       await onConnectionStartCallback.call();
     } catch (exception) {
