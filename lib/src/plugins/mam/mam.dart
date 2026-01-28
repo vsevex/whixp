@@ -7,6 +7,7 @@ import 'package:whixp/src/stanza/forwarded.dart';
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stanza/node.dart';
 import 'package:whixp/src/stanza/stanza.dart';
+import 'package:whixp/src/transport.dart';
 import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
@@ -20,15 +21,16 @@ class MAM {
   /// archive for all messages within a certain timespan, optionally restricting
   /// results to those to/from a particular JID.
   ///
-  /// The final <iq/> result response MUST include an RSM <set/> element,
-  /// wrapped into a <fin/> element qualified by the 'urn:xmpp:mam:2' namespace,
+  /// The final iq result response MUST include an RSM set element,
+  /// wrapped into a fin element qualified by the 'urn:xmpp:mam:2' namespace,
   /// indicating the UID of the first and last message of the (possibly limited)
   /// result set. This allows clients to accurately page through messages.
   ///
   /// It is important to note that flipping a page does not affect what results
   /// are returned in response to the query. It only affects the order in which
   /// they are transmitted from the server to the client.
-  static async.FutureOr<IQ> queryArchive<T>({
+  static async.FutureOr<IQ> queryArchive<T>(
+    Transport transport, {
     Form? filter,
     RSMSet? pagination,
     bool flipPage = false,
@@ -44,6 +46,7 @@ class MAM {
       ..payload = query;
 
     return iq.send(
+      transport,
       callback: callback,
       failureCallback: failureCallback,
       timeoutCallback: timeoutCallback,
@@ -56,6 +59,7 @@ class MAM {
   ///
   /// See more in [MAMMetadata].
   static async.FutureOr<IQ> retrieveMetadata<T>({
+    required Transport transport,
     async.FutureOr<T> Function(IQ result)? callback,
     async.FutureOr<void> Function(ErrorStanza error)? failureCallback,
     async.FutureOr<void> Function()? timeoutCallback,
@@ -65,6 +69,7 @@ class MAM {
         ..payload = const MAMMetadata()
         ..type = iqTypeGet
         ..send(
+          transport,
           callback: callback,
           failureCallback: failureCallback,
           timeoutCallback: timeoutCallback,
@@ -132,7 +137,12 @@ class MAM {
 
     return Form(type: FormType.submit)
       ..addFields([
-        Field(type: FieldType.hidden, values: [WhixpUtils.getNamespace('MAM')]),
+        // XEP-0004: FORM_TYPE field must have var='FORM_TYPE'
+        Field(
+          variable: 'FORM_TYPE',
+          type: FieldType.hidden,
+          values: [WhixpUtils.getNamespace('MAM')],
+        ),
         ...fields,
       ]);
   }
