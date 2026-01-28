@@ -1,4 +1,4 @@
 /// {@category Core}
-library log;
+library;
 
 export 'src/log.dart';
