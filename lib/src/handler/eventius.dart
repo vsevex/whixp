@@ -33,7 +33,7 @@ abstract class _Eventius {
 
   /// Emits an event with optional data to all registered listeners for that
   /// event.
-  FutureOr<void> emit<B>(String event, [B? data]);
+  Future<void> emit<B>(String event, [B? data]);
 
   ///Removes all listeners for the specified event.
   void off(String event);
@@ -125,7 +125,7 @@ class Eventius extends _Eventius {
   /// eventius.emit<String>('event', 'salam!');
   /// ```
   @override
-  FutureOr<void> emit<B>(String event, [B? data]) async {
+  Future<void> emit<B>(String event, [B? data]) async {
     final List<_Handler<B>> handlerContainer =
         _events.putIfAbsent(event, () => <_Handler<B>>[]) as List<_Handler<B>>;
     for (final handler in handlerContainer) {
