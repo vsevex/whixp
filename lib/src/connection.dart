@@ -1,5 +1,7 @@
 part of 'transport.dart';
 
+// SocketManager and related classes are imported via transport.dart
+
 class Connection {
   /// Manages the network connection to a server, including DNS resolution,
   /// connection attempts, and reconnection handling. It uses a combination of
@@ -53,13 +55,13 @@ class Connection {
   /// association of SASL.
   late String serviceName;
 
-  /// [Connecta] instance that will be declared when there is a connection
+  /// [SocketManager] instance that will be declared when there is a connection
   /// attempt to the server.
-  Connecta? _connecta;
+  SocketManager? _socketManager;
 
-  /// [io.ConnectionTask] keeps current connection task and can be used to
-  /// cancel when it is necessary.
-  late io.ConnectionTask<io.Socket>? _connectionTask;
+  /// Socket manager instance used for connection cancellation.
+  /// We store a reference to the socket manager instead of ConnectionTask
+  /// since Socket.connect() doesn't return a ConnectionTask.
 
   /// Will be parsed from [ConnectionConfiguration].
   ReconnectionPolicy? _reconnectionPolicy;
@@ -94,11 +96,14 @@ class Connection {
     } else {
       /// Set to null for no more iteration.
       _dnsAnswers = null;
+      // Initialize serviceName with the configured host when no DNS record is found
+      serviceName = configuration.host;
+      _address = Tuple2(configuration.host, configuration.port);
     }
 
-    /// Sets [Connecta] instance and assigns newly created instance to the
+    /// Sets [SocketManager] instance and assigns newly created instance to the
     /// global variable.
-    _setConnectaInstance();
+    _setSocketManagerInstance();
 
     try {
       Log.instance.info(
@@ -106,14 +111,27 @@ class Connection {
       );
 
       changeStateCallback.call(TransportState.connecting);
-      _connectionTask =
-          await _connecta?.createTask(configuration.socketOptions);
+      await _socketManager?.createTask(configuration.socketOptions);
 
       await _onStart();
     } catch (exception) {
+      final host = _address.firstValue;
+      final port = _address.secondValue;
+      final useTLS = configuration.useTLS;
+      final disableStartTLS = configuration.disableStartTLS;
+
       Log.instance.error(
-        'Error occured while trying to connect to ${_address.firstValue}',
+        'Connection error: Failed to connect to $host:$port (TLS: $useTLS, StartTLS disabled: $disableStartTLS)',
       );
+
+      // Enhance exception with connection context if it's a SocketManagerException
+      if (exception is SocketManagerException) {
+        Log.instance.error(
+          'Connection failed: ${exception.message}. '
+          'Host: $host, Port: $port, Service: ${serviceName.isNotEmpty ? serviceName : configuration.host}',
+        );
+      }
+
       handleError(exception);
       abort(
         callback: onConnectionFailure,
@@ -129,7 +147,16 @@ class Connection {
     /// If there is new connection attempt will take place, then this variable
     /// should be null.
     currentConnectionAttempt = null;
-    await onConnectionStartCallback.call();
+    
+    try {
+      await onConnectionStartCallback.call();
+    } catch (exception) {
+      Log.instance.error(
+        'Error in connection start callback: $exception',
+      );
+      handleError(exception);
+      rethrow;
+    }
 
     await _reconnectionPolicy?.onSuccess();
     if (clearAnswers) _dnsAnswers = null;
@@ -154,29 +181,27 @@ class Connection {
       } on Exception {
         /// pass
       } finally {
-        _connecta?.destroy();
+        _socketManager?.destroy();
         cancelConnectionAttempt();
         changeStateCallback.call(TransportState.disconnected);
       }
     }
 
-    if (_connecta != null && consume) {
+    if (_socketManager != null && consume) {
       return consumeSend();
     } else {
       return abort();
     }
   }
 
-  void _setConnectaInstance() => _connecta = Connecta(
-        ConnectaToolkit(
-          hostname: _address.firstValue,
-          port: _address.secondValue,
-          context: configuration.securityContext,
-          timeout: configuration.connectionTimeout,
-          connectionType: _connectionTypeFromConfiguration,
-          onBadCertificateCallback: configuration.onBadCertificateCallback,
-          supportedProtocols: ['TLSv1.2', 'TLSv1.3'],
-        ),
+  void _setSocketManagerInstance() => _socketManager = SocketManager(
+        hostname: _address.firstValue,
+        port: _address.secondValue,
+        securityContext: configuration.securityContext,
+        timeout: configuration.connectionTimeout,
+        connectionType: _connectionTypeFromConfiguration,
+        onBadCertificateCallback: configuration.onBadCertificateCallback,
+        listener: configuration.socketOptions,
       );
 
   /// Parses [ConnectionType] from the [ConnectionConfiguration].
@@ -321,7 +346,7 @@ class Connection {
   ///
   /// If the handshake is successful, the XML stream will need to be restarted.
   Future<bool> startTLS() async {
-    if (_connecta == null) return false;
+    if (_socketManager == null) return false;
 
     if (configuration.disableStartTLS) {
       Log.instance
@@ -332,15 +357,29 @@ class Connection {
     _eventWhenConnected = TransportState.tlsSuccess;
 
     try {
-      await _connecta!.upgradeConnection(listener: configuration.socketOptions);
+      await _socketManager!.upgradeConnection(configuration.socketOptions);
 
       await _onStart(true);
       return true;
-    } on ConnectaException catch (error) {
-      Log.instance.error(error.message);
+    } on SocketManagerException catch (error) {
+      final host = _address.firstValue;
+      final port = _address.secondValue;
+
+      Log.instance.error(
+        'TLS handshake failed: ${error.message}. '
+        'Host: $host, Port: $port',
+      );
+
+      // Try next DNS answer if available
       if (_dnsAnswers != null && _dnsAnswers!.moveNext()) {
+        Log.instance.info(
+          'Retrying TLS handshake with next available server address',
+        );
         await startTLS();
       } else {
+        Log.instance.error(
+          'No more server addresses to try. TLS handshake failed.',
+        );
         rethrow;
       }
       return false;
@@ -354,8 +393,7 @@ class Connection {
   void reset({String? host, int? port}) {
     _parseConnectionConfiguration(newHost: host, newPort: port);
     _eventWhenConnected = TransportState.connected;
-    _connecta = null;
-    _connectionTask = null;
+    _socketManager = null;
   }
 
   /// Forcibly close the connection.
@@ -366,9 +404,9 @@ class Connection {
     void Function()? callback,
     TransportState state = TransportState.killed,
   }) {
-    if (_connecta != null) {
+    if (_socketManager != null) {
       try {
-        _connecta?.destroy();
+        _socketManager?.destroy();
       } catch (_) {
         Log.instance.error('Socket is not initialized yet, aborting...');
       }
@@ -381,8 +419,8 @@ class Connection {
   /// Immediately cancel the current connection attempt.
   void cancelConnectionAttempt() {
     currentConnectionAttempt = null;
-    _connectionTask?.cancel();
-    _connecta = null;
+    _socketManager?.destroy();
+    _socketManager = null;
   }
 
   void _parseConnectionConfiguration({String? newHost, int? newPort}) {
@@ -393,10 +431,21 @@ class Connection {
 
   /// Send raw data using socket.
   void send(String data) {
-    final raw = WhixpUtils.utf8Encode(data);
-    Log.instance.debug('SEND: $data');
+    if (_socketManager == null) {
+      Log.instance.error('Cannot send data: socket manager is null');
+      return;
+    }
 
-    if (_connecta != null) _connecta?.send(raw);
+    if (!_socketManager!.isConnectionSecure && _socketManager!.isDestroyed) {
+      Log.instance.error('Cannot send data: socket manager is destroyed');
+      return;
+    }
+
+    final raw = WhixpUtils.utf8Encode(data);
+    Log.instance.debug(
+        'SEND: ${data.length > 200 ? "${data.substring(0, 200)}..." : data}');
+
+    _socketManager!.send(raw);
   }
 
   /// Use this method if there is a need to explicitly set reconnection.
@@ -404,7 +453,7 @@ class Connection {
       _reconnectionPolicy?.setShouldReconnect(value);
 
   /// Indicates to the security of connection.
-  bool get isConnectionSecure => _connecta?.isConnectionSecure ?? false;
+  bool get isConnectionSecure => _socketManager?.isConnectionSecure ?? false;
 }
 
 class ConnectionConfiguration {
@@ -440,9 +489,8 @@ class ConnectionConfiguration {
   /// [async.TimeoutException].
   final int connectionTimeout;
 
-  /// Part of [Connecta] package. Used to handle state of socket connection and
-  /// do required actions.
-  final ConnectaListener socketOptions;
+  /// Used to handle state of socket connection and do required actions.
+  final SocketListener socketOptions;
 
   /// Defines whether the client will later call StartTLS or not.
   ///
