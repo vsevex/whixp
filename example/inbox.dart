@@ -13,7 +13,8 @@ void main() {
   );
 
   whixp
-    ..addEventHandler('streamNegotiated', (_) => getInbox())
+    ..addEventHandler(
+        'streamNegotiated', (_) => getInbox(transport: whixp.transport))
     ..addEventHandler<Message>('message', (message) {
       final result = message?.get<InboxResult>();
       if (result?.isNotEmpty ?? false) {
@@ -44,17 +45,19 @@ void main() {
 String? globalLast;
 
 Future<void> getInbox({
+  required Transport transport,
   String? lastItem,
 }) async {
   globalLast = null;
   final result = await Inbox.queryInbox(
+    transport,
     pagination: RSMSet(
       max: 25,
       after: lastItem,
     ),
   );
 
-  final fin = result.payload as InboxFin?;
+  final fin = result.payload is InboxFin ? result.payload! as InboxFin : null;
   final last = fin?.last?.lastItem;
   Log.instance.warning(
     "active-conversations: ${fin?.activeConversation}",
@@ -68,6 +71,7 @@ Future<void> getInbox({
 
   if (last != null && last != globalLast) {
     getInbox(
+      transport: transport,
       lastItem: last,
     );
   }
