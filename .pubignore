@@ -1,0 +1,46 @@
+# Example app is published to pub.dev for better package quality
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# IDE and editor files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Build artifacts
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+*.lock
+
+# Coverage and testing artifacts
+coverage/
+test_driver/
+*.coverage
+*.lcov
+
+# Documentation that's not needed
+**/doc/api/
+
+# Metadata files
+.metadata
+
+# Miscellaneous
+*.log
+*.pyc
+*.class
+.history
+migrate_working_dir/
