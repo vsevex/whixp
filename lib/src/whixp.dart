@@ -5,7 +5,6 @@ import 'package:whixp/src/_static.dart';
 import 'package:whixp/src/handler/handler.dart';
 import 'package:whixp/src/session.dart';
 import 'package:whixp/src/stanza/mixins.dart';
-import 'package:whixp/src/transport.dart';
 import 'package:whixp/whixp.dart';
 
 part '_extensions.dart';
@@ -75,9 +74,6 @@ abstract class WhixpBase {
 
     /// [Log] instance to print out various log messages properly
     Log? logger,
-
-    /// Whether to end session on disconnect method or not. Defaults to `true`.
-    bool endSessionOnDisconnect = true,
     String internalDatabasePath = '/',
     ReconnectionPolicy? reconnectionPolicy,
   }) {
@@ -149,12 +145,11 @@ abstract class WhixpBase {
       pingKeepAlive: pingKeepAlive,
       internalDatabasePath: internalDatabasePath,
       pingKeepAliveInterval: pingKeepAliveInterval,
-      endSessionOnDisconnect: endSessionOnDisconnect,
       reconnectionPolicy: reconnectionPolicy,
     );
 
     /// Initialize PubSub instance.
-    PubSub.initialize();
+    PubSub.initialize(_transport);
 
     /// Set up the transport with XMPP's root stanzas & handlers.
     _transport
@@ -266,7 +261,7 @@ abstract class WhixpBase {
       presenceType: type,
       presenceNick: nick,
     );
-    return Transport.instance().send(presence);
+    return _transport.send(presence);
   }
 
   /// Creates, initializes and sends a new [Message].
@@ -297,7 +292,7 @@ abstract class WhixpBase {
     /// Requests "is message displayed" information in-message
     bool requestDisplayedInformation = false,
   }) =>
-      Transport.instance().send(
+      _transport.send(
         _makeMessage(
           to,
           messageBody: body,
@@ -427,17 +422,17 @@ abstract class WhixpBase {
       ..to = messageTo
       ..from = messageFrom;
 
-    Transport.instance().send(message.makeDisplayed(messageID));
+    _transport.send(message.makeDisplayed(messageID));
   }
 
   /// Sends stanza via [Transport] instance.
-  void send(Stanza stanza) => Transport.instance().send(stanza);
+  void send(Stanza stanza) => _transport.send(stanza);
 
   /// Close the XML stream and wait for ack from the server.
   ///
   /// Calls the primary method from [Transport].
   Future<void> disconnect({bool consume = true}) =>
-      Transport.instance().disconnect(consume: consume);
+      _transport.disconnect(consume: consume);
 
   /// Processes incoming message stanzas.
   void _handleMessage(Packet message) {
@@ -494,6 +489,9 @@ abstract class WhixpBase {
     bool once = false,
   }) =>
       _transport.addEventHandler<B>(event, handler, once: once);
+
+  /// The [Transport] instance used by this XMPP connection.
+  Transport get transport => _transport;
 
   /// Password from credentials.
   String get password => _credentials['password']!;
