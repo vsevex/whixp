@@ -7,7 +7,6 @@ part of 'utils.dart';
 /// * _[AUTH]_ - Legacy authentication namespace.
 /// * _[ROSTER]_ - Roster operations namespace.
 /// * _[PROFILE]_ - Profile namespace.
-/// * _[VCARD]_ - vCard (Virtual Business Card) namespace.
 /// * _[PREAPPROVAL] - Features Pre-Approval namespace.
 /// * _[COMPONENT]_ - Jabber Component Accept namespace.
 /// * _[DISCO_INFO]_ - Service discovery info namespace from XEP-0030.
@@ -31,7 +30,6 @@ final _namespace = <String, String>{
   'AUTH': "jabber:iq:auth",
   'ROSTER': "jabber:iq:roster",
   'PROFILE': "jabber:iq:profile",
-  'VCARD': "vcard-temp",
   'PREAPPROVAL': "urn:xmpp:features:pre-approval",
   'COMPONENT': 'jabber:component:accept',
   'DISCO_INFO': "http://jabber.org/protocol/disco#info",
@@ -53,5 +51,8 @@ final _namespace = <String, String>{
   'VERSION': "jabber:iq:version",
   'STANZAS': "urn:ietf:params:xml:ns:xmpp-stanzas",
   'XML': "http://www.w3.org/XML/1998/namespace",
-  'INBOX': "erlang-solutions.com:xmpp:inbox:0",
+  // XEP-0430 Inbox (current namespace)
+  // Note: Some servers (e.g. older MongooseIM deployments) used
+  // "erlang-solutions.com:xmpp:inbox:0". Parsing code supports both.
+  'INBOX': "urn:xmpp:inbox:1",
 };
