@@ -1,4 +1,4 @@
-# 3.0.0 - [IN PROGRESS]
+# 3.0.0
 
 > **Note**: This is a major version release with significant improvements and breaking changes. See [UPGRADE_STEPS.md](UPGRADE_STEPS.md) for detailed upgrade instructions.
 
