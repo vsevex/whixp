@@ -62,11 +62,11 @@ abstract class Stanza with Packet {
       return MAMResult.fromXML(node);
     } else if (tag == forwardedTag) {
       return Forwarded.fromXML(node);
-    } else if (tag == inboxQueryTag) {
+    } else if (tag == inboxQueryTag || tag == inboxQueryTagLegacy) {
       return InboxQuery.fromXML(node);
-    } else if (tag == inboxFinTag) {
+    } else if (tag == inboxFinTag || tag == inboxFinTagLegacy) {
       return InboxFin.fromXML(node);
-    } else if (tag == inboxResultTag) {
+    } else if (tag == inboxResultTag || tag == inboxResultTagLegacy) {
       return InboxResult.fromXML(node);
     } else {
       throw WhixpInternalException.stanzaNotFound(
