@@ -18,7 +18,7 @@ class Forwarded extends MessageStanza {
   final DelayStanza? delay;
 
   /// * The original sender and receiver should be identified.
-  /// * Most extension payloads should be included (not only a message <body/>).
+  /// * Most extension payloads should be included (not only a message body).
   final Message? actual;
 
   @override
