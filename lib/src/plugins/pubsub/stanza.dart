@@ -192,12 +192,12 @@ class PubSubEvent extends MessageStanza {
 /// This stanza helps to support the ability to publish items. Any entity that
 /// is allowed to publish items to node (i.e., a publisher or an owner) may do
 /// so at any time by sending an IQ-set to the service containing a pubsub
-/// element with a __<publish/>__ child.
+/// element with a __publish__ child.
 ///
-/// * The <publish/> element MUST possess a `node` attribute, specifying the
+/// * The publish element MUST possess a `node` attribute, specifying the
 /// NodeID of the node.
-/// * Depending on the node configuration, the __<publish/>__ element MAY
-/// contain no __<item/>__ elements or one __<item/>__ element.
+/// * Depending on the node configuration, the __publish__ element MAY
+/// contain no __item__ elements or one __item__ element.
 ///
 /// see <https://xmpp.org/extensions/xep-0060.html#publisher-publish>
 class _Publish {
@@ -238,8 +238,8 @@ class _Publish {
 }
 
 /// This retract stanzas will be send by the publisher to delete an item. The
-/// __<retract/>__ element MUST possess a `node` attribute, MAY possess a
-/// `notify` attribute, and MUST contain one __<item/>__ element; this item
+/// __retract__ element MUST possess a `node` attribute, MAY possess a
+/// `notify` attribute, and MUST contain one __item__ element; this item
 /// element MUST be empty and MUST possess and `id` attribute.
 ///
 /// ```xml
