@@ -17,11 +17,11 @@ import 'package:xml/xml.dart' as xml;
 /// IQ stanzas, or info/query stanzas, are XMPP's method of requesting and
 /// modifying information, similar to HTTP's GET and POST methods.
 ///
-/// Each __<iq>__ stanza must have an 'id' value which associates the stanza
+/// Each __iq__ stanza must have an 'id' value which associates the stanza
 /// with the response stanza. XMPP entities must always be given a response
 /// IQ stanza with a type of 'result' after sending a stanza 'get' or 'set'.
 ///
-/// Must use cases for IQ stanzas will involve adding a <query> element whose
+/// Must use cases for IQ stanzas will involve adding a query element whose
 /// namespace indicates the type of information desired. However, some custom
 /// XMPP applications use IQ stanzas as a carrier stanza for an
 /// application-specific protocol instead.
@@ -128,7 +128,8 @@ class IQ extends Stanza with Attributes {
   ///
   /// You can set the return of the callback return type you have provided or
   /// just avoid this.
-  FutureOr<IQ> send<T>({
+  FutureOr<IQ> send<T>(
+    Transport transport, {
     /// Sync or async callback function which accepts the incoming "result"
     /// iq stanza.
     FutureOr<T> Function(IQ iq)? callback,
@@ -146,7 +147,7 @@ class IQ extends Stanza with Attributes {
     /// [timeoutCallback] is called, instead of the sync callback. Defaults to
     /// `10` seconds.
     int timeout = 5,
-  }) async {
+  }) {
     final completer = Completer<IQ?>();
     final errorCompleter = Completer<IQ?>();
     final resultCompleter = Completer<IQ>();
@@ -175,14 +176,13 @@ class IQ extends Stanza with Attributes {
       } else {
         handler = Handler(
           _handlerID!,
-          (stanza) => Future.microtask(() => successCallback(stanza as IQ))
-              .timeout(Duration(seconds: timeout)),
+          (stanza) => successCallback(stanza as IQ),
         )..id(id!);
 
-        Transport.instance().registerHandler(handler!);
+        transport.registerHandler(handler!);
       }
 
-      Transport.instance().cancelSchedule(_handlerID!);
+      transport.cancelSchedule(_handlerID!);
 
       /// Run provided callback if there is any completed IQ stanza.
       if (callback != null) {
@@ -204,10 +204,12 @@ class IQ extends Stanza with Attributes {
     void callbackTimeout() {
       runZonedGuarded(
         () {
-          if (!resultCompleter.isCompleted) throw StanzaException.timeout(this);
+          if (!resultCompleter.isCompleted) {
+            throw StanzaException.timeout(this, timeoutSeconds: timeout);
+          }
         },
         (error, trace) {
-          Transport.instance().removeHandler(_handlerID!);
+          transport.removeHandler(_handlerID!);
           if (timeoutCallback != null) {
             timeoutCallback.call();
           }
@@ -218,15 +220,30 @@ class IQ extends Stanza with Attributes {
     if (<String>{'get', 'set'}.contains(type)) {
       handler = Handler(
         _handlerID!,
-        (iq) => Future.microtask(() => successCallback(iq as IQ))
-            .timeout(Duration(seconds: timeout)),
+        (iq) => successCallback(iq as IQ),
       )..id(id!);
 
-      Transport.instance()
+      transport
         ..registerHandler(handler!)
         ..schedule(handler!.name, callbackTimeout, seconds: timeout);
     }
-    Transport.instance().send(this);
+    transport.send(this);
+
+    // Set up timeout handling
+    Future.delayed(Duration(seconds: timeout), () {
+      if (!resultCompleter.isCompleted) {
+        transport.removeHandler(_handlerID!);
+        transport.cancelSchedule(_handlerID!);
+        if (timeoutCallback != null) {
+          timeoutCallback.call();
+        }
+        if (!resultCompleter.isCompleted) {
+          resultCompleter.completeError(
+            StanzaException.timeout(this, timeoutSeconds: timeout),
+          );
+        }
+      }
+    });
 
     return synchronized(() => resultCompleter.future);
   }
