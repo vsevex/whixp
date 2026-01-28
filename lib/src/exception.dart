@@ -29,22 +29,51 @@ abstract class WhixpException implements Exception {
 class WhixpInternalException extends WhixpException {
   /// Constructor for [WhixpInternalException] that takes a message as a
   /// parameter.
-  const WhixpInternalException(super.message);
+  const WhixpInternalException(
+    super.message, {
+    this.code,
+    this.recoverySuggestion,
+  });
+
+  /// Optional error code for programmatic error handling.
+  final String? code;
+
+  /// Optional recovery suggestion to help users resolve the issue.
+  final String? recoverySuggestion;
 
   /// Whenever there is an exception there in the setup process of the package,
   /// then this exception will be thrown.
-  factory WhixpInternalException.setup(String message) =>
-      WhixpInternalException(message);
+  factory WhixpInternalException.setup(
+    String message, {
+    String? recoverySuggestion,
+  }) =>
+      WhixpInternalException(
+        message,
+        code: 'SETUP_ERROR',
+        recoverySuggestion: recoverySuggestion,
+      );
 
   /// Factory constructor for [WhixpInternalException] that creates an instance
   /// of the exception with a message "Invalid XML".
-  factory WhixpInternalException.invalidXML() =>
-      const WhixpInternalException('Invalid XML');
+  factory WhixpInternalException.invalidXML({String? context}) =>
+      WhixpInternalException(
+        context != null
+            ? 'Invalid XML: $context'
+            : 'Invalid XML - unable to parse XML document',
+        code: 'INVALID_XML',
+        recoverySuggestion:
+            'Check that the XML is well-formed and matches expected XMPP format',
+      );
 
   /// Factory constructor for [WhixpInternalException] that creates an instance
   /// of the exception with a message "Invalid node".
   factory WhixpInternalException.invalidNode(String node, String name) =>
-      WhixpInternalException('Invalid $node, expecting $name');
+      WhixpInternalException(
+        'Invalid XML node: found "$node" but expected "$name"',
+        code: 'INVALID_NODE',
+        recoverySuggestion:
+            'Verify the XML structure matches the expected XMPP stanza format',
+      );
 
   /// Factory constructor for [WhixpInternalException] that creates an instance
   /// of the exception with a message "Unexpected XMPP packet".
@@ -52,14 +81,22 @@ class WhixpInternalException extends WhixpException {
     String? namespace,
     String node,
   ) =>
-      WhixpInternalException('Unexpected XMPP packet {$namespace} <$node>');
+      WhixpInternalException(
+        'Unexpected XMPP packet: namespace "$namespace", element "<$node>"',
+        code: 'UNEXPECTED_PACKET',
+        recoverySuggestion:
+            'This may indicate a protocol mismatch or unsupported XEP extension',
+      );
 
   /// Factory constructor for [WhixpInternalException] that creates an instance
   /// of the exception with a message "Unknown namespace while trying to parse
   /// element".
   factory WhixpInternalException.unknownNamespace(String namespace) =>
       WhixpInternalException(
-        'Unknown namespace($namespace) while trying to parse element',
+        'Unknown namespace "$namespace" while trying to parse element',
+        code: 'UNKNOWN_NAMESPACE',
+        recoverySuggestion:
+            'The namespace may require a plugin or XEP extension to be enabled',
       );
 
   /// Factory constructor for [WhixpInternalException] that creates an instance
@@ -68,27 +105,84 @@ class WhixpInternalException extends WhixpException {
     String stanza,
     String tag,
   ) =>
-      WhixpInternalException('Unable to find $stanza stanza for XML Tag: $tag');
+      WhixpInternalException(
+        'Unable to find $stanza stanza for XML tag: $tag',
+        code: 'STANZA_NOT_FOUND',
+        recoverySuggestion:
+            'Verify the tag format and ensure the corresponding stanza handler is registered',
+      );
 
   /// Overrides of the `toString` method to return the message of the exception.
   @override
-  String toString() => message;
+  String toString() {
+    final buffer = StringBuffer(message);
+    if (code != null) {
+      buffer.write(' [Code: $code]');
+    }
+    if (recoverySuggestion != null) {
+      buffer.write('\nSuggestion: $recoverySuggestion');
+    }
+    return buffer.toString();
+  }
 }
 
 /// Exception thrown when authentication fails.
 class AuthenticationException extends WhixpException {
   /// Creates an [AuthenticationException] with the given [message].
-  AuthenticationException(super.message);
+  AuthenticationException(
+    super.message, {
+    this.code,
+    this.recoverySuggestion,
+  });
+
+  /// Optional error code for programmatic error handling.
+  final String? code;
+
+  /// Optional recovery suggestion to help users resolve the issue.
+  final String? recoverySuggestion;
 
   /// Creates an [AuthenticationException] indicating that TLS is required by the server.
   factory AuthenticationException.requiresTLS() => AuthenticationException(
-        'Server requires TLS session. Ensure you either "disableStartTLS" attribute to "false"',
+        'Server requires TLS session but TLS is disabled',
+        code: 'TLS_REQUIRED',
+        recoverySuggestion:
+            'Set disableStartTLS to false or useTLS to true in Transport configuration',
       );
 
   /// Creates an [AuthenticationException] indicating that TLS is disabled but requested.
   factory AuthenticationException.disabledTLS() => AuthenticationException(
-        "You requested TLS session, but Server doesn't support TLS",
+        "TLS session requested but server doesn't support TLS",
+        code: 'TLS_NOT_SUPPORTED',
+        recoverySuggestion:
+            'Disable TLS (set useTLS to false and disableStartTLS to true) or use a server that supports TLS',
       );
+
+  /// Creates an [AuthenticationException] for general authentication failures.
+  factory AuthenticationException.failed({
+    String? reason,
+    String? mechanism,
+  }) =>
+      AuthenticationException(
+        mechanism != null
+            ? 'Authentication failed using $mechanism${reason != null ? ": $reason" : ""}'
+            : 'Authentication failed${reason != null ? ": $reason" : ""}',
+        code: 'AUTH_FAILED',
+        recoverySuggestion: mechanism != null
+            ? 'Verify credentials are correct for $mechanism mechanism'
+            : 'Verify username, password, and that the server supports your authentication method',
+      );
+
+  @override
+  String toString() {
+    final buffer = StringBuffer(message);
+    if (code != null) {
+      buffer.write(' [Code: $code]');
+    }
+    if (recoverySuggestion != null) {
+      buffer.write('\nSuggestion: $recoverySuggestion');
+    }
+    return buffer.toString();
+  }
 }
 
 /// Represents an exception related to XMPP stanzas within the context of the
@@ -137,33 +231,53 @@ class StanzaException extends WhixpException {
   final Stanza? stanza;
 
   /// Creates a [StanzaException] for a timed-out response from the server.
-  factory StanzaException.timeout(Stanza? stanza) => StanzaException(
-        'Waiting for response from the server is timed out',
+  factory StanzaException.timeout(Stanza? stanza, {int? timeoutSeconds}) =>
+      StanzaException(
+        timeoutSeconds != null
+            ? 'Waiting for response from server timed out after ${timeoutSeconds}s'
+            : 'Waiting for response from the server timed out',
         stanza: stanza,
         condition: 'remote-server-timeout',
       );
 
   /// Creates a [StanzaException] for a received service unavailable stanza.
   factory StanzaException.serviceUnavailable(Stanza stanza) => StanzaException(
-        'Received service unavailable stanza',
+        'Service unavailable: "unknown"',
         stanza: stanza,
+        condition: 'service-unavailable',
       );
 
   /// Creates a [StanzaException] for an IQ error with additional details.
-  factory StanzaException.iq(IQ iq) => StanzaException(
-        'IQ error has occured',
-        stanza: iq,
-        text: iq.error?.text ?? '',
-        condition: iq.error?.reason ?? '',
-        errorType: iq.error?.type ?? '',
-      );
+  factory StanzaException.iq(IQ iq) {
+    final error = iq.error;
+    final errorText = error?.text ?? '';
+    final errorReason = error?.reason ?? 'unknown-error';
+    final errorType = error?.type ?? 'cancel';
+    final stanzaId = iq.id ?? 'unknown';
+    final to = iq.to?.toString() ?? 'unknown';
+
+    return StanzaException(
+      'IQ error occurred (ID: $stanzaId, To: $to, Type: $errorType, Reason: $errorReason)',
+      stanza: iq,
+      text: errorText,
+      condition: errorReason,
+      errorType: errorType,
+    );
+  }
 
   /// Creates a [StanzaException] for an IQ timeout.
-  factory StanzaException.iqTimeout(IQ iq) => StanzaException(
-        'IQ timeout has occured',
-        stanza: iq,
-        condition: 'remote-server-timeout',
-      );
+  factory StanzaException.iqTimeout(IQ iq, {int? timeoutSeconds}) {
+    final stanzaId = iq.id ?? 'unknown';
+    final to = iq.to?.toString() ?? 'unknown';
+
+    return StanzaException(
+      timeoutSeconds != null
+          ? 'IQ timeout occurred after ${timeoutSeconds}s (ID: $stanzaId, To: $to)'
+          : 'IQ timeout occurred (ID: $stanzaId, To: $to)',
+      stanza: iq,
+      condition: 'remote-server-timeout',
+    );
+  }
 
   /// Formats the exception details.
   String get _format {
@@ -213,28 +327,91 @@ class StringPreparationException extends WhixpException {
 /// ```
 class SASLException extends WhixpException {
   /// Creates a [SASLException] with the specified error message.
-  SASLException(super.message, {this.extra});
+  SASLException(
+    super.message, {
+    this.extra,
+    this.code,
+    this.recoverySuggestion,
+  });
 
   /// [extra] is an optional parameter that can be used to pass additional
   /// information about the exception.
   dynamic extra;
 
-  factory SASLException.cancelled(String message) => SASLException(message);
+  /// Optional error code for programmatic error handling.
+  final String? code;
+
+  /// Optional recovery suggestion to help users resolve the issue.
+  final String? recoverySuggestion;
+
+  factory SASLException.cancelled(String message) => SASLException(
+        message,
+        code: 'SASL_CANCELLED',
+        recoverySuggestion: 'Authentication was cancelled by user or server',
+      );
+
   factory SASLException.missingCredentials(
     String credential, {
     Mechanism? mech,
   }) =>
       SASLException(
-        'Missing credential in SASL mechanism: $credential',
+        'Missing credential "$credential" required for ${mech?.name ?? "SASL"} mechanism',
         extra: mech,
+        code: 'MISSING_CREDENTIAL',
+        recoverySuggestion:
+            'Provide the required credential in your SASL callback function',
       );
-  factory SASLException.noAppropriateMechanism() =>
-      SASLException('No appropriate mechanism was found');
+
+  factory SASLException.noAppropriateMechanism({
+    List<String>? availableMechanisms,
+  }) =>
+      SASLException(
+        availableMechanisms != null && availableMechanisms.isNotEmpty
+            ? 'No appropriate SASL mechanism found. Available: ${availableMechanisms.join(", ")}'
+            : 'No appropriate SASL mechanism was found',
+        code: 'NO_MECHANISM',
+        recoverySuggestion:
+            'Ensure your SASL callback supports at least one mechanism offered by the server',
+      );
+
   factory SASLException.unimplementedChallenge(String mechanism) =>
-      SASLException('Challenge is not implemented for: $mechanism');
-  factory SASLException.scram(String message) => SASLException(message);
-  factory SASLException.cnonce() =>
-      SASLException('Client nonce is not applicable');
-  factory SASLException.unknownHash(String name) =>
-      SASLException('The $name hashing is not supported');
+      SASLException(
+        'Challenge handling is not implemented for mechanism: $mechanism',
+        code: 'UNIMPLEMENTED_CHALLENGE',
+        recoverySuggestion:
+            'This mechanism may require additional implementation or a different mechanism',
+      );
+
+  factory SASLException.scram(String message) => SASLException(
+        'SCRAM authentication error: $message',
+        code: 'SCRAM_ERROR',
+        recoverySuggestion:
+            'Verify your password and that SCRAM is properly configured',
+      );
+
+  factory SASLException.cnonce() => SASLException(
+        'Client nonce is not applicable for this SASL mechanism',
+        code: 'CNONCE_ERROR',
+        recoverySuggestion:
+            'This may indicate an internal error in SASL processing',
+      );
+
+  factory SASLException.unknownHash(String name) => SASLException(
+        'Hash algorithm "$name" is not supported',
+        code: 'UNKNOWN_HASH',
+        recoverySuggestion:
+            'Use a supported hash algorithm (SHA-1, SHA-256, SHA-512)',
+      );
+
+  @override
+  String toString() {
+    final buffer = StringBuffer(message);
+    if (code != null) {
+      buffer.write(' [Code: $code]');
+    }
+    if (recoverySuggestion != null) {
+      buffer.write('\nSuggestion: $recoverySuggestion');
+    }
+    return buffer.toString();
+  }
 }
