@@ -17,7 +17,7 @@ const String _name = 'x';
 /// form-processing entity. The submission MAY include fields that were not
 /// provided in the empty form, but the form-processing entity MUST ignore any
 /// fields that it does not understand. Furthermore, the submission MAY omit
-/// fields not marked with <required/> by the form-processing entity.
+/// fields not marked with required by the form-processing entity.
 /// * `cancel` The form-submitting entity has cancelled submission of data to
 /// the form-processing entity.
 /// * `result` The form-processing entity is returning data (e.g., search
@@ -28,8 +28,8 @@ enum FormType { form, submit, cancel, result }
 /// choice between two options. The default value is "false".
 /// * `fixed`	The field is intended for data description (e.g., human-readable
 /// text such as "section" headers) rather than data gathering or provision. The
-/// <value/> child SHOULD NOT contain newlines (the \n and \r characters);
-/// instead an application SHOULD generate multiple fixed fields, each with one<value/> child.
+/// value child SHOULD NOT contain newlines (the \n and \r characters);
+/// instead an application SHOULD generate multiple fixed fields, each with one value child.
 /// * `hidden` The field is not shown to the form-submitting entity, but
 /// instead is returned with the form. The form-submitting entity SHOULD NOT
 /// modify the value of a hidden field, but MAY do so if such behavior is
