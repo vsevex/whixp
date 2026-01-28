@@ -8,7 +8,7 @@ part 'stanza.dart';
 
 extension Markable on Message {
   /// An entity interested to know if the recipient has displayed a message
-  /// attaches a <markable/> element qualified by dedicated namespace to the
+  /// attaches a markable element qualified by dedicated namespace to the
   /// message.
   ///
   /// ### Example:
@@ -25,7 +25,7 @@ extension Markable on Message {
   }
 
   /// To let the sender know a message has been displayed an entity sends a
-  /// message with a <displayed/> element. The <displayed/> element must have a
+  /// message with a displayed element. The displayed element must have a
   /// [messageID] attribute that copies the value from the 'message-id' attribute
   /// of the message it refers to.
   ///
