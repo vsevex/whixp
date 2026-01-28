@@ -31,21 +31,34 @@ class StreamManagement {
 
   xml.XmlElement toXML() => WhixpUtils.xmlElement('sm', namespace: _namespace);
 
-  static Future<void> saveSMStateToLocal(String jid, SMState state) async {
-    return HiveController.writeToSMBox(jid, state.toJson());
-  }
+  static Future<void> saveSMStateToLocal(
+    DatabaseController databaseController,
+    String jid,
+    SMState state,
+  ) =>
+      databaseController.writeToSMBox(jid, state.toJson());
 
-  static Future<SMState?> getSMStateFromLocal(String? jid) async {
+  static Future<SMState?> getSMStateFromLocal(
+    DatabaseController databaseController,
+    String? jid,
+  ) async {
     if (jid?.isEmpty ?? true) return null;
-    return await HiveController.readFromSMBox(jid!);
+    return await databaseController.readFromSMBox(jid!);
   }
 
-  static Future<void>? saveUnackedToLocal(int sequence, Stanza stanza) =>
-      HiveController.writeUnackeds(sequence, stanza);
+  static Future<void>? saveUnackedToLocal(
+    DatabaseController databaseController,
+    int sequence,
+    Stanza stanza,
+  ) =>
+      databaseController.writeUnackeds(sequence, stanza);
 
-  static Map<dynamic, String>? get unackeds => HiveController.unackeds;
+  static Map<dynamic, String>? getUnackeds(
+          DatabaseController databaseController) =>
+      databaseController.unackeds;
 
-  static String? popFromUnackeds() => HiveController.popUnacked();
+  static String? popFromUnackeds(DatabaseController databaseController) =>
+      databaseController.popUnacked();
 
   static Packet parse(xml.XmlElement node) {
     switch (node.localName) {
