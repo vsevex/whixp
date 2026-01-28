@@ -15,9 +15,11 @@ import 'package:xml/xml.dart' as xml;
 class CSI {
   const CSI();
 
-  static void sendInactive() => Transport.instance().send(const CSIInactive());
+  static void sendInactive(Transport transport) =>
+      transport.send(const CSIInactive());
 
-  static void sendActive() => Transport.instance().send(const CSIActive());
+  static void sendActive(Transport transport) =>
+      transport.send(const CSIActive());
 }
 
 class CSIInactive extends Stanza {
