@@ -9,7 +9,7 @@ part of 'pubsub.dart';
 ///
 /// Information about tunes is provided by the user and propagated on the
 /// network by the user's client. The information container for tune data is a
-/// <tune/> element that is qualified by the 'http://jabber.org/protocol/tune'
+/// tune element that is qualified by the 'http://jabber.org/protocol/tune'
 /// namespace.
 ///
 /// For more information refer to: <https://xmpp.org/extensions/xep-0118.html>
@@ -155,10 +155,10 @@ class Tune extends MessageStanza {
 /// The class also includes methods to convert from and to XML.
 ///
 /// Information about user moods is provided by the user and propagated on the
-/// network by the user's client. The information is structured via a <mood/>
+/// network by the user's client. The information is structured via a mood
 /// element that is qualified by the 'http://jabber.org/protocol/mood'
 /// namespace. The mood itself is provided as the element name of a defined
-/// child element of the <mood/> element (e.g., <happy/>); one such child
+/// child element of the mood element (e.g., happy); one such child
 /// element is REQUIRED.
 ///
 /// ### Example:
