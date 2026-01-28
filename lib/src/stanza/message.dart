@@ -17,7 +17,7 @@ import 'package:xml/xml.dart' as xml;
 /// ```
 enum MessageType { chat, error, groupchat, headline, normal }
 
-/// XMPP's <message> stanza are a "push" mechanism to send information to
+/// XMPP's message stanza are a "push" mechanism to send information to
 /// other XMPP entities without requiring a response.
 ///
 /// Chat clients will typically use [Message] stanzas that have a type of either
@@ -124,7 +124,6 @@ class Message extends Stanza with Attributes {
               extensions.add(extension);
             }
           }
-          break;
       }
     }
     final message = Message(
