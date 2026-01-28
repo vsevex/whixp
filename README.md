@@ -20,17 +20,61 @@ Below is a visual demonstration showcasing the real-world application of the Whi
 
 [Whixp in use](https://dosybuck.s3.amazonaws.com/whixp/whixp.mp4).
 
+## Why Use Whixp?
+
+**🏗️ Built for Dart & Flutter**: Whixp is written in pure Dart, making it the perfect choice for Dart and Flutter applications. No platform-specific code, no web compatibility compromises—just clean, native Dart that works seamlessly across Android, iOS, macOS, and Windows.
+
+**🚀 Production-Ready**: With comprehensive XMPP protocol support including Stream Management (XEP-0198), Message Archive Management (XEP-0313), Chat Markers (XEP-0333), and more, Whixp provides everything you need to build robust XMPP clients.
+
+**🔌 Extensible Architecture**: Whixp's plugin-based architecture makes it easy to add new XMPP protocol extensions. The well-designed plugin system allows you to extend functionality without modifying core code.
+
+**⚡ Lightweight & Performant**: Designed with performance in mind, Whixp avoids unnecessary dependencies and overhead. It's optimized for mobile and desktop applications where resource efficiency matters.
+
+**🛡️ Reliable Connection Management**: Built-in reconnection policies, stream management, and robust error handling ensure your XMPP connections stay stable even in challenging network conditions.
+
+**📱 Mobile-First**: Unlike web-focused XMPP libraries, Whixp is designed specifically for native mobile and desktop applications. It leverages Dart's strengths without the constraints of web platform limitations.
+
+**🔒 Secure by Default**: Supports TLS/SSL encryption, SASL authentication mechanisms (SCRAM-SHA-1, SCRAM-SHA-256, PLAIN), and follows XMPP security best practices.
+
+**🎯 Modern XMPP Features**: Supports modern XMPP extensions like MAM (message archiving), Chat Markers (read receipts), Unique Stanza IDs, and more—everything you need for a modern messaging experience.
+
+**📚 Well-Documented**: Comprehensive documentation and examples help you get started quickly and implement advanced features with confidence.
+
+**🤝 Actively Maintained**: Regular updates, bug fixes, and new feature additions ensure Whixp stays current with XMPP protocol developments.
+
 ## Features
 
 **Connection Management**: Establishes secure connections to XMPP servers effortlessly. Manage connection states with ease: connect, disconnect, and handle reconnections properly.
 
 **Stanza Handling**: Efficiently handles various XMPP stanzas, including IQ, message, and presence stanzas. You can customize stanza handling based on your application's requirements.
 
-**Extensions Support**: Extensible architecture supports XMPP protocol extensions.
+**Extensions Support**: Extensible architecture supports XMPP protocol extensions including:
 
-**Pure Dart implementation**: Written in pure Dart, enabling easy integration with Dart and Flutter projects.
+- Stream Management (XEP-0198)
+- Message Archive Management (XEP-0313)
+- Chat Markers (XEP-0333)
+- Unique Stanza IDs (XEP-0359)
+- Service Discovery (XEP-0030)
+- PubSub (XEP-0060)
+- And more...
+
+**Pure Dart Implementation**: Written in pure Dart, enabling easy integration with Dart and Flutter projects. **Note**: Web platform is not supported—Whixp is optimized for native mobile and desktop applications.
 
 **Lightweight**: Whixp is designed to be lightweight, providing a streamlined solution for XMPP connectivity without unnecessary dependencies or overhead.
+
+**Platform Support**:
+
+- ✅ Android
+- ✅ iOS
+- ✅ macOS
+- ✅ Windows
+- ❌ Web (not supported - see [Limitations](#limitations))
+
+## Limitations
+
+**Web Platform**: Whixp does not support web platforms due to Dart/Flutter limitations with web sockets and native networking APIs. For web applications, consider using web-specific XMPP libraries.
+
+**End-to-End Encryption**: OMEMO (XEP-0384) is not currently supported due to cryptographic library limitations in Dart. Basic TLS/SSL encryption and SASL authentication are fully supported.
 
 ## API
 
