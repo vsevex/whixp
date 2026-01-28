@@ -14,7 +14,7 @@ void main() {
       whixp.sendPresence();
 
       /// Sending sample message.
-      whixp.sendMessage(JabberID('alyosha@localhost'), body: 'First message');
+      whixp.sendMessage(JabberID('anar@localhost'), body: 'First message');
 
       /// Sending marked message.
       const id = StanzaID('random-id');
