@@ -266,9 +266,9 @@ class WhixpUtils {
     return out;
   }
 
-  /// Generates a unique ID for use in <iq /> stanzas.
+  /// Generates a unique ID for use in iq stanzas.
   ///
-  /// All <iq /> stanzas are required to have unique id attributes. This
+  /// All iq stanzas are required to have unique id attributes. This
   /// function makes creating this ease. Each connection instance has a counter
   /// which starts from zero, and the value of this counter plus a colon
   /// followed by the `suffix` becomes the unique id. If no suffix is supplied,
