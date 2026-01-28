@@ -5,6 +5,7 @@ import 'package:whixp/src/plugins/plugins.dart';
 import 'package:whixp/src/stanza/forwarded.dart';
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stanza/stanza.dart';
+import 'package:whixp/src/transport.dart';
 import 'package:whixp/src/utils/src/utils.dart';
 
 import 'package:xml/xml.dart';
@@ -16,16 +17,18 @@ class Inbox {
 
   /// read here for all the options for the inbox querying
   /// https://esl.github.io/MongooseDocs/latest/open-extensions/inbox/
-  static FutureOr<IQ> queryInbox<T>({
+  static FutureOr<IQ> queryInbox<T>(
+    Transport transport, {
     RSMSet? pagination,
     int timeout = 5,
   }) {
     final query = InboxQuery(rsm: pagination);
 
     final iq = IQ(generateID: true)
-      ..type = iqTypeSet
+      // XEP-0430 uses an IQ of type "get" for querying.
+      ..type = iqTypeGet
       ..payload = query;
 
-    return iq.send(timeout: timeout);
+    return iq.send(transport, timeout: timeout);
   }
 }
