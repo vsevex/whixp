@@ -53,7 +53,6 @@ String get pubsubOwnerTag =>
 String get pubsubEventTag =>
     '{${WhixpUtils.getNamespace('PUBSUB')}#event}event';
 String get vCard4Tag => '{urn:ietf:params:xml:ns:vcard-4.0}vcard';
-String get vCardTag => '{vcard-temp}vCard';
 String get adhocCommandTag => '{http://jabber.org/protocol/commands}command';
 String get enableTag => '{urn:xmpp:push:0}enable';
 String get disableTag => '{urn:xmpp:push:0}disable';
@@ -66,9 +65,16 @@ String get mamFinTag => '{urn:xmpp:mam:2}fin';
 String get mamResultTag => '{urn:xmpp:mam:2}result';
 String get mamMetadataTag => '{urn:xmpp:mam:2}metadata';
 String get forwardedTag => '{urn:xmpp:forward:0}forwarded';
-String get inboxQueryTag => '{erlang-solutions.com:xmpp:inbox:0}inbox';
-String get inboxFinTag => '{erlang-solutions.com:xmpp:inbox:0}fin';
-String get inboxResultTag => '{erlang-solutions.com:xmpp:inbox:0}result';
+
+/// Inbox (XEP-0430) stanza tags.
+String get inboxQueryTag => '{${WhixpUtils.getNamespace('INBOX')}}inbox';
+String get inboxFinTag => '{${WhixpUtils.getNamespace('INBOX')}}fin';
+String get inboxResultTag => '{${WhixpUtils.getNamespace('INBOX')}}result';
+
+/// Legacy inbox namespace used by some servers (e.g. older MongooseIM).
+String get inboxQueryTagLegacy => '{erlang-solutions.com:xmpp:inbox:0}inbox';
+String get inboxFinTagLegacy => '{erlang-solutions.com:xmpp:inbox:0}fin';
+String get inboxResultTagLegacy => '{erlang-solutions.com:xmpp:inbox:0}result';
 
 Set<String> get presenceTypes => <String>{
       'subscribe',
