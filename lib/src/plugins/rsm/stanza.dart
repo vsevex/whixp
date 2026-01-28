@@ -27,23 +27,23 @@ class RSMSet extends IQStanza {
 
   /// In order to limit the number of items of a result set to be returned,
   /// the requesting entity specifies the maximum size of the desired subset
-  /// (via the XML character data of the <max/> element).
+  /// (via the XML character data of the max element).
   final int max;
 
   /// The requesting entity can then ask for the next page in the result set
   /// by including in its request the UID of the last item from the previous
-  /// page (encapsulated in an <after/> element), along with the maximum number
-  /// of items to return. Note: If no <after/> element is specified, then the
+  /// page (encapsulated in an after element), along with the maximum number
+  /// of items to return. Note: If no after element is specified, then the
   /// UID defaults to "before the first item in the result set" (i.e.,
   /// effectively an index of negative one).
   final String? after;
 
   /// The requesting entity MAY ask for the previous page in a result set by
   /// including in its request the UID of the first item from the page that has
-  /// already been received (encapsulated in a <before/> element), along with
+  /// already been received (encapsulated in a before element), along with
   /// the maximum number of items to return.
   ///
-  /// If set to an empty string, then <before/> element will be added.
+  /// If set to an empty string, then before element will be added.
   final String? before;
 
   /// In order to get the item count of a result set without retrieving the
@@ -58,7 +58,7 @@ class RSMSet extends IQStanza {
   /// the position within the full set (which MAY be approximate) of the first
   /// item in the page. If that item is the first in the full set, then the
   /// index SHOULD be '0' (zero). If the last item in the page is the last item
-  /// in the full set, then the value of the <first/> element's index attribute
+  /// in the full set, then the value of the first element's index attribute
   /// SHOULD be the specified count minus the number of items in the last page.
   final int? firstIndex;
 
@@ -77,7 +77,7 @@ class RSMSet extends IQStanza {
   /// set page is not known, then the requesting entity MAY request the page
   /// that starts at a particular index within the result set. It does that by
   /// including in its request the index of the first item to be returned
-  /// (encapsulated in an <index/> element), as well as the maximum number of
+  /// (encapsulated in an index element), as well as the maximum number of
   /// items to return.
   final int? index;
 
