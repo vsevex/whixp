@@ -5,6 +5,7 @@ import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/plugins/form/form.dart';
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stanza/stanza.dart';
+import 'package:whixp/src/transport.dart';
 import 'package:whixp/src/utils/utils.dart';
 
 import 'package:xml/xml.dart' as xml;
@@ -24,13 +25,14 @@ class Push {
     JabberID jid, {
     String? node,
     Form? payload,
+    required Transport transport,
   }) {
     final nod = node ?? WhixpUtils.generateUniqueID('push');
     final iq = IQ(generateID: true)
       ..type = iqTypeSet
       ..payload = Enable(jid, nod, payload: payload);
 
-    iq.send();
+    iq.send(transport);
 
     return nod;
   }
@@ -39,11 +41,12 @@ class Push {
   static async.FutureOr<IQ> disableNotifications(
     JabberID jid, {
     String? node,
+    required Transport transport,
   }) {
     final iq = IQ(generateID: true)
       ..type = iqTypeSet
       ..payload = Disable(jid, node: node);
 
-    return iq.send();
+    return iq.send(transport);
   }
 }
