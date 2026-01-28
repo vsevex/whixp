@@ -1,11 +1,10 @@
 import 'dart:async' as async;
 import 'dart:io' as io;
 
-import 'package:connecta/connecta.dart';
 import 'package:dnsolve/dnsolve.dart';
 import 'package:synchronized/extension.dart';
-import 'package:whixp/src/database/controller.dart';
 
+import 'package:whixp/src/database/controller.dart';
 import 'package:whixp/src/enums.dart';
 import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/handler/eventius.dart';
@@ -14,8 +13,13 @@ import 'package:whixp/src/handler/router.dart';
 import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/log/log.dart';
 import 'package:whixp/src/parser.dart';
+import 'package:whixp/src/performance/batcher.dart';
+import 'package:whixp/src/performance/metrics.dart';
+import 'package:whixp/src/performance/rate_limiter.dart';
 import 'package:whixp/src/plugins/features.dart';
 import 'package:whixp/src/reconnection.dart';
+import 'package:whixp/src/socket/socket_listener.dart';
+import 'package:whixp/src/socket/socket_manager.dart';
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stanza/message.dart';
 import 'package:whixp/src/stanza/mixins.dart';
@@ -33,8 +37,6 @@ part 'connection.dart';
 ///
 /// Establishes a socket connection, accepts and sends data over this socket.
 class Transport {
-  static Transport? _instance;
-
   /// Typically, stanzas are first processed by a [Transport] event handler
   /// which will then trigger ustom events to continue further processing,
   /// especially since custom event handlers may run in individual threads.
@@ -52,7 +54,7 @@ class Transport {
   /// /// it will connect to the "xmpp.is" on port 5223 over DirectTLS
   /// transport.connect();
   /// ```
-  factory Transport(
+  Transport(
     /// Hostname that the client needs to establish a connection with
     String host, {
     /// Defaults to 5222
@@ -60,7 +62,7 @@ class Transport {
 
     /// The JabberID (JID) used by this connection, as set after session
     /// binding. This may even be a different bare JID than what was requested
-    JabberID? boundJID,
+    this.boundJID,
 
     /// The service name to check with DNS SRV records. For example, setting this
     /// to "xmpp-client" would query the "_xmpp-clilent._tcp" service.
@@ -84,11 +86,11 @@ class Transport {
 
     /// If `true`, periodically send a whitespace character over the wire to
     /// keep the connection alive
-    bool pingKeepAlive = true,
+    this.pingKeepAlive = true,
 
     /// The default interval between keepalive signals when [pingKeepAlive] is
     /// enabled. Represents in seconds. Defaults to `180`
-    int pingKeepAliveInterval = 180,
+    this.pingKeepAliveInterval = 180,
 
     /// Optional [io.SecurityContext] which is going to be used in socket
     /// connections
@@ -103,55 +105,49 @@ class Transport {
     /// Must be declared internal database path.
     String internalDatabasePath = '',
 
-    /// Whether to end session on disconnect method or not. Defaults to `true`.
-    bool endSessionOnDisconnect = true,
-
     /// Represents the duration in milliseconds for which the system will wait
     /// for a connection to be established before raising a
     /// [async.TimeoutException].
     ///
     /// Defaults to `2000` milliseconds
-    int connectionTimeout = 2000,
+    this.connectionTimeout = 2000,
 
     /// Reconnection strategy if there is an network interruption or disconnect.
     ReconnectionPolicy? reconnectionPolicy,
-  }) =>
-      _instance = Transport._internal(
-        host,
-        boundJID: boundJID,
-        port: port,
-        dnsService: dnsService,
-        useIPv6: useIPv6,
-        useTLS: useTLS,
-        disableStartTLS: disableStartTLS,
-        endSessionOnDisconnect: endSessionOnDisconnect,
-        pingKeepAlive: pingKeepAlive,
-        pingKeepAliveInterval: pingKeepAliveInterval,
-        context: context,
-        onBadCertificateCallback: onBadCertificateCallback,
-        connectionTimeout: connectionTimeout,
-        internalDatabasePath: internalDatabasePath,
-        reconnectionPolicy: reconnectionPolicy,
-      );
 
-  factory Transport.instance() => _instance!;
+    /// Enable message batching to reduce network overhead.
+    /// When enabled, multiple stanzas are grouped together before sending.
+    /// Defaults to `true`.
+    bool enableBatching = true,
 
-  Transport._internal(
-    String host, {
-    required int port,
-    required this.boundJID,
-    required String? dnsService,
-    required bool useIPv6,
-    required bool useTLS,
-    required bool disableStartTLS,
-    required this.pingKeepAlive,
-    required this.pingKeepAliveInterval,
-    required io.SecurityContext? context,
-    required bool Function(io.X509Certificate)? onBadCertificateCallback,
-    required this.connectionTimeout,
-    required this.endSessionOnDisconnect,
-    required String internalDatabasePath,
-    required ReconnectionPolicy? reconnectionPolicy,
+    /// Maximum number of stanzas to batch before flushing.
+    /// Only used when [enableBatching] is `true`.
+    /// Defaults to `50`.
+    int maxBatchSize = 50,
+
+    /// Maximum time in milliseconds to wait before flushing a batch.
+    /// Only used when [enableBatching] is `true`.
+    /// Defaults to `100` milliseconds.
+    int maxBatchDelay = 100,
+
+    /// Enable rate limiting to prevent overwhelming the server.
+    /// Defaults to `true`.
+    bool enableRateLimiting = true,
+
+    /// Maximum number of stanzas allowed per second.
+    /// Only used when [enableRateLimiting] is `true`.
+    /// Defaults to `100` stanzas per second.
+    int maxStanzasPerSecond = 100,
+
+    /// Maximum burst size for rate limiting (number of stanzas that can be sent immediately).
+    /// Only used when [enableRateLimiting] is `true`.
+    /// Defaults to `50`.
+    int maxBurst = 50,
+
+    /// Maximum size of the sending queue. When the queue is full, backpressure is applied.
+    /// Set to `null` for unbounded queue (not recommended for high-volume applications).
+    /// Defaults to `1000`.
+    int? maxQueueSize = 1000,
   }) {
     connection = Connection(
       ConnectionConfiguration(
@@ -159,11 +155,11 @@ class Transport {
         port: port,
         useTLS: useTLS,
         disableStartTLS: disableStartTLS,
-        socketOptions: ConnectaListener(
-          onData: _dataReceived,
-          combineWhile: _combineWhile,
-          onDone: _connectionLost,
-          onError: (exception, trace) => _handleError(exception),
+        socketOptions: _SocketListenerImpl(
+          onDataCallback: _dataReceived,
+          combineWhileCallback: _combineWhile,
+          onDoneCallback: _connectionLost,
+          onErrorCallback: (exception, trace) => _handleError(exception),
         ),
         securityContext: context,
         connectionTimeout: connectionTimeout,
@@ -174,13 +170,18 @@ class Transport {
       (state) => emit<TransportState>('state', data: state),
       onConnectionStartCallback: () async {
         /// Initialize internal used database for Whixp.
-        await HiveController.initialize(internalDatabasePath);
-        _waitingQueueController = async.StreamController<Packet>();
+        await _databaseController.initialize();
 
         /// Reinit XML parser.
         _initParser();
 
-        _run();
+        // Recreate queue controller if it was closed (e.g., on reconnection)
+        if (_waitingQueueController.isClosed) {
+          _queueSubscription?.cancel();
+          _waitingQueueController = async.StreamController<Packet>();
+          _run();
+        }
+
         sendRaw(streamHeader);
       },
       handleError: (exception) => _handleError(exception),
@@ -189,7 +190,41 @@ class Transport {
     streamHeader = '<stream>';
     streamFooter = '<stream/>';
 
+    // Initialize performance components
+    _rateLimiter = RateLimiter(
+      maxStanzasPerSecond: maxStanzasPerSecond,
+      maxBurst: maxBurst,
+    );
+    _rateLimiter.enabled = enableRateLimiting;
+
+    // Initialize metrics
+    metrics.reset();
+
+    _batcher = MessageBatcher(
+      maxBatchSize: maxBatchSize,
+      maxBatchDelay: maxBatchDelay,
+      onFlush: (List<Packet> batch) async {
+        final startTime = DateTime.now();
+        await _flushBatch(batch);
+        final flushTime = DateTime.now().difference(startTime);
+        metrics.recordBatchFlushed(batch.length, flushTime);
+        metrics.updateBatchSize(0); // Reset after flush
+      },
+    )..setEnabled(enableBatching);
+
+    _maxQueueSize = maxQueueSize;
+
+    // Initialize DatabaseController instance for this Transport
+    _databaseController = DatabaseController(
+        internalDatabasePath.isEmpty ? null : internalDatabasePath);
+
+    // Initialize queue controller early for seamless data transport
+    _waitingQueueController = async.StreamController<Packet>();
+
     _setup();
+
+    // Start queue processing immediately - it will buffer until connection is ready
+    _run();
   }
 
   /// [Tuple2] type variable that holds both [_host] and [_port].
@@ -216,7 +251,7 @@ class Transport {
 
   /// Controls if the session can be considered ended if the connection is
   /// terminated.
-  late bool endSessionOnDisconnect;
+  bool endSessionOnDisconnect = false;
 
   /// Default [async.Timer] for [pingKeepAliveInterval]. This will be assigned
   /// when there is a [async.Timer] attached after connection established.
@@ -231,6 +266,34 @@ class Transport {
 
   /// [async.StreamController] for stanzas to be sent.
   late async.StreamController<Packet> _waitingQueueController;
+
+  /// Stream subscription for processing outgoing stanzas.
+  async.StreamSubscription<Packet>? _queueSubscription;
+
+  /// Rate limiter to control outgoing stanza rate
+  late RateLimiter _rateLimiter;
+
+  /// Message batcher to group stanzas together
+  late MessageBatcher _batcher;
+
+  /// Performance metrics for monitoring client performance.
+  final PerformanceMetrics metrics = PerformanceMetrics();
+
+  /// Maximum size of the sending queue (null for unbounded)
+  int? _maxQueueSize;
+
+  /// DatabaseController instance for managing database storage for this Transport.
+  late final DatabaseController _databaseController;
+
+  /// Gets the DatabaseController instance for this Transport.
+  DatabaseController get databaseController => _databaseController;
+
+  /// Gets the DatabaseController instance for this Transport.
+  ///
+  /// Deprecated: Use [databaseController] instead.
+  /// This getter is kept for backward compatibility.
+  @Deprecated('Use databaseController instead')
+  DatabaseController get hiveController => _databaseController;
 
   /// [Packet] list of stanzas need to be sent when the connection is
   /// established.
@@ -267,10 +330,13 @@ class Transport {
   final callbacksBeforeStanzaSend =
       <async.FutureOr<void> Function(dynamic data)>[];
 
+  /// Map of pending sendAwait completers that should be cancelled on disconnect
+  final Map<String, async.Completer<Packet?>> _pendingAwaitCompleters = {};
+
   void _setup() {
     _reset();
 
-    addEventHandler<TransportState>('state', (state) async {
+    addEventHandler<TransportState>('state', (state) {
       if (state == TransportState.disconnected ||
           state == TransportState.killed) {
         if (_keepAliveTimer != null) {
@@ -278,6 +344,20 @@ class Transport {
           _keepAliveTimer?.cancel();
         }
         StreamFeatures.supported.clear();
+
+        // Cancel all pending sendAwait requests
+        for (final entry in _pendingAwaitCompleters.entries) {
+          if (!entry.value.isCompleted) {
+            Log.instance.warning(
+              'Cancelling pending request: ${entry.key} (connection lost)',
+            );
+            entry.value.completeError(
+              StanzaException.timeout(null, timeoutSeconds: 0),
+            );
+          }
+        }
+        _pendingAwaitCompleters.clear();
+
         _closeStreams();
       }
     });
@@ -300,6 +380,16 @@ class Transport {
     _keepAliveTimer = null;
     _redirectAttempts = 0;
     _scheduledEvents = <String, async.Timer>{};
+
+    // Cancel any pending await completers
+    for (final completer in _pendingAwaitCompleters.values) {
+      if (!completer.isCompleted) {
+        completer.completeError(
+          StanzaException.timeout(null, timeoutSeconds: 0),
+        );
+      }
+    }
+    _pendingAwaitCompleters.clear();
   }
 
   /// Begin sending whitespace periodically to keep the connection alive.
@@ -365,21 +455,46 @@ class Transport {
     dynamic exception, {
     bool connectionFailure = false,
   }) async {
+    // Log detailed error information
     if (exception is Exception) {
-      if (exception is ConnectaException) {
+      if (exception is SocketManagerException) {
+        Log.instance.error(
+          'Connection error: ${exception.message}',
+        );
         emit<Object>('connectionFailure', data: exception.message);
+      } else if (exception is AuthenticationException) {
+        Log.instance.error(
+          'Authentication error: ${exception.message}',
+        );
+        if (exception.recoverySuggestion != null) {
+          Log.instance.info('Recovery: ${exception.recoverySuggestion}');
+        }
+        emit<Object>('connectionFailure', data: exception);
       } else {
+        Log.instance.error(
+          'Error: $exception',
+        );
         emit<Object>('connectionFailure', data: exception);
       }
+    } else {
+      Log.instance.error('Unknown error: $exception');
+      emit<Object>('connectionFailure', data: exception);
     }
+
     if (connectionFailure) {
       emit<TransportState>('state', data: TransportState.connectionFailure);
     }
 
+    // Attempt reconnection if policy allows
     if ((await connection._reconnectionPolicy?.canTriggerFailure()) ?? false) {
+      Log.instance.info(
+        'Reconnection policy triggered. Attempting to reconnect...',
+      );
       await connection._reconnectionPolicy?.onFailure();
     } else {
-      Log.instance.warning('Reconnection is not set');
+      Log.instance.warning(
+        'Reconnection is not configured. Connection will be terminated.',
+      );
       await connection.hangup(consume: false, sendFooter: false);
     }
   }
@@ -399,16 +514,26 @@ class Transport {
     _closeStreams();
   }
 
-  /// Combines while the given condition is true. Works with [Connecta].
+  /// Combines while the given condition is true. Works with [SocketManager].
   bool _combineWhile(List<int> bytes) {
-    const messageEof = <String>{'</iq>'};
     final data = WhixpUtils.unicode.call(bytes);
 
-    for (final eof in messageEof) {
-      if (data.endsWith(eof)) return true;
-    }
+    // Only attempt to combine IQ stanzas. If the latest IQ stanza isn't yet
+    // complete (common when stanzas are split across packets), keep buffering.
+    final lastIqStart = data.lastIndexOf('<iq');
+    if (lastIqStart == -1) return false;
 
-    return false;
+    final tail = data.substring(lastIqStart);
+
+    // Self-closing IQ: <iq .../>
+    final hasSelfClosingIq = RegExp(r'<iq\b[^>]*\/\s*>').hasMatch(tail);
+    if (hasSelfClosingIq) return false;
+
+    // Regular IQ: ... </iq> (allow trailing whitespace/newlines)
+    final hasIqClose = RegExp(r'</iq\s*>\s*$').hasMatch(tail);
+    if (hasIqClose) return false;
+
+    return true;
   }
 
   /// Called when incoming data is received on the socket. We feed that data
@@ -422,9 +547,13 @@ class Transport {
   /// Analyze incoming XML stanzas and convert them into stanza objects if
   /// applicable and queue stream events to be processed by matching handlers.
   Future<void> _spawnEvent(xml.XmlElement element) async {
+    final parseStart = DateTime.now();
     final stanza = _buildStanza(element);
+    final parseTime = DateTime.now().difference(parseStart);
+    metrics.recordStanzaReceived();
+    metrics.recordStanzaParsed(parseTime);
 
-    Router.route(stanza);
+    Router.route(stanza, this);
 
     Log.instance.debug('RECEIVED: $element');
 
@@ -443,12 +572,36 @@ class Transport {
       XMLParser.nextPacket(node, namespace: node.getAttribute('xmlns'));
 
   /// Background [Stream] that processes stanzas to send.
-  void _run() => _waitingQueueController.stream.listen((data) async {
-        for (final callback in callbacksBeforeStanzaSend) {
-          await callback.call(data);
-        }
-        sendRaw(data.toXMLString());
-      });
+  void _run() => _queueSubscription = _waitingQueueController.stream.listen(
+        (data) async {
+          for (final callback in callbacksBeforeStanzaSend) {
+            await callback.call(data);
+          }
+          // Use batcher instead of sending directly
+          await _batcher.add(data);
+          metrics.updateBatchSize(_batcher.currentBatchSize);
+        },
+        onError: (error) {
+          Log.instance.error('Error in sending queue: $error');
+        },
+        cancelOnError: false,
+      );
+
+  /// Flushes a batch of stanzas, applying rate limiting.
+  Future<void> _flushBatch(List<Packet> batch) async {
+    for (final packet in batch) {
+      // Wait for rate limiter token
+      final canSend = await _rateLimiter.canSend();
+      if (!canSend) {
+        metrics.recordRateLimitHit();
+        await _rateLimiter.waitForToken();
+      }
+
+      // Send the packet
+      sendRaw(packet.toXMLString());
+      metrics.recordStanzaSent();
+    }
+  }
 
   /// Add a stream event handler that will be executed when a matching stanza
   /// is received.
@@ -458,7 +611,7 @@ class Transport {
   void removeHandler(String name) => Router.removeHandler(name);
 
   /// Triggers a custom [event] manually.
-  async.FutureOr<void> emit<T>(String event, {T? data}) async =>
+  async.Future<void> emit<T>(String event, {T? data}) =>
       _eventius.emit<T>(event, data);
 
   /// Adds a custom [event] handler that will be executed whenever its event is
@@ -571,29 +724,36 @@ class Transport {
   /// Wraps basic send method declared in this class privately. Helps to send
   /// [Extension] objects.
   void send(Packet data) {
+    // Before session starts, queue non-critical stanzas for later
     if (!_sessionStarted) {
-      bool passthrough = false;
+      // Critical stanzas (IQ, SASL, SM, session establishment) go through immediately
+      final isCritical = data is IQ ||
+          data.name.startsWith('sasl') ||
+          data.name.startsWith('sm') ||
+          data.name == 'proceed' ||
+          data.name == 'bind' ||
+          data.name == 'session' ||
+          data.name == 'register';
 
-      if (!passthrough) {
-        if (data.name.startsWith('sasl') ||
-            data.name.startsWith('sm') ||
-            data is IQ) {
-          passthrough = true;
-        } else {
-          switch (data.name) {
-            case 'proceed':
-              passthrough = true;
-            case 'bind':
-              passthrough = true;
-            case 'session':
-              passthrough = true;
-            case 'register':
-              passthrough = true;
-          }
+      if (!isCritical) {
+        // Queue non-critical stanzas until session starts
+        if (_maxQueueSize != null && _queuedStanzas.length >= _maxQueueSize!) {
+          Log.instance.warning(
+            'Queue full (${_queuedStanzas.length} >= $_maxQueueSize), dropping packet',
+          );
+          metrics.recordQueueOverflow();
+          return;
         }
+        _queuedStanzas.add(data);
+        metrics.updateQueueSize(_queuedStanzas.length);
+        return;
       }
+    }
 
-      if (!passthrough) return _queuedStanzas.add(data);
+    // Add to queue (batcher will handle batching and rate limiting)
+    if (_waitingQueueController.isClosed) {
+      Log.instance.error('Cannot send: queue controller is closed');
+      return;
     }
 
     _waitingQueueController.add(data);
@@ -605,21 +765,26 @@ class Transport {
     String successPacket, {
     int timeout = 3,
     String? failurePacket,
-  }) async {
+  }) {
     final completer = async.Completer<Packet?>();
+
+    // Track this completer so we can cancel it if connection is lost
+    _pendingAwaitCompleters[handlerName] = completer;
 
     final handler = Handler(
       handlerName,
-      (stanza) async {
+      (stanza) {
         if (stanza is S) {
-          await Future.microtask(() {
-            if (!completer.isCompleted) completer.complete(stanza);
-          }).timeout(Duration(seconds: timeout));
+          if (!completer.isCompleted) {
+            _pendingAwaitCompleters.remove(handlerName);
+            completer.complete(stanza);
+          }
           removeHandler(handlerName);
         } else if (stanza is F) {
-          await Future.microtask(() {
-            if (!completer.isCompleted) completer.complete(null);
-          }).timeout(Duration(seconds: timeout));
+          if (!completer.isCompleted) {
+            _pendingAwaitCompleters.remove(handlerName);
+            completer.complete(null);
+          }
           removeHandler(handlerName);
         }
       },
@@ -633,21 +798,22 @@ class Transport {
 
     registerHandler(handler);
 
-    void callbackTimeout() {
-      async.runZonedGuarded(
-        () {
-          if (!completer.isCompleted) {
-            completer.complete(null);
-            throw StanzaException.timeout(null);
-          }
-        },
-        (error, trace) => Log.instance.warning(error.toString()),
-      );
-      removeHandler(handlerName);
-    }
-
-    schedule(handlerName, callbackTimeout, seconds: timeout);
+    schedule(
+      handlerName,
+      () {
+        if (!completer.isCompleted) {
+          _pendingAwaitCompleters.remove(handlerName);
+          completer.complete(null);
+          removeHandler(handlerName);
+        }
+      },
+      seconds: timeout,
+    );
     send(data);
+
+    // Clean up completer when future completes (success or error)
+    synchronized(() => completer.future)
+        .whenComplete(() => _pendingAwaitCompleters.remove(handlerName));
 
     return synchronized(() => completer.future);
   }
@@ -664,6 +830,11 @@ class Transport {
   }
 
   void _closeStreams() {
+    // Cancel queue subscription
+    _queueSubscription?.cancel();
+    _queueSubscription = null;
+    // Flush batcher before closing
+    _batcher.dispose();
     _waitingQueueController.close();
     _streamController.close();
   }
@@ -681,4 +852,32 @@ class Transport {
 
   /// Indicates whether the connection is secured or not.
   bool get isConnectionSecured => connection.isConnectionSecure;
+}
+
+/// Implementation of [SocketListener] for [Transport].
+class _SocketListenerImpl implements SocketListener {
+  _SocketListenerImpl({
+    required this.onDataCallback,
+    required this.combineWhileCallback,
+    required this.onDoneCallback,
+    required this.onErrorCallback,
+  });
+
+  final void Function(List<int> bytes) onDataCallback;
+  final bool Function(List<int> bytes) combineWhileCallback;
+  final void Function() onDoneCallback;
+  final void Function(Object exception, StackTrace trace) onErrorCallback;
+
+  @override
+  void onData(List<int> bytes) => onDataCallback(bytes);
+
+  @override
+  bool combineWhile(List<int> bytes) => combineWhileCallback(bytes);
+
+  @override
+  void onDone() => onDoneCallback();
+
+  @override
+  void onError(Object exception, StackTrace trace) =>
+      onErrorCallback(exception, trace);
 }
