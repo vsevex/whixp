@@ -63,9 +63,8 @@ class RateLimiter {
     if (!enabled) return;
 
     while (true) {
-      // Simple lock mechanism
       while (_locked) {
-        await async.Future.delayed(const Duration(milliseconds: 1));
+        await async.Future.delayed(Duration.zero);
       }
       _locked = true;
       _replenishTokens();
