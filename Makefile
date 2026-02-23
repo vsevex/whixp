@@ -190,6 +190,7 @@ android-x86_64: android-check-ndk
 
 # --- iOS (macOS only; requires Xcode). Device and sim are both arm64 so we can't lipo them together. ---
 # Output: libwhixp_transport.a = device (arm64), libwhixp_transport_sim.a = simulator (arm64 + x86_64).
+# ios-xcframework also builds WhixpTransport.xcframework so CocoaPods links the right slice (fixes "symbol not found" on simulator).
 IOS_DEVICE  := aarch64-apple-ios
 IOS_SIM_ARM := aarch64-apple-ios-sim
 IOS_SIM_X86 := x86_64-apple-ios
@@ -209,6 +210,22 @@ ios-lipo: ios-build
 		$(TARGET)/$(IOS_SIM_X86)/release/libwhixp_transport.a \
 		-output $(REPO_ROOT)/ios/libwhixp_transport_sim.a
 	@echo "Created ios/libwhixp_transport.a (device arm64), ios/libwhixp_transport_sim.a (simulator arm64+x86_64)"
+
+# XCFramework so CocoaPods links device lib for device and sim lib for simulator (fixes dlsym symbol not found on simulator).
+ios-xcframework: ios-build ios-lipo
+	@mkdir -p $(REPO_ROOT)/ios/xcframework-build
+	@cd $(REPO_ROOT)/ios/xcframework-build && \
+		rm -rf ios-arm64 ios-arm64_x86_64-simulator WhixpTransport.xcframework && \
+		mkdir -p ios-arm64 ios-arm64_x86_64-simulator && \
+		cp $(REPO_ROOT)/ios/libwhixp_transport.a ios-arm64/ && \
+		cp $(REPO_ROOT)/ios/libwhixp_transport_sim.a ios-arm64_x86_64-simulator/
+	@mkdir -p $(REPO_ROOT)/ios/Headers
+	xcodebuild -create-xcframework \
+		-library $(REPO_ROOT)/ios/xcframework-build/ios-arm64/libwhixp_transport.a -headers $(REPO_ROOT)/ios/Headers \
+		-library $(REPO_ROOT)/ios/xcframework-build/ios-arm64_x86_64-simulator/libwhixp_transport_sim.a -headers $(REPO_ROOT)/ios/Headers \
+		-output $(REPO_ROOT)/ios/WhixpTransport.xcframework
+	@rm -rf $(REPO_ROOT)/ios/xcframework-build
+	@echo "Created ios/WhixpTransport.xcframework (device + simulator)"
 
 # --- Tests ---
 # dart_test.yaml sets concurrency: 1 to avoid OOM when many suites run in parallel.
