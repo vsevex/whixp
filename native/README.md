@@ -68,6 +68,8 @@ Release builds use a size-oriented profile (`opt-level = "z"`, LTO, strip, `pani
 
 4. **CI builds, optional publish** — Build all targets in CI and attach artifacts to releases. Package on pub.dev stays source-only; power users get prebuilt libs from GitHub Releases.
 
+**Per-platform layout:** For the exact paths and file names (jniLibs, ios/, macos/, linux/, windows/) and how the Dart side loads the lib on each platform, see [Configuring native binaries per platform](../doc/NATIVE_BINARIES_PER_PLATFORM.md).
+
 ## How users get the binaries (after `pub get`)
 
 **Option A — Binaries included in the package (default if we commit them)**  
