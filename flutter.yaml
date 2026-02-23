@@ -1,0 +1,16 @@
+# Flutter plugin so that platform folders (android/, ios/, etc.) are included
+# when users depend on whixp. Native libs (from Rust build) are placed there
+# by CI; users just pub get and run.
+plugin:
+  platforms:
+    android:
+      package: com.whixp.transport
+      pluginClass: WhixpTransportPlugin
+    ios:
+      pluginClass: WhixpTransportPlugin
+    macos:
+      pluginClass: WhixpTransportPlugin
+    windows:
+      pluginClass: WhixpTransportPlugin
+    linux:
+      pluginClass: WhixpTransportPlugin
