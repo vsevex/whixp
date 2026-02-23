@@ -1,7 +1,7 @@
 import 'dart:async' as async;
-import 'dart:io' as io;
+import 'dart:convert';
+import 'dart:isolate';
 
-import 'package:dnsolve/dnsolve.dart';
 import 'package:synchronized/extension.dart';
 
 import 'package:whixp/src/database/controller.dart';
@@ -12,14 +12,13 @@ import 'package:whixp/src/handler/handler.dart';
 import 'package:whixp/src/handler/router.dart';
 import 'package:whixp/src/jid/jid.dart';
 import 'package:whixp/src/log/log.dart';
+import 'package:whixp/src/native/transport_ffi.dart';
 import 'package:whixp/src/parser.dart';
 import 'package:whixp/src/performance/batcher.dart';
 import 'package:whixp/src/performance/metrics.dart';
 import 'package:whixp/src/performance/rate_limiter.dart';
 import 'package:whixp/src/plugins/features.dart';
 import 'package:whixp/src/reconnection.dart';
-import 'package:whixp/src/socket/socket_listener.dart';
-import 'package:whixp/src/socket/socket_manager.dart';
 import 'package:whixp/src/stanza/iq.dart';
 import 'package:whixp/src/stanza/message.dart';
 import 'package:whixp/src/stanza/mixins.dart';
@@ -35,15 +34,13 @@ part 'connection.dart';
 /// Designed to simplify the complexities associated with establishing a
 /// connection to a server, as well as sending and receiving XML stanzas.
 ///
-/// Establishes a socket connection, accepts and sends data over this socket.
+/// Establishes a connection via the native (Rust) transport and sends/receives XML stanzas.
 class Transport {
   /// Typically, stanzas are first processed by a [Transport] event handler
-  /// which will then trigger ustom events to continue further processing,
-  /// especially since custom event handlers may run in individual threads.
+  /// which will then trigger custom events to continue further processing.
   ///
-  /// [Transport] establishes [io.Socket] connection in the first hand, then
-  /// initializes XML parser and tries to parse incoming XML's to the particular
-  /// stanzas.
+  /// [Transport] uses the native transport for TCP/TLS, then initializes the
+  /// XML parser and parses incoming XML into stanzas.
   ///
   /// Note: This class should only be used in the associate of [Whixp] client
   /// or component.
@@ -84,6 +81,12 @@ class Transport {
     /// a TLS connection on the client side. Defaults to `false`
     bool disableStartTLS = false,
 
+    /// If `true`, connect over WebSocket (ws:// or wss://) instead of raw TCP/TLS.
+    this.useWebSocket = false,
+
+    /// WebSocket path (e.g. "/ws" or "/xmpp-websocket"). Only used when [useWebSocket] is true. Defaults to "/ws".
+    this.wsPath,
+
     /// If `true`, periodically send a whitespace character over the wire to
     /// keep the connection alive
     this.pingKeepAlive = true,
@@ -91,16 +94,6 @@ class Transport {
     /// The default interval between keepalive signals when [pingKeepAlive] is
     /// enabled. Represents in seconds. Defaults to `180`
     this.pingKeepAliveInterval = 180,
-
-    /// Optional [io.SecurityContext] which is going to be used in socket
-    /// connections
-    io.SecurityContext? context,
-
-    /// To avoid processing on bad certification you can use this callback.
-    ///
-    /// Passes [io.X509Certificate] instance when returning boolean value which
-    /// indicates to proceed on bad certificate or not.
-    bool Function(io.X509Certificate)? onBadCertificateCallback,
 
     /// Must be declared internal database path.
     String internalDatabasePath = '',
@@ -149,23 +142,69 @@ class Transport {
     /// Defaults to `1000`.
     int? maxQueueSize = 1000,
   }) {
+    if (!isNativeTransportAvailable) {
+      throw const WhixpInternalException(
+        'Native transport library not available on this platform. '
+        'Ensure the Rust-built lib is present for this OS.',
+      );
+    }
+    final nativePort = ReceivePort();
+    nativePort.listen((dynamic message) {
+      if (message is List && message.isNotEmpty) {
+        switch (message[0]) {
+          case 'state':
+            Log.instance.debug(
+                '[STANZA_RX] native state -> ${_transportStateFromNative(message[1] as int)}');
+            emit<TransportState>('state',
+                data: _transportStateFromNative(message[1] as int));
+          case 'stanza':
+            final raw = message[1] as String;
+            Log.instance.debug(
+                '[STANZA_RX] native stanza bytes -> ${raw.length} chars');
+            _dataReceived(utf8.encode(raw));
+          case 'error':
+            Log.instance.debug('[STANZA_RX] native error -> ${message[2]}');
+            connection.tearDownNative();
+            emit<TransportState>('state', data: TransportState.disconnected);
+            _handleError(WhixpInternalException(
+                'Native transport error: ${message[2]}'));
+        }
+      }
+    });
+    final nativeSendPort = nativePort.sendPort;
+
     connection = Connection(
       ConnectionConfiguration(
         host: host,
         port: port,
         useTLS: useTLS,
         disableStartTLS: disableStartTLS,
-        socketOptions: _SocketListenerImpl(
-          onDataCallback: _dataReceived,
-          combineWhileCallback: _combineWhile,
-          onDoneCallback: _connectionLost,
-          onErrorCallback: (exception, trace) => _handleError(exception),
+        useWebSocket: useWebSocket,
+        wsPath: wsPath,
+        createNativeTransport: (
+          h,
+          p,
+          kind,
+          timeoutMs,
+          tlsName,
+          service,
+          useIPv6Resolving,
+          wsPathArg,
+        ) =>
+            WhixpTransportNative.create(
+          host: h,
+          port: p,
+          kind: kind,
+          connectTimeoutMs: timeoutMs,
+          tlsServerName: tlsName,
+          service: service,
+          useIPv6: useIPv6Resolving,
+          wsPath: wsPathArg,
+          sendPort: nativeSendPort,
         ),
-        securityContext: context,
         connectionTimeout: connectionTimeout,
         useIPv6WhenResolvingDNS: useIPv6,
         service: dnsService,
-        onBadCertificateCallback: onBadCertificateCallback,
       ),
       (state) => emit<TransportState>('state', data: state),
       onConnectionStartCallback: () async {
@@ -241,11 +280,17 @@ class Transport {
   /// Scheduled callback handler [Map] late initializer.
   late Map<String, async.Timer> _scheduledEvents;
 
+  /// Whether the transport uses WebSocket (RFC 7395). When true, stream open/close use framing elements.
+  final bool useWebSocket;
+
+  /// WebSocket path (e.g. "/ws"). Only used when [useWebSocket] is true.
+  final String? wsPath;
+
   /// If `true`, periodically send a whitespace character over the wire to keep
   /// the connection alive.
   final bool pingKeepAlive;
 
-  /// The default interval between keepalive signals when [pinkKeepAlive] is
+  /// The default interval between keepalive signals when [pingKeepAlive] is
   /// enabled.
   final int pingKeepAliveInterval;
 
@@ -299,13 +344,12 @@ class Transport {
   /// established.
   final _queuedStanzas = <Packet>[];
 
-  /// Actual [StreamParser] instance to manipulate incoming data from the
-  /// socket.
+  /// [StreamParser] for incoming XML from the transport.
   late StreamParser _parser;
 
   /// [StreamParser] parser should add list of [StreamObject] to this
-  /// controller.
-  late async.StreamController<String> _streamController;
+  /// controller. Null until connection actually starts (e.g. native can disconnect before that).
+  async.StreamController<String>? _streamController;
 
   /// [StreamParser] parser will communicate with this [async.Stream];
   late async.Stream<List<StreamObject>> _stream;
@@ -339,6 +383,7 @@ class Transport {
     addEventHandler<TransportState>('state', (state) {
       if (state == TransportState.disconnected ||
           state == TransportState.killed) {
+        connection.tearDownNative();
         if (_keepAliveTimer != null) {
           Log.instance.warning('Stopping Ping keep alive...');
           _keepAliveTimer?.cancel();
@@ -403,10 +448,7 @@ class Transport {
     }
   }
 
-  /// Creates a new socket and connect to the server.
-  ///
-  /// The parameters needed to establish a connection in order are passed
-  /// beforehand when creating [Transport] instance.
+  /// Starts connection (DNS resolution then native transport connect).
   void connect() {
     callbacksBeforeStanzaSend.clear();
 
@@ -417,13 +459,35 @@ class Transport {
   void _initParser() {
     _parser = StreamParser();
     _streamController = async.StreamController<String>();
-    _stream = _streamController.stream.transform(_parser);
+    _stream = _streamController!.stream.transform(_parser);
     _stream.listen((objects) async {
       for (final object in objects) {
         if (object is StreamHeader) {
+          Log.instance.debug('[STANZA_RX] parser -> StreamHeader');
           startStreamHandler(object.attributes);
         } else if (object is StreamElement) {
           final element = object.element;
+          Log.instance.debug(
+              '[STANZA_RX] parser -> StreamElement ${element.localName}');
+          // WebSocket framing (RFC 7395): <open> and <close/> from urn:ietf:params:xml:ns:xmpp-framing
+          const framingNs = 'urn:ietf:params:xml:ns:xmpp-framing';
+          if (element.namespaceUri == framingNs) {
+            if (element.localName == 'open') {
+              final attrs = <String, String>{};
+              for (final a in element.attributes) {
+                attrs[a.name.qualified] = a.value;
+              }
+              Log.instance
+                  .debug('[STANZA_RX] parser -> WebSocket framing open');
+              startStreamHandler(attrs);
+            } else if (element.localName == 'close') {
+              Log.instance
+                  .debug('[STANZA_RX] parser -> WebSocket framing close');
+              Log.instance.info('End of stream received.');
+              connection.abort(callback: _closeStreams);
+            }
+            continue;
+          }
           if (element.getAttribute('xmlns') == null) {
             if (element.localName == 'message' ||
                 element.localName == 'presence' ||
@@ -439,6 +503,7 @@ class Transport {
 
           await _spawnEvent(element);
         } else {
+          Log.instance.debug('[STANZA_RX] parser -> stream end');
           Log.instance.info('End of stream received.');
           connection.abort(callback: _closeStreams);
         }
@@ -457,7 +522,7 @@ class Transport {
   }) async {
     // Log detailed error information
     if (exception is Exception) {
-      if (exception is SocketManagerException) {
+      if (exception is WhixpException) {
         Log.instance.error(
           'Connection error: ${exception.message}',
         );
@@ -495,53 +560,19 @@ class Transport {
       Log.instance.warning(
         'Reconnection is not configured. Connection will be terminated.',
       );
-      await connection.hangup(consume: false, sendFooter: false);
+      connection.cancelConnectionAttempt();
     }
   }
 
-  /// On any kind of disconnection, initiated by us or not. This signals the
-  /// closure of connection.
-  Future<void> _connectionLost() async {
-    Log.instance.warning('Connection is lost');
-
-    if (endSessionOnDisconnect) {
-      emit('endSession');
-      Log.instance.debug('Session ended');
-    }
-    await connection.hangup(sendFooter: false);
-
-    /// Close all open sockets when the connection is lost.
-    _closeStreams();
-  }
-
-  /// Combines while the given condition is true. Works with [SocketManager].
-  bool _combineWhile(List<int> bytes) {
-    final data = WhixpUtils.unicode.call(bytes);
-
-    // Only attempt to combine IQ stanzas. If the latest IQ stanza isn't yet
-    // complete (common when stanzas are split across packets), keep buffering.
-    final lastIqStart = data.lastIndexOf('<iq');
-    if (lastIqStart == -1) return false;
-
-    final tail = data.substring(lastIqStart);
-
-    // Self-closing IQ: <iq .../>
-    final hasSelfClosingIq = RegExp(r'<iq\b[^>]*\/\s*>').hasMatch(tail);
-    if (hasSelfClosingIq) return false;
-
-    // Regular IQ: ... </iq> (allow trailing whitespace/newlines)
-    final hasIqClose = RegExp(r'</iq\s*>\s*$').hasMatch(tail);
-    if (hasIqClose) return false;
-
-    return true;
-  }
-
-  /// Called when incoming data is received on the socket. We feed that data
+  /// Called when incoming data is received from native transport. We feed that data
   /// to the parser and then see if this produced any XML event. This could
   /// trigger one or more event.
   void _dataReceived(List<int> bytes) {
+    Log.instance.debug('[STANZA_RX] _dataReceived -> ${bytes.length} bytes');
+    final c = _streamController;
+    if (c == null) return;
     final data = WhixpUtils.unicode(bytes);
-    _streamController.add(data);
+    c.add(data);
   }
 
   /// Analyze incoming XML stanzas and convert them into stanza objects if
@@ -553,6 +584,8 @@ class Transport {
     metrics.recordStanzaReceived();
     metrics.recordStanzaParsed(parseTime);
 
+    Log.instance.debug(
+        '[STANZA_RX] _spawnEvent element=${element.localName} stanza=${stanza.runtimeType} ${stanza.name}');
     Router.route(stanza, this);
 
     Log.instance.debug('RECEIVED: $element');
@@ -589,6 +622,7 @@ class Transport {
 
   /// Flushes a batch of stanzas, applying rate limiting.
   Future<void> _flushBatch(List<Packet> batch) async {
+    Log.instance.debug('[STANZA_TX] _flushBatch -> ${batch.length} packets');
     for (final packet in batch) {
       // Wait for rate limiter token
       final canSend = await _rateLimiter.canSend();
@@ -597,6 +631,8 @@ class Transport {
         await _rateLimiter.waitForToken();
       }
 
+      Log.instance
+          .debug('[STANZA_TX] sendRaw ${packet.runtimeType} ${packet.name}');
       // Send the packet
       sendRaw(packet.toXMLString());
       metrics.recordStanzaSent();
@@ -744,6 +780,8 @@ class Transport {
           metrics.recordQueueOverflow();
           return;
         }
+        Log.instance.debug(
+            '[STANZA_TX] send -> queued (session not started) ${data.runtimeType} ${data.name}');
         _queuedStanzas.add(data);
         metrics.updateQueueSize(_queuedStanzas.length);
         return;
@@ -756,6 +794,8 @@ class Transport {
       return;
     }
 
+    Log.instance
+        .debug('[STANZA_TX] send -> queue ${data.runtimeType} ${data.name}');
     _waitingQueueController.add(data);
   }
 
@@ -818,7 +858,7 @@ class Transport {
     return synchronized(() => completer.future);
   }
 
-  /// Converts the passed data to raw data and send it using socket.
+  /// Sends raw XML over the transport.
   void sendRaw(String data) => connection.send(data);
 
   /// On session start, queue all pending stanzas to be sent.
@@ -836,7 +876,8 @@ class Transport {
     // Flush batcher before closing
     _batcher.dispose();
     _waitingQueueController.close();
-    _streamController.close();
+    _streamController?.close();
+    _streamController = null;
   }
 
   Future<void> disconnect({bool consume = true, bool sendFooter = false}) =>
@@ -854,30 +895,24 @@ class Transport {
   bool get isConnectionSecured => connection.isConnectionSecure;
 }
 
-/// Implementation of [SocketListener] for [Transport].
-class _SocketListenerImpl implements SocketListener {
-  _SocketListenerImpl({
-    required this.onDataCallback,
-    required this.combineWhileCallback,
-    required this.onDoneCallback,
-    required this.onErrorCallback,
-  });
-
-  final void Function(List<int> bytes) onDataCallback;
-  final bool Function(List<int> bytes) combineWhileCallback;
-  final void Function() onDoneCallback;
-  final void Function(Object exception, StackTrace trace) onErrorCallback;
-
-  @override
-  void onData(List<int> bytes) => onDataCallback(bytes);
-
-  @override
-  bool combineWhile(List<int> bytes) => combineWhileCallback(bytes);
-
-  @override
-  void onDone() => onDoneCallback();
-
-  @override
-  void onError(Object exception, StackTrace trace) =>
-      onErrorCallback(exception, trace);
+/// Map Rust transport state (0..6) to Dart [TransportState].
+TransportState _transportStateFromNative(int s) {
+  switch (s) {
+    case 0:
+      return TransportState.disconnected;
+    case 1:
+      return TransportState.connecting;
+    case 2:
+      return TransportState.connected;
+    case 3:
+      return TransportState.tlsSuccess;
+    case 4:
+      return TransportState.disconnected;
+    case 5:
+      return TransportState.connectionFailure;
+    case 6:
+      return TransportState.reconnecting;
+    default:
+      return TransportState.disconnected;
+  }
 }
