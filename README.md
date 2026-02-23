@@ -76,6 +76,8 @@ Below is a visual demonstration showcasing the real-world application of the Whi
 
 **End-to-End Encryption**: OMEMO (XEP-0384) is not currently supported due to cryptographic library limitations in Dart. Basic TLS/SSL encryption and SASL authentication are fully supported.
 
+**Native transport**: The optional Rust transport (TLS, WebSocket) ships as platform-specific binaries. How you get them: if the package on pub.dev includes them, `pub get` is enough; otherwise see [Getting the native libraries](native/README.md#how-users-get-the-binaries-after-pub-get) (download from [Releases](https://github.com/vsevex/whixp/releases) or build from source with `make`).
+
 ## API
 
 This code snippet demonstrates how to establish a connection using the `Whixp` package.
