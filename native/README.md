@@ -51,3 +51,45 @@ dylib in that environment, not from Rust code running at load.
   If it still gets killed, try more heap:  
   `DART_VM_OPTIONS="--old_gen_heap_size=2048" WHIXP_TEST_NATIVE=1 dart test test/transport_test.dart`
 - **Shrinking the dylib** (fewer deps / features) could reduce OOM risk when loaded in test, but the robust approach is to keep “don’t load in test” on the Dart side.
+
+## Package size (managing native libs)
+
+**If your binary is 30+ MB you are almost certainly building debug.** Use `cargo build --release` and check the file in `target/release/` (e.g. `libwhixp_transport.so`). With the release profile you should see roughly **3–10 MB** per target.
+
+Release builds use a size-oriented profile (`opt-level = "z"`, LTO, strip, `panic = "abort"`, single-threaded tokio runtime). For an even smaller binary, build without the DoH fallback: `cargo build --release --no-default-features` (system DNS only; no ureq). Tokio + rustls + TLS still add several MB per target.
+
+**Ways to manage size as a package:**
+
+1. **Don't commit built libs** — Add to repo `.gitignore`: `macos/*.dylib`, `linux/*.so`, `windows/*.dll`, `android/src/main/jniLibs/`, `ios/*.a`. Document that users run `make` (or `make android` / `make ios` etc.) for their platform. Pub package stays small; downside: users need Rust/NDK/Xcode for their target.
+
+2. **Commit only what you need** — e.g. commit only `macos/` and `linux/` for desktop-only; leave Android/iOS to "build from source" in the README.
+
+3. **Android: ship fewer ABIs** — In your app's `android/app/build.gradle`, set `ndk.abiFilters` so the APK only includes ABIs you need (e.g. `abiFilters 'arm64-v8a'` for most devices; add `armeabi-v7a`, `x86_64` only for 32-bit or emulator). The Makefile builds all three by default; you can build one ABI and put it in `jniLibs` for a smaller app.
+
+4. **CI builds, optional publish** — Build all targets in CI and attach artifacts to releases. Package on pub.dev stays source-only; power users get prebuilt libs from GitHub Releases.
+
+## How users get the binaries (after `pub get`)
+
+**Option A — Binaries included in the package (default if we commit them)**  
+If the published package on pub.dev includes the built libs (e.g. `macos/`, `linux/`, `windows/`, `android/.../jniLibs/`, `ios/`), then **`flutter pub get` or `dart pub get` is enough**: the native libraries are already in the package. No extra steps.
+
+**Option B — Download from GitHub Releases**  
+If the package does _not_ ship binaries (to keep pub small), maintainers attach a zip to each [GitHub Release](https://github.com/vsevex/whixp/releases) (e.g. `whixp-native-v3.1.0.zip`). Users:
+
+1. Run `pub get` as usual.
+2. Download `whixp-native-<version>.zip` from the [Releases](https://github.com/vsevex/whixp/releases) page for the version they use.
+3. Unzip and copy the contents into the package’s platform folders (e.g. copy `macos/` into `.../whixp/macos/`, `android/` into `.../whixp/android/src/main/jniLibs/`, etc.). The zip layout matches the repo layout.
+
+Releases are created automatically when you push a tag `v*` (e.g. `v3.1.0`); the [Native builds](.github/workflows/native.yml) workflow builds all platforms and attaches the zip.
+
+**Option C — Build from source**  
+Users with Rust (and for Android: NDK; for iOS: Xcode) can build locally. From the **package root** (e.g. inside their pub cache or a cloned repo):
+
+- **Current host only:** `make` or `make release`
+- **macOS:** `make macos`
+- **Linux:** `make linux` (on Linux) or `make linux-cross` / `make linux-cross-docker` (from Mac)
+- **Windows:** `make windows`
+- **Android:** set `ANDROID_NDK_HOME` then `make android`
+- **iOS:** `make ios` (on macOS with Xcode)
+
+Then the built libs are in `macos/`, `linux/`, `windows/`, `android/src/main/jniLibs/`, `ios/` as above.
