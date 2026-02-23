@@ -178,6 +178,7 @@ jobs:
             -library ios/libwhixp_transport.a -headers ios/Headers \
             -library ios/libwhixp_transport_sim.a -headers ios/Headers \
             -output ios/WhixpTransport.xcframework
+          rm -f ios/libwhixp_transport.a ios/libwhixp_transport_sim.a
 
       - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
