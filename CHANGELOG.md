@@ -1,4 +1,41 @@
-# 3.0.0
+# 3.1.0
+
+## Added
+
+- **Native (Rust) transport**: Optional Rust-based transport for TCP, TLS, WebSocket, and stanza framing
+  - TLS via **rustls** (no OpenSSL); DNS resolution remains in Dart
+  - **WebSocket**: `useWebSocket: true` and optional `wsPath` (e.g. `"/ws"`) on `Transport` / `Whixp`; native layer uses tungstenite for `ws://` and `wss://`
+  - Prebuilt libs for macOS, Linux, Windows, Android, iOS (see `native/README.md`, `make help`)
+  - Dart FFI layer in `lib/src/native/transport_ffi.dart`; optional entrypoint `package:whixp/whixp_native.dart`
+  - When the native lib is present, `Transport` uses it; otherwise construction throws with a clear message
+- **Makefile**: Build and copy native libs (`make`, `make macos`, `make linux`, `make windows`, etc.) and run tests (`make test`)
+
+## Changed
+
+- **Transport**: Uses the native (Rust) transport when the library is available on the current platform
+  - Connection, TLS/StartTLS, retry, and stanza framing are handled in Rust; batching, rate limiting, and high-level API stay in Dart
+- **Tests**: `dart_test.yaml` sets `concurrency: 1` to reduce memory pressure when running the full suite
+
+## Removed
+
+- **Dart socket layer**: Replaced by the native transport
+  - Removed `lib/src/socket/socket_listener.dart` and `lib/src/socket/socket_manager.dart`
+
+## Fixed
+
+- **Test runner kill (SIGKILL)**: `dart test` could kill the process when loading the native lib in test isolates
+  - Native lib is **not** loaded when the test runner is detected (script path or env); Transport tests are skipped unless `WHIXP_TEST_NATIVE=1`
+  - Run all tests: `dart test` or `make test` (Transport tests skipped; no native load)
+  - Run Transport tests with native: `WHIXP_TEST_NATIVE=1 dart test test/transport_test.dart` (optional: `DART_VM_OPTIONS="--old_gen_heap_size=2048"` if OOM)
+
+## Documentation
+
+- **native/README.md**: Build instructions, layout, Dart integration, and a “Testing” section explaining why the native lib is not loaded under `dart test` and how to run Transport tests with the native lib
+- **Makefile**: Inline comments for test and heap-size usage
+
+---
+
+## 3.0.0
 
 > **Note**: This is a major version release with significant improvements and breaking changes. See [UPGRADE_STEPS.md](UPGRADE_STEPS.md) for detailed upgrade instructions.
 
@@ -45,7 +82,7 @@ _This section will be updated as breaking changes are implemented during the upg
   - **Migration**: Use vCard4 over PubSub (XEP-0292) instead via `PubSub.retrieveVCard()`, `PubSub.publishVCard()`, etc.
   - **Impact**: Any code using legacy vCard constants will need to migrate to vCard4
 
-### Added
+### Added (3.0.0)
 
 - **Performance Optimizations**: Added comprehensive performance improvements for high-volume applications
   - **Message Batching**: Automatically batches outgoing stanzas to reduce network overhead
