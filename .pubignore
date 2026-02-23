@@ -44,3 +44,15 @@ test_driver/
 *.class
 .history
 migrate_working_dir/
+
+# Rust
+native/
+
+# Android
+android/
+
+# iOS
+ios/
+
+# Test
+test/
