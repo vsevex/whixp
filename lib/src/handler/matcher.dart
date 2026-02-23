@@ -80,6 +80,7 @@ class DescendantMatcher extends Matcher {
     try {
       for (final name in descendants.sublist(1)) {
         final element = xml.XmlDocument.parse(
+          // ignore: experimental_member_use
           packet.toXML().xpath('/*' * (level + 1)).first.toXmlString(),
         ).rootElement;
 
