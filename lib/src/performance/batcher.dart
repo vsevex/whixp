@@ -65,9 +65,8 @@ class MessageBatcher {
       return;
     }
 
-    // Simple lock mechanism for batching
     while (_locked) {
-      await async.Future.delayed(const Duration(milliseconds: 1));
+      await async.Future.delayed(Duration.zero);
     }
     _locked = true;
     _batch.add(packet);
