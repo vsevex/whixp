@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' as io;
 
 import 'package:whixp/src/_static.dart';
 import 'package:whixp/src/handler/handler.dart';
@@ -43,19 +42,15 @@ abstract class WhixpBase {
     /// a TLS connection on the client side. Defaults to `false`
     bool disableStartTLS = false,
 
+    /// If `true`, connect over WebSocket (ws:// or wss://) instead of raw TCP/TLS.
+    bool useWebSocket = false,
+
+    /// WebSocket path (e.g. "/ws" or "/xmpp-websocket"). Only used when [useWebSocket] is true. Defaults to "/ws".
+    String? wsPath,
+
     /// If `true`, periodically send a whitespace character over the wire to
     /// keep the connection alive
     bool pingKeepAlive = true,
-
-    /// Optional [io.SecurityContext] which is going to be used in socket
-    /// connections
-    io.SecurityContext? context,
-
-    /// To avoid processing on bad certification you can use this callback.
-    ///
-    /// Passes [io.X509Certificate] instance when returning boolean value which
-    /// indicates to proceed on bad certificate or not.
-    bool Function(io.X509Certificate cert)? onBadCertificateCallback,
 
     /// Represents the duration in milliseconds for which the system will wait
     /// for a connection to be established before raising a [TimeoutException].
@@ -136,11 +131,11 @@ abstract class WhixpBase {
       port: port,
       useIPv6: useIPv6,
       disableStartTLS: disableStartTLS,
+      useWebSocket: useWebSocket,
+      wsPath: wsPath,
       boundJID: _boundJID,
       dnsService: dnsService,
       useTLS: useTLS,
-      context: context,
-      onBadCertificateCallback: onBadCertificateCallback,
       connectionTimeout: connectionTimeout,
       pingKeepAlive: pingKeepAlive,
       internalDatabasePath: internalDatabasePath,
@@ -439,7 +434,7 @@ abstract class WhixpBase {
     if (message is! Message) return;
     final to = message.to;
 
-    if (!_isComponent && (to != null || to!.bare.isEmpty)) {
+    if (!_isComponent && (to == null || to.bare.isEmpty)) {
       message.to = transport.boundJID;
     }
 
