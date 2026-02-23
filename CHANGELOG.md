@@ -1,4 +1,13 @@
-# 3.2.0
+# 3.3.0
+
+## Changed
+
+- **iOS build**: `make ios-xcframework` now outputs only `WhixpTransport.xcframework` into `ios/` (builds from `target/` into a temp dir, then removes it). No standalone `libwhixp_transport.a` / `libwhixp_transport_sim.a` in `ios/` when using the XCFramework path, so `ios/` stays smaller and avoids duplicate binaries.
+- **CI**: iOS job removes the two `.a` files from `ios/` after creating the XCFramework so the release zip does not ship duplicates.
+
+---
+
+## 3.2.0
 
 ## Added
 
@@ -7,7 +16,7 @@
 - **CI/CD**: GitHub Actions workflow builds native libs for macOS, Linux, Windows, Android, iOS; on tag `v*` creates a release and attaches `whixp-native-<tag>.zip`
 - **Docs**: `doc/NATIVE_BINARIES_PER_PLATFORM.md` (per-platform layout and troubleshooting), release flow in `native/README.md`
 
-## Changed
+## Changed (3.2.0)
 
 - **Graceful disconnect**: On server down or connection termination, transport tears down native handle, emits `TransportState.disconnected` once, and cleans up so the app can reconnect
 - **Native release profile**: Smaller Rust binaries (`opt-level = "z"`, LTO, strip, single-threaded tokio); optional `--no-default-features` to omit DoH for smaller size
