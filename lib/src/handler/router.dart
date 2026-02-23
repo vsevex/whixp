@@ -19,13 +19,27 @@ class Router {
   /// with 'get' or 'set' type, and responds with a `feature-not-implemented`
   /// error if necessary.
   static void route(Packet packet, Transport transport) {
-    if (_match(packet)) {
+    final matchedName = _matchedHandlerName(packet);
+    if (matchedName != null) {
+      Log.instance
+          .debug('[STANZA_RX] Router -> matched handler "$matchedName"');
       return;
     }
 
+    Log.instance.debug('[STANZA_RX] Router -> no handler for ${packet.name}');
     if (packet is IQ && [iqTypeGet, iqTypeSet].contains(packet.type)) {
+      Log.instance.debug(
+          '[STANZA_RX] Router -> sending feature-not-implemented for IQ');
       return _notImplemented(packet, transport);
     }
+  }
+
+  /// Returns the name of the first matching handler, or null if none.
+  static String? _matchedHandlerName(Packet packet) {
+    for (final handler in _handlers) {
+      if (handler.match(packet)) return handler.name;
+    }
+    return null;
   }
 
   /// Adds a [handler] to the list of registered handlers.
@@ -41,17 +55,6 @@ class Router {
 
   /// Clears all registerd route handlers.
   static void clearHandlers() => _handlers.clear();
-
-  /// Matches the incoming [packet] with registered handlers.
-  ///
-  /// Returns `true` if a matching handler is found, otherwise `false`.
-  static bool _match(Packet packet) {
-    for (final handler in _handlers) {
-      final match = handler.match(packet);
-      if (match) return true;
-    }
-    return false;
-  }
 
   /// Sends a feature-not-implemented error response for the unhandled [iq].
   static void _notImplemented(IQ iq, Transport transport) {
