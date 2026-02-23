@@ -43,7 +43,8 @@ pub fn resolve_xmpp(
         return Ok((host, p));
     }
 
-    // Fallback: DoH.
+    // Fallback: DoH (optional; enable with default features for smaller binary use --no-default-features).
+    #[cfg(feature = "doh")]
     if let Ok((host, p)) = try_doh(domain, port, srv_service, use_ipv6) {
         return Ok((host, p));
     }
@@ -98,8 +99,10 @@ fn try_system_resolver(
 }
 
 /// DoH (Cloudflare) fallback. SRV type = 33, A = 1, AAAA = 28.
+#[cfg(feature = "doh")]
 const DOH_URL: &str = "https://cloudflare-dns.com/dns-query";
 
+#[cfg(feature = "doh")]
 #[derive(serde::Deserialize)]
 struct DohResponse {
     #[serde(default)]
@@ -108,6 +111,7 @@ struct DohResponse {
     answer: Vec<DohAnswer>,
 }
 
+#[cfg(feature = "doh")]
 #[derive(serde::Deserialize)]
 struct DohAnswer {
     #[serde(default)]
@@ -117,6 +121,7 @@ struct DohAnswer {
     data: String,
 }
 
+#[cfg(feature = "doh")]
 fn try_doh(
     domain: &str,
     _default_port: u16,
