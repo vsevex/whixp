@@ -3,7 +3,8 @@
 .dart_tool/
 
 # Created by `dart doc`
-doc/
+doc/NATIVE_TRANSPORT.md
+doc/TLS_CONFIGURATION.md
 dartdoc_options.yaml
 
 # Avoid committing pubspec.lock for library packages; see
