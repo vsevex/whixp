@@ -1,6 +1,27 @@
-# 3.1.0
+# 3.2.0
 
 ## Added
+
+- **Flutter plugin registration**: `pubspec.yaml` declares the native transport as a Flutter plugin (Android, iOS) so apps get jniLibs and vendored libs automatically
+- **iOS XCFramework**: `make ios-xcframework` builds `WhixpTransport.xcframework` (device + simulator); podspec uses it when present, fixing "symbol not found" on iOS Simulator
+- **CI/CD**: GitHub Actions workflow builds native libs for macOS, Linux, Windows, Android, iOS; on tag `v*` creates a release and attaches `whixp-native-<tag>.zip`
+- **Docs**: `doc/NATIVE_BINARIES_PER_PLATFORM.md` (per-platform layout and troubleshooting), release flow in `native/README.md`
+
+## Changed
+
+- **Graceful disconnect**: On server down or connection termination, transport tears down native handle, emits `TransportState.disconnected` once, and cleans up so the app can reconnect
+- **Native release profile**: Smaller Rust binaries (`opt-level = "z"`, LTO, strip, single-threaded tokio); optional `--no-default-features` to omit DoH for smaller size
+- **iOS**: Podspec uses XCFramework when `ios/WhixpTransport.xcframework` exists, else falls back to `libwhixp_transport.a`
+
+## Fixed
+
+- **iOS Simulator "symbol not found"**: Use XCFramework (from `make ios-xcframework` or a release zip) so the correct slice is linked for device and simulator
+
+---
+
+## 3.1.0
+
+## Added (3.1.0)
 
 - **Native (Rust) transport**: Optional Rust-based transport for TCP, TLS, WebSocket, and stanza framing
   - TLS via **rustls** (no OpenSSL); DNS resolution remains in Dart
@@ -10,7 +31,7 @@
   - When the native lib is present, `Transport` uses it; otherwise construction throws with a clear message
 - **Makefile**: Build and copy native libs (`make`, `make macos`, `make linux`, `make windows`, etc.) and run tests (`make test`)
 
-## Changed
+## Changed (3.1.0)
 
 - **Transport**: Uses the native (Rust) transport when the library is available on the current platform
   - Connection, TLS/StartTLS, retry, and stanza framing are handled in Rust; batching, rate limiting, and high-level API stay in Dart
@@ -21,7 +42,7 @@
 - **Dart socket layer**: Replaced by the native transport
   - Removed `lib/src/socket/socket_listener.dart` and `lib/src/socket/socket_manager.dart`
 
-## Fixed
+## Fixed (3.1.0)
 
 - **Test runner kill (SIGKILL)**: `dart test` could kill the process when loading the native lib in test isolates
   - Native lib is **not** loaded when the test runner is detected (script path or env); Transport tests are skipped unless `WHIXP_TEST_NATIVE=1`
