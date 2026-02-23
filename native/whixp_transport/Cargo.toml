@@ -1,0 +1,25 @@
+[package]
+name = "whixp_transport"
+version = "0.1.0"
+edition = "2021"
+description = "Rust transport and stanza layer for Whixp XMPP client"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+tokio = { version = "1", features = ["net", "io-util", "sync", "time", "rt-multi-thread"] }
+rustls = { version = "0.23", features = ["ring"] }
+webpki-roots = "0.26"
+quick-xml = { version = "0.36", features = ["serialize"] }
+thiserror = "2"
+tracing = "0.1"
+trust-dns-resolver = { version = "0.23", features = ["system-config"] }
+ureq = { version = "2", default-features = false, features = ["json", "tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio-util = { version = "0.7", features = ["codec"] }
+tungstenite = { version = "0.28", default-features = false, features = ["handshake"] }
+http = "1"
