@@ -211,15 +211,15 @@ ios-lipo: ios-build
 		-output $(REPO_ROOT)/ios/libwhixp_transport_sim.a
 	@echo "Created ios/libwhixp_transport.a (device arm64), ios/libwhixp_transport_sim.a (simulator arm64+x86_64)"
 
-# XCFramework so CocoaPods links device lib for device and sim lib for simulator (fixes dlsym symbol not found on simulator).
-ios-xcframework: ios-build ios-lipo
-	@mkdir -p $(REPO_ROOT)/ios/xcframework-build
-	@cd $(REPO_ROOT)/ios/xcframework-build && \
-		rm -rf ios-arm64 ios-arm64_x86_64-simulator WhixpTransport.xcframework && \
-		mkdir -p ios-arm64 ios-arm64_x86_64-simulator && \
-		cp $(REPO_ROOT)/ios/libwhixp_transport.a ios-arm64/ && \
-		cp $(REPO_ROOT)/ios/libwhixp_transport_sim.a ios-arm64_x86_64-simulator/
+# XCFramework only: build from target/ into a temp dir, output only WhixpTransport.xcframework to ios/ (no .a copies = smaller ios/).
+ios-xcframework: ios-build
 	@mkdir -p $(REPO_ROOT)/ios/Headers
+	@mkdir -p $(REPO_ROOT)/ios/xcframework-build/ios-arm64 $(REPO_ROOT)/ios/xcframework-build/ios-arm64_x86_64-simulator
+	@cp $(TARGET)/$(IOS_DEVICE)/release/libwhixp_transport.a $(REPO_ROOT)/ios/xcframework-build/ios-arm64/
+	@lipo -create \
+		$(TARGET)/$(IOS_SIM_ARM)/release/libwhixp_transport.a \
+		$(TARGET)/$(IOS_SIM_X86)/release/libwhixp_transport.a \
+		-output $(REPO_ROOT)/ios/xcframework-build/ios-arm64_x86_64-simulator/libwhixp_transport_sim.a
 	xcodebuild -create-xcframework \
 		-library $(REPO_ROOT)/ios/xcframework-build/ios-arm64/libwhixp_transport.a -headers $(REPO_ROOT)/ios/Headers \
 		-library $(REPO_ROOT)/ios/xcframework-build/ios-arm64_x86_64-simulator/libwhixp_transport_sim.a -headers $(REPO_ROOT)/ios/Headers \
