@@ -27,9 +27,12 @@ void main(List<String> args) async {
     print(
         '  --no-tls          Disable StartTLS (plain TCP, for local testing)');
     print('  --direct-tls      Use DirectTLS (connect with TLS immediately)');
-    print('  --accept-bad-cert Accept self-signed/invalid certificates');
     print(
         '  --port PORT       Specify custom port (default: 5222, DirectTLS: 5223)');
+    print(
+        '  --websocket      Connect over WebSocket (ws:// or wss:// with --direct-tls)');
+    print(
+        '  --ws-path PATH    WebSocket path (default: /ws). Use with --websocket.');
     print('');
     print('Note: JID must be in format user@domain.com (not just username)');
     print('');
@@ -37,6 +40,15 @@ void main(List<String> args) async {
     print('  - Default: Uses StartTLS (plain TCP, then upgrade to TLS)');
     print('  - --no-tls: Plain TCP only (NOT recommended for production)');
     print('  - --direct-tls: Direct TLS connection (usually port 5223)');
+    print('');
+    print('WebSocket:');
+    print('  - --websocket: Use WebSocket transport instead of raw TCP.');
+    print('  - With --direct-tls: wss:// (secure). Typical ports: 443, 5281.');
+    print('  - Without TLS: ws:// (plain). Typical ports: 80, 5280.');
+    print(
+        '  - --ws-path: Server path (e.g. /ws or /xmpp-websocket). Default: /ws.');
+    print(
+        '  Example: dart run example/cli_messenger.dart user@server.com pass res --websocket --port 5280');
     exit(1);
   }
 
@@ -47,7 +59,8 @@ void main(List<String> args) async {
   // Parse options (defaults to secure StartTLS)
   bool disableStartTLS = false;
   bool useDirectTLS = false;
-  bool acceptBadCert = false;
+  bool useWebSocket = false;
+  String? wsPath;
   int? customPort;
 
   for (int i = 3; i < args.length; i++) {
@@ -56,8 +69,16 @@ void main(List<String> args) async {
         disableStartTLS = true;
       case '--direct-tls':
         useDirectTLS = true;
-      case '--accept-bad-cert':
-        acceptBadCert = true;
+      case '--websocket':
+        useWebSocket = true;
+      case '--ws-path':
+        if (i + 1 < args.length) {
+          wsPath = args[i + 1];
+          i++;
+        } else {
+          print('❌ Error: --ws-path requires a path (e.g. /ws)');
+          exit(1);
+        }
       case '--port':
         if (i + 1 < args.length) {
           customPort = int.tryParse(args[i + 1]);
@@ -82,9 +103,13 @@ void main(List<String> args) async {
     exit(1);
   }
 
-  // Set default port for DirectTLS
-  if (useDirectTLS && customPort == null) {
-    customPort = 5223; // Standard XMPP DirectTLS port
+  // Set default port: DirectTLS 5223, WebSocket often 5280/5281 or 80/443
+  if (customPort == null) {
+    if (useDirectTLS) {
+      customPort = 5223; // Standard XMPP DirectTLS port
+    } else if (useWebSocket) {
+      customPort = useDirectTLS ? 5281 : 5280; // Common XMPP WebSocket ports
+    }
   }
 
   print('🚀 Whixp v3.0 CLI Messenger');
@@ -99,6 +124,7 @@ void main(List<String> args) async {
     jabberID: '$jid/$resource',
     password: password,
     port: customPort ?? (useDirectTLS ? 5223 : 5222),
+    pingKeepAliveInterval: 5,
     logger: Log(
       enableWarning: true,
       enableError: true,
@@ -107,25 +133,26 @@ void main(List<String> args) async {
     internalDatabasePath: 'whixp_cli',
     useTLS: useDirectTLS,
     disableStartTLS: disableStartTLS,
-    onBadCertificateCallback: acceptBadCert ? (cert) => true : null,
+    useWebSocket: useWebSocket,
+    wsPath: wsPath,
   );
 
-  // Print TLS configuration
-  if (disableStartTLS) {
+  // Print transport configuration
+  if (useWebSocket) {
+    final scheme = useDirectTLS ? 'wss' : 'ws';
+    print(
+        '🔌 WebSocket: $scheme:// (path: ${wsPath ?? '/ws'}, port ${customPort ?? (useDirectTLS ? 5281 : 5280)})');
+    print('');
+  }
+  if (disableStartTLS && !useWebSocket) {
     print('⚠️  WARNING: TLS is disabled (plain TCP only)');
     print('   This is NOT secure and should only be used for local testing!');
     print('');
-  } else if (useDirectTLS) {
+  } else if (useDirectTLS && !useWebSocket) {
     print('🔒 Using DirectTLS (port ${customPort ?? 5223})');
-    if (acceptBadCert) {
-      print('⚠️  WARNING: Accepting invalid certificates (for local testing)');
-    }
     print('');
-  } else {
+  } else if (!useWebSocket) {
     print('🔒 Using StartTLS (default, secure)');
-    if (acceptBadCert) {
-      print('⚠️  WARNING: Accepting invalid certificates (for local testing)');
-    }
     print('');
   }
 
@@ -228,7 +255,6 @@ void main(List<String> args) async {
       print('  💡 Solutions for local ejabberd:');
       print('     - Try: --no-tls (disables TLS, plain TCP only)');
       print('     - Or: --direct-tls --port 5223 (if ejabberd has DirectTLS)');
-      print('     - Or: --accept-bad-cert (accepts self-signed certificates)');
       print('     - Check ejabberd config: listen -> starttls_required: false');
     } else {
       print('  - Server is unreachable or not responding');
@@ -240,7 +266,7 @@ void main(List<String> args) async {
     print('Dart/Flutter TLS Limitations:');
     print('  - Supports TLSv1.2 and TLSv1.3 (configured in Transport)');
     print('  - Certificate validation follows platform defaults');
-    print('  - Self-signed certificates require onBadCertificateCallback');
+    print('  - Self-signed certs: use a proper CA or --no-tls for local test');
     print('  - Some older TLS versions may not be supported');
     exit(1);
   } finally {
@@ -264,7 +290,7 @@ void _setupEventHandlers(Whixp whixp) {
   whixp.addEventHandler<Message>('message', (message) {
     if (message == null) return;
 
-    final from = message.from?.username ?? 'unknown';
+    final from = message.from?.username ?? message.from?.bare ?? 'unknown';
     final body = message.body ?? '(no body)';
     final timestamp = DateTime.now().toString().substring(11, 19);
 
@@ -272,6 +298,7 @@ void _setupEventHandlers(Whixp whixp) {
     print('📨 [$timestamp] From: $from');
     print('   $body');
     print('');
+    stdout.flush();
   });
 
   // Error handling
