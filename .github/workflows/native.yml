@@ -1,0 +1,223 @@
+# Build native (Rust) transport for all platforms. Uploads artifacts per platform.
+# On push of tag v* (e.g. v3.1.0), creates a GitHub Release and attaches native libs.
+name: Native builds
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+env:
+  CARGO_TERM_COLOR: always
+  REPO_ROOT: ${{ github.workspace }}
+
+jobs:
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build macOS dylib
+        run: make macos
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-macos
+          path: macos/libwhixp_transport.dylib
+
+  linux:
+    name: Linux
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Linux .so
+        run: make linux
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux
+          path: linux/libwhixp_transport.so
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install MinGW (GNU target)
+        run: choco install mingw --yes
+
+      - name: Add MinGW to PATH
+        run: |
+          $mingw = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin"
+          echo "$mingw" >> $env:GITHUB_PATH
+          echo "CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=$mingw\gcc.exe" >> $env:GITHUB_ENV
+          echo "CARGO_TARGET_X86_64_PC_WINDOWS_GNU_AR=$mingw\ar.exe" >> $env:GITHUB_ENV
+
+      - name: Add Windows GNU target
+        run: rustup target add x86_64-pc-windows-gnu
+
+      - name: Build Windows DLL
+        run: |
+          cd native/whixp_transport
+          cargo build --release --target x86_64-pc-windows-gnu
+          mkdir -p $env:REPO_ROOT\windows
+          Copy-Item target\x86_64-pc-windows-gnu\release\whixp_transport.dll $env:REPO_ROOT\windows\
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-windows
+          path: windows/whixp_transport.dll
+
+  android:
+    name: Android
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add Android targets
+        run: |
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+
+      - name: Setup Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27d
+          add-to-path: false
+
+      - name: Build Android arm64-v8a
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          CC_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang
+          AR_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang
+        run: |
+          cd native/whixp_transport
+          cargo build --release --target aarch64-linux-android
+          mkdir -p "$REPO_ROOT/android/src/main/jniLibs/arm64-v8a"
+          cp target/aarch64-linux-android/release/libwhixp_transport.so "$REPO_ROOT/android/src/main/jniLibs/arm64-v8a/"
+
+      - name: Build Android armeabi-v7a
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          CC_armv7_linux_androideabi: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang
+          AR_armv7_linux_androideabi: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+          CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang
+        run: |
+          cd native/whixp_transport
+          cargo build --release --target armv7-linux-androideabi
+          mkdir -p "$REPO_ROOT/android/src/main/jniLibs/armeabi-v7a"
+          cp target/armv7-linux-androideabi/release/libwhixp_transport.so "$REPO_ROOT/android/src/main/jniLibs/armeabi-v7a/"
+
+      - name: Build Android x86_64
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          CC_x86_64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang
+          AR_x86_64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+          CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang
+        run: |
+          cd native/whixp_transport
+          cargo build --release --target x86_64-linux-android
+          mkdir -p "$REPO_ROOT/android/src/main/jniLibs/x86_64"
+          cp target/x86_64-linux-android/release/libwhixp_transport.so "$REPO_ROOT/android/src/main/jniLibs/x86_64/"
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-android
+          path: android/src/main/jniLibs/
+
+  ios:
+    name: iOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add iOS targets
+        run: |
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+
+      - name: Build iOS device (arm64)
+        run: |
+          cd native/whixp_transport
+          cargo build --release --target aarch64-apple-ios
+
+      - name: Build iOS simulator (arm64 + x86_64)
+        run: |
+          cd native/whixp_transport
+          cargo build --release --target aarch64-apple-ios-sim
+          cargo build --release --target x86_64-apple-ios
+
+      - name: Copy and lipo iOS libs
+        run: |
+          mkdir -p ios
+          cp native/whixp_transport/target/aarch64-apple-ios/release/libwhixp_transport.a ios/libwhixp_transport.a
+          lipo -create \
+            native/whixp_transport/target/aarch64-apple-ios-sim/release/libwhixp_transport.a \
+            native/whixp_transport/target/x86_64-apple-ios/release/libwhixp_transport.a \
+            -output ios/libwhixp_transport_sim.a
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-ios
+          path: ios/
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [macos, linux, windows, android, ios]
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Prepare release layout
+        run: |
+          mkdir -p release
+          mv release-artifacts/native-macos release/macos
+          mv release-artifacts/native-linux release/linux
+          mv release-artifacts/native-windows release/windows
+          mv release-artifacts/native-android release/android
+          mv release-artifacts/native-ios release/ios
+          find release -type f
+
+      - name: Zip native libs
+        run: |
+          cd release && zip -r "../whixp-native-${{ github.ref_name }}.zip" . && cd ..
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: whixp-native-${{ github.ref_name }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
