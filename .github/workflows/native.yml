@@ -171,6 +171,14 @@ jobs:
             native/whixp_transport/target/x86_64-apple-ios/release/libwhixp_transport.a \
             -output ios/libwhixp_transport_sim.a
 
+      - name: Create iOS XCFramework (device + simulator)
+        run: |
+          mkdir -p ios/Headers
+          xcodebuild -create-xcframework \
+            -library ios/libwhixp_transport.a -headers ios/Headers \
+            -library ios/libwhixp_transport_sim.a -headers ios/Headers \
+            -output ios/WhixpTransport.xcframework
+
       - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
