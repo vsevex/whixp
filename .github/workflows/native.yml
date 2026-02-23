@@ -53,27 +53,22 @@ jobs:
 
   windows:
     name: Windows
-    runs-on: windows-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Set up MinGW (GNU target)
-        uses: egor-tensin/setup-mingw@v2
-        with:
-          platform: x64
+      - name: Install cross
+        run: cargo install cross
 
-      - name: Add Windows GNU target
-        run: rustup target add x86_64-pc-windows-gnu
-
-      - name: Build Windows DLL
+      - name: Build Windows DLL (cross)
         run: |
           cd native/whixp_transport
-          cargo build --release --target x86_64-pc-windows-gnu
-          New-Item -ItemType Directory -Force -Path "$env:REPO_ROOT\windows" | Out-Null
-          Copy-Item target\x86_64-pc-windows-gnu\release\whixp_transport.dll "$env:REPO_ROOT\windows\"
+          cross build --release --target x86_64-pc-windows-gnu
+          mkdir -p "$REPO_ROOT/windows"
+          cp target/x86_64-pc-windows-gnu/release/whixp_transport.dll "$REPO_ROOT/windows/"
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
