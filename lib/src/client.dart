@@ -54,17 +54,7 @@ class Whixp extends WhixpBase {
   /// connection. This flag disables that handshaking and forbids establishing
   /// a TLS connection on the client side. Defaults to `false`.
   ///
-  /// [endSessionOnDisconnect] controls if the session can be considered ended
-  /// if the connection is terminated. Defaults to `true`.
-  ///
   /// [logger] is a [Log] instance to print out various log messages properly.
-  ///
-  /// [context] is a [SecurityContext] instance that is responsible for
-  /// certificate exchange.
-  ///
-  /// [onBadCertificateCallback] passes [X509Certificate] instance when
-  /// returning boolean value which indicates to proceed on bad certificate or
-  /// not.
   ///
   /// If [reconnectionPolicy] is defined, then [Whixp] tries to reconnect
   /// whenever there is an error (internal, network, etc.). Defaults to `null`.
@@ -83,11 +73,11 @@ class Whixp extends WhixpBase {
     super.useIPv6,
     super.useTLS,
     super.disableStartTLS,
+    super.useWebSocket,
+    super.wsPath,
     super.pingKeepAlive,
     super.pingKeepAliveInterval,
     super.logger,
-    super.context,
-    super.onBadCertificateCallback,
     super.internalDatabasePath,
     super.reconnectionPolicy,
     String language = 'en',
@@ -131,10 +121,18 @@ class Whixp extends WhixpBase {
     }
 
     /// Set [streamHeader] of declared transport for initial send.
-    transport
-      ..streamHeader =
-          "<stream:stream to='$host' xmlns:stream='$streamNamespace' xmlns='$defaultNamespace' xml:lang='$_language' version='1.0'>"
-      ..streamFooter = "</stream:stream>";
+    /// Over WebSocket (RFC 7395) use <open>/<close> framing; otherwise <stream:stream>.
+    if (transport.useWebSocket) {
+      transport
+        ..streamHeader =
+            "<open xmlns='urn:ietf:params:xml:ns:xmpp-framing' to='$host' version='1.0' xml:lang='$_language'/>"
+        ..streamFooter = "<close xmlns='urn:ietf:params:xml:ns:xmpp-framing'/>";
+    } else {
+      transport
+        ..streamHeader =
+            "<stream:stream to='$host' xmlns:stream='$streamNamespace' xmlns='$defaultNamespace' xml:lang='$_language' version='1.0'>"
+        ..streamFooter = "</stream:stream>";
+    }
 
     transport
       ..registerHandler(
