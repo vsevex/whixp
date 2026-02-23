@@ -20,9 +20,6 @@ abstract class ReconnectionPolicy {
   /// Indicate if should try to reconnect.
   bool _shouldAttemptReconnection = false;
 
-  Future<bool> canTryReconnecting() =>
-      _lock.synchronized(() => !_isReconnecting);
-
   Future<bool> getIsReconnecting() => _lock.synchronized(() => _isReconnecting);
 
   Future<void> _resetIsReconnecting() =>
@@ -45,7 +42,7 @@ abstract class ReconnectionPolicy {
   /// Called by the XmppConnection when the reconnection failed.
   Future<void> onFailure() async {}
 
-  /// Caled by the XmppConnection when the reconnection was successful.
+  /// Called by the XmppConnection when the reconnection was successful.
   Future<void> onSuccess();
 
   Future<bool> getShouldReconnect() =>
@@ -102,7 +99,16 @@ class RandomBackoffReconnectionPolicy extends ReconnectionPolicy {
     if (!shouldContinue) return;
 
     Log.instance.info('Reconnecting...');
-    await performReconnect!();
+    try {
+      await performReconnect!();
+    } catch (e, st) {
+      Log.instance.error(
+        'Reconnection attempt failed',
+        exception: e,
+        stackTrace: st,
+      );
+      await _resetIsReconnecting();
+    }
   }
 
   @override
@@ -120,7 +126,7 @@ class RandomBackoffReconnectionPolicy extends ReconnectionPolicy {
     final seconds = math.Random().nextInt(_maxBackoffTime - _minBackoffTime) +
         _minBackoffTime;
     Log.instance
-        .info('Failure occured. Starting random backoff with ${seconds}s');
+        .info('Failure occurred. Starting random backoff with ${seconds}s');
 
     await _timerLock.synchronized(() {
       _timer?.cancel();
