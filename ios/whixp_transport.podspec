@@ -9,5 +9,11 @@ Pod::Spec.new do |s|
   s.source           = { :path => '.' }
   s.source_files     = 'Classes/**/*'
   s.ios.deployment_target = '12.0'
-  s.vendored_libraries = 'libwhixp_transport.a'
+  # XCFramework provides correct slice for device and simulator (fixes "symbol not found" on simulator).
+  # Build with: make ios-xcframework
+  if File.directory?(File.join(__dir__, 'WhixpTransport.xcframework'))
+    s.vendored_frameworks = 'WhixpTransport.xcframework'
+  else
+    s.vendored_libraries = 'libwhixp_transport.a'
+  end
 end
