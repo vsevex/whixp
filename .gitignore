@@ -39,3 +39,11 @@ whixp/
 # Flutter plugins
 .flutter-plugins
 .flutter-plugins-dependencies
+
+# Optional: ignore built native libs to keep repo small (users run make for their platform).
+# Uncomment if you publish prebuilts via CI/Releases instead of committing.
+# macos/*.dylib
+# linux/*.so
+# windows/*.dll
+# android/src/main/jniLibs/
+# ios/*.a
