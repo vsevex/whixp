@@ -1,16 +1,9 @@
 part of 'transport.dart';
 
-// SocketManager and related classes are imported via transport.dart
-
 class Connection {
   /// Manages the network connection to a server, including DNS resolution,
-  /// connection attempts, and reconnection handling. It uses a combination of
-  /// DNS SRV records and direct host/port configurations to establish a
-  /// connection.
-  ///
-  /// The class also supports TLS (Transport Layer Security) for secure
-  /// connections and provides methods to handle connection state changes and
-  /// reconnection policies.
+  /// connection attempts, and reconnection handling. Uses the native (Rust)
+  /// transport for TCP/TLS and stanza framing.
   Connection(
     this.configuration,
     this.changeStateCallback, {
@@ -27,7 +20,7 @@ class Connection {
   /// established.
   final Future<void> Function() onConnectionStartCallback;
 
-  /// Error handler callback whenever there is a connection error occured.
+  /// Error handler callback whenever a connection error occurs.
   final void Function(dynamic exception) handleError;
 
   /// [async.Completer] of current connection attempt. After the connection,
@@ -39,28 +32,22 @@ class Connection {
   /// the step we are at.
   late TransportState _eventWhenConnected;
 
-  /// Domain which will be used when querying DNS records.
+  /// Domain which will be used for resolution (and display).
   late String _defaultDomain;
 
-  /// Port which will be used if there is not any answer from the DNS loookup.
+  /// Port which will be used when no SRV is found.
   late int _defaultPort;
 
-  /// [Tuple2] type variable that holds both [_host] and [_port].
+  /// [Tuple2] type variable that holds both [host] and [port] (for display / retries).
   late Tuple2<String, int> _address;
 
-  /// [Iterator] of DNS results that have not yet been tried.
-  late Iterator<Tuple3<String, String, int>>? _dnsAnswers;
-
-  /// Will hold host that socket is connected to and will work in the
-  /// association of SASL.
+  /// Resolved host after connect (for SASL). Set from native transport.
   late String serviceName;
 
-  /// [SocketManager] instance that will be declared when there is a connection
-  /// attempt to the server.
-  SocketManager? _socketManager;
+  /// Native (Rust) transport handle. Set after [createNativeTransport] and
+  /// cleared on disconnect/abort.
+  WhixpTransportNative? _native;
 
-  /// Socket manager instance used for connection cancellation.
-  /// We store a reference to the socket manager instead of ConnectionTask
   /// since Socket.connect() doesn't return a ConnectionTask.
 
   /// Will be parsed from [ConnectionConfiguration].
@@ -76,42 +63,55 @@ class Connection {
       };
   }
 
-  /// Creates a new socket and connects to the server.
+  /// Creates native transport (Rust does DNS + connect) and starts.
   Future<void> start({void Function()? onConnectionFailure}) async {
-    final record = await _parseDNSRecord();
     _eventWhenConnected = TransportState.connected;
-
     await _reconnectionPolicy?.reset();
     await _reconnectionPolicy?.setShouldReconnect(true);
 
-    if (record != null) {
-      final host = record.firstValue;
-
-      /// A fully qualified domain name.
-      final fqdn = record.secondValue;
-      final port = record.thirdValue;
-
-      _address = Tuple2(fqdn, port);
-      serviceName = host;
-    } else {
-      /// Set to null for no more iteration.
-      _dnsAnswers = null;
-      // Initialize serviceName with the configured host when no DNS record is found
-      serviceName = configuration.host;
-      _address = Tuple2(configuration.host, configuration.port);
-    }
-
-    /// Sets [SocketManager] instance and assigns newly created instance to the
-    /// global variable.
-    _setSocketManagerInstance();
+    _address = Tuple2(configuration.host, configuration.port);
+    serviceName = configuration.host;
 
     try {
       Log.instance.info(
-        'Trying to connect to ${_address.firstValue} on port ${_address.secondValue}',
+        'Connecting to ${configuration.host}:${configuration.port} (DNS in native)',
       );
 
       changeStateCallback.call(TransportState.connecting);
-      await _socketManager?.createTask(configuration.socketOptions);
+
+      _native?.disconnect();
+      _native?.destroy();
+      _native = null;
+
+      final kind = _nativeKindFromConfiguration;
+      _native = configuration.createNativeTransport(
+        configuration.host,
+        configuration.port,
+        kind,
+        configuration.connectionTimeout,
+        configuration.host,
+        configuration.service,
+        configuration.useIPv6WhenResolvingDNS,
+        configuration.wsPath,
+      );
+      if (_native == null) {
+        throw const WhixpInternalException(
+            'createNativeTransport returned null');
+      }
+
+      final result = _native!.connect();
+      if (result != 0) {
+        final message = _native!.lastError;
+        throw WhixpInternalException(
+          message.isNotEmpty
+              ? message
+              : 'Native transport connect failed with code $result',
+        );
+      }
+      serviceName = _native!.resolvedHost.isNotEmpty
+          ? _native!.resolvedHost
+          : configuration.host;
+      _native!.startPolling();
 
       await _onStart();
     } catch (exception) {
@@ -123,12 +123,10 @@ class Connection {
       Log.instance.error(
         'Connection error: Failed to connect to $host:$port (TLS: $useTLS, StartTLS disabled: $disableStartTLS)',
       );
-
-      // Enhance exception with connection context if it's a SocketManagerException
-      if (exception is SocketManagerException) {
+      if (exception is WhixpException) {
         Log.instance.error(
           'Connection failed: ${exception.message}. '
-          'Host: $host, Port: $port, Service: ${serviceName.isNotEmpty ? serviceName : configuration.host}',
+          'Host: $host, Port: $port, Service: $serviceName',
         );
       }
 
@@ -140,12 +138,19 @@ class Connection {
     }
   }
 
+  int get _nativeKindFromConfiguration {
+    if (configuration.useWebSocket) {
+      return configuration.useTLS ? kKindWebSocketTls : kKindWebSocket;
+    }
+    if (configuration.useTLS) return kKindDirectTls;
+    if (configuration.disableStartTLS) return kKindTcp;
+    return kKindTcpStartTls;
+  }
+
   /// Called when the connection has been established with the server.
-  Future<void> _onStart([bool clearAnswers = false]) async {
+  Future<void> _onStart() async {
     changeStateCallback.call(_eventWhenConnected);
 
-    /// If there is new connection attempt will take place, then this variable
-    /// should be null.
     currentConnectionAttempt = null;
 
     try {
@@ -159,7 +164,6 @@ class Connection {
     }
 
     await _reconnectionPolicy?.onSuccess();
-    if (clearAnswers) _dnsAnswers = null;
   }
 
   /// Close the XML stream and wait for ack from the server for at most
@@ -173,6 +177,8 @@ class Connection {
     String? streamFooter,
   }) async {
     Log.instance.warning('Disconnect method is called');
+    await _reconnectionPolicy?.setShouldReconnect(false);
+    await _reconnectionPolicy?.reset();
     if (sendFooter && streamFooter != null) send(streamFooter);
 
     Future<void> consumeSend() async {
@@ -181,246 +187,84 @@ class Connection {
       } on Exception {
         /// pass
       } finally {
-        _socketManager?.destroy();
+        _native?.disconnect();
+        _native?.destroy();
+        _native = null;
         cancelConnectionAttempt();
         changeStateCallback.call(TransportState.disconnected);
       }
     }
 
-    if (_socketManager != null && consume) {
+    if (_native != null && consume) {
       return consumeSend();
     } else {
       return abort();
     }
   }
 
-  void _setSocketManagerInstance() => _socketManager = SocketManager(
-        hostname: _address.firstValue,
-        port: _address.secondValue,
-        securityContext: configuration.securityContext,
-        timeout: configuration.connectionTimeout,
-        connectionType: _connectionTypeFromConfiguration,
-        onBadCertificateCallback: configuration.onBadCertificateCallback,
-        listener: configuration.socketOptions,
-      );
-
-  /// Parses [ConnectionType] from the [ConnectionConfiguration].
-  ConnectionType get _connectionTypeFromConfiguration {
-    if (configuration.useTLS) return ConnectionType.tls;
-    if (configuration.disableStartTLS) return ConnectionType.tcp;
-    return ConnectionType.upgradableTcp;
-  }
-
-  /// Starts parsing SRV records from remote servers. It will return [SRVRecord]
-  /// list with corresponding values and an empty list if there is nothing
-  /// found.
-  Future<List<SRVRecord>> _parseSRVRecords() async {
-    ResolveResponse? response;
-
-    final srvs = <SRVRecord>[];
-    final service = configuration.service;
-
-    /// Set current [TransportState] to pickingAddress.
-    changeStateCallback.call(TransportState.pickingAddress);
-
-    if (service != null) {
-      try {
-        response = await DNSolve()
-            .lookup('_$service._tcp.$_defaultDomain', type: RecordType.srv)
-            .timeout(
-          const Duration(milliseconds: 5000),
-          onTimeout: () {
-            throw async.TimeoutException('Connection timed out');
-          },
-        );
-      } catch (_) {
-        rethrow;
-      }
-
-      if (response.answer != null &&
-          (response.answer!.srvs != null &&
-              response.answer!.srvs!.isNotEmpty)) {
-        for (final record in SRVRecord.sort(response.answer!.srvs!)) {
-          if (record.target != null) {
-            srvs.add(record);
-          }
-        }
-      }
-    }
-
-    return srvs;
-  }
-
-  /// Performs DNS resolution for a given hostname.
-  ///
-  /// Resolution may perform SRV record lookups if a service and protocol are
-  /// specified. The returned addresses will be sorted according to the SRV
-  /// properties and weights.
-  Future<Tuple3<String, String, int>?> _parseDNSRecord() async {
-    final srvs = <SRVRecord>[];
-
-    try {
-      final result = await _parseSRVRecords();
-
-      /// Add found values to the final [List].
-      srvs.addAll(result);
-    } on Exception {
-      Log.instance.warning('Could not pick any SRV record');
-    }
-
-    /// Tuple3 -> (Domain, FQDN, port)
-    final results = <Tuple3<String, String, int>>[];
-
-    /// If there is not any answer from SRV records which previously parsed
-    /// (tried at least), then stop iteration.
-    if (srvs.isEmpty) return null;
-
-    final useIPv6 = configuration.useIPv6WhenResolvingDNS;
-
-    for (final srv in srvs) {
-      if (useIPv6) {
-        final response =
-            await DNSolve().lookup(srv.target!, type: RecordType.aaaa);
-        if (response.answer != null && response.answer!.records != null) {
-          for (final record in response.answer!.records!) {
-            results.add(Tuple3(_defaultDomain, record.name, srv.port));
-          }
-        }
-      }
-      final response = await DNSolve().lookup(srv.target!);
-      if (response.answer != null) {
-        for (final record in response.answer!.records!) {
-          results.add(Tuple3(_defaultDomain, record.name, srv.port));
-        }
-      }
-    }
-
-    if (results.isNotEmpty) {
-      _dnsAnswers = results.iterator;
-
-      try {
-        return _dnsAnswers!.moveNext() ? _dnsAnswers!.current : null;
-      } catch (_) {
-        return null;
-      }
-    }
-
-    ResolveResponse? response;
-
-    try {
-      if (!useIPv6) {
-        Log.instance.warning('DNS lookup: Use of IPv6 has been disabled');
-      }
-
-      response = await DNSolve().lookup(
-        _defaultDomain,
-        type: useIPv6 ? RecordType.aaaa : RecordType.A,
-      );
-    } catch (_) {
-      Log.instance.warning(
-        'DNS lookup: Failed to parse${useIPv6 ? ' IPv6 ' : ' '}records for $_defaultDomain, processing with provided record',
-      );
-      return null;
-    }
-
-    if (response.answer != null && response.answer!.records != null) {
-      for (final record in response.answer!.records!) {
-        results.add(Tuple3(_defaultDomain, record.name, _defaultPort));
-      }
-    }
-
-    if (results.isNotEmpty) {
-      _dnsAnswers = results.iterator;
-
-      try {
-        return _dnsAnswers!.moveNext() ? _dnsAnswers!.current : null;
-      } catch (_) {
-        return null;
-      }
-    }
-
-    return null;
-  }
-
-  /// Performs a handshake for TLS.
-  ///
-  /// If the handshake is successful, the XML stream will need to be restarted.
+  /// Performs a handshake for TLS. Not used with native transport (TLS is
+  /// handled inside Rust for DirectTls / TcpStartTls).
   Future<bool> startTLS() async {
-    if (_socketManager == null) return false;
-
     if (configuration.disableStartTLS) {
       Log.instance
           .info('Disable StartTLS is enabled, can not negotiate handshake');
       return false;
     }
-
-    _eventWhenConnected = TransportState.tlsSuccess;
-
-    try {
-      await _socketManager!.upgradeConnection(configuration.socketOptions);
-
-      await _onStart(true);
-      return true;
-    } on SocketManagerException catch (error) {
-      final host = _address.firstValue;
-      final port = _address.secondValue;
-
-      Log.instance.error(
-        'TLS handshake failed: ${error.message}. '
-        'Host: $host, Port: $port',
-      );
-
-      // Try next DNS answer if available
-      if (_dnsAnswers != null && _dnsAnswers!.moveNext()) {
-        Log.instance.info(
-          'Retrying TLS handshake with next available server address',
-        );
-        await startTLS();
-      } else {
-        Log.instance.error(
-          'No more server addresses to try. TLS handshake failed.',
-        );
-        rethrow;
-      }
-      return false;
-    }
+    // Native path: TLS is already negotiated by Rust; no separate StartTLS step.
+    return false;
   }
 
-  /// Reschedules current connection attempt if there is an error occured.
+  /// Reschedules current connection attempt when an error occurs.
   void _rescheduleConnectionAttempt() =>
       currentConnectionAttempt = async.Completer()..complete(start());
 
   void reset({String? host, int? port}) {
     _parseConnectionConfiguration(newHost: host, newPort: port);
     _eventWhenConnected = TransportState.connected;
-    _socketManager = null;
+    _native?.destroy();
+    _native = null;
   }
 
   /// Forcibly close the connection.
-  ///
-  /// [callback] will be invoked from [Transport] class if there is something
-  /// to do on aborting.
   void abort({
     void Function()? callback,
     TransportState state = TransportState.killed,
   }) {
-    if (_socketManager != null) {
+    final hadNative = _native != null;
+    if (hadNative) {
       try {
-        _socketManager?.destroy();
+        _native?.disconnect();
+        _native?.destroy();
+        _native = null;
       } catch (_) {
-        Log.instance.error('Socket is not initialized yet, aborting...');
+        Log.instance.error('Native transport not initialized yet, aborting...');
       }
       changeStateCallback.call(state);
-      cancelConnectionAttempt();
     }
+    cancelConnectionAttempt();
     callback?.call();
+  }
+
+  /// Tear down native transport without emitting state. Use when native
+  /// already reported disconnect (e.g. read loop exit) so user got state and
+  /// we only need to stop polling and clear handle.
+  void tearDownNative() {
+    if (_native == null) return;
+    try {
+      _native?.disconnect();
+      _native?.destroy();
+    } catch (_) {
+      Log.instance.error('Native transport tearDown failed');
+    }
+    _native = null;
   }
 
   /// Immediately cancel the current connection attempt.
   void cancelConnectionAttempt() {
     currentConnectionAttempt = null;
-    _socketManager?.destroy();
-    _socketManager = null;
+    _native?.disconnect();
+    _native?.destroy();
+    _native = null;
   }
 
   void _parseConnectionConfiguration({String? newHost, int? newPort}) {
@@ -429,68 +273,70 @@ class Connection {
     _address = Tuple2(_defaultDomain, _defaultPort);
   }
 
-  /// Send raw data using socket.
+  /// Send raw data using native transport.
   void send(String data) {
-    if (_socketManager == null) {
-      Log.instance.error('Cannot send data: socket manager is null');
-      return;
-    }
-
-    if (!_socketManager!.isConnectionSecure && _socketManager!.isDestroyed) {
-      Log.instance.error('Cannot send data: socket manager is destroyed');
+    if (_native == null) {
+      Log.instance.error('Cannot send data: native transport is null');
       return;
     }
 
     final raw = WhixpUtils.utf8Encode(data);
     Log.instance.debug(
-        'SEND: ${data.length > 200 ? "${data.substring(0, 200)}..." : data}');
+        '[STANZA_TX] connection.send -> ${data.length} chars (${data.length > 200 ? "${data.substring(0, 200)}..." : data})');
 
-    _socketManager!.send(raw);
+    _native!.send(raw);
   }
 
   /// Use this method if there is a need to explicitly set reconnection.
   Future<void>? setShouldReconnect(bool value) =>
       _reconnectionPolicy?.setShouldReconnect(value);
 
-  /// Indicates to the security of connection.
-  bool get isConnectionSecure => _socketManager?.isConnectionSecure ?? false;
+  /// Indicates whether the connection is secured (TLS). Native transport uses
+  /// TLS when kind is DirectTls or TcpStartTls after handshake.
+  bool get isConnectionSecure => _native != null;
 }
 
+/// Factory that creates a native transport. Rust performs DNS (SRV + A/AAAA) and connect.
+typedef CreateNativeTransport = WhixpTransportNative? Function(
+  String host,
+  int port,
+  int kind,
+  int connectTimeoutMs,
+  String? tlsServerName,
+  String? service,
+  bool useIPv6,
+  String? wsPath,
+);
+
 class ConnectionConfiguration {
-  /// Stores the configuration settings for a [Connection] instance. It defines
-  /// the [host], [port], security context, and other parameters needed to
-  /// establish a connection, including optional settings for TLS, IPv6, and
-  /// reconnection policies.
+  /// Stores the configuration settings for a [Connection] instance. Uses
+  /// native (Rust) transport for TCP/TLS/WebSocket and stanza framing.
   const ConnectionConfiguration({
     required this.host,
     required this.port,
-    required this.securityContext,
     required this.connectionTimeout,
-    required this.socketOptions,
+    required this.createNativeTransport,
     required this.disableStartTLS,
     required this.useTLS,
     required this.useIPv6WhenResolvingDNS,
     this.service,
-    this.onBadCertificateCallback,
+    this.useWebSocket = false,
+    this.wsPath,
   });
 
-  /// The host that socket has to connect to.
+  /// The host to connect to.
   final String host;
 
-  /// The port that socket has to connect to.
+  /// The port to connect to.
   final int port;
-
-  /// Optional [io.SecurityContext] which is going to be used in socket
-  /// connections.
-  final io.SecurityContext? securityContext;
 
   /// Represents the duration in milliseconds for which the system will wait
   /// for a connection to be established before raising a
   /// [async.TimeoutException].
   final int connectionTimeout;
 
-  /// Used to handle state of socket connection and do required actions.
-  final SocketListener socketOptions;
+  /// Creates the native transport for (host, port, kind, timeout, tlsName, wsPath).
+  final CreateNativeTransport createNativeTransport;
 
   /// Defines whether the client will later call StartTLS or not.
   ///
@@ -513,24 +359,24 @@ class ConnectionConfiguration {
   /// to "xmpp-client" will query the "_xmpp-clilent._tcp" service.
   final String? service;
 
-  /// To avoid processing on bad certification you can use this callback.
-  ///
-  /// Passes [io.X509Certificate] instance when returning boolean value which
-  /// indicates to proceed on bad certificate or not.
-  final bool Function(io.X509Certificate cert)? onBadCertificateCallback;
+  /// If `true`, connect over WebSocket (ws:// or wss://) instead of raw TCP/TLS.
+  final bool useWebSocket;
+
+  /// WebSocket path (e.g. "/ws" or "/xmpp-websocket"). Only used when [useWebSocket] is true. Defaults to "/ws".
+  final String? wsPath;
 
   @override
   int get hashCode => Object.hashAll([
         host,
         port,
-        securityContext,
         connectionTimeout,
-        socketOptions,
+        createNativeTransport,
         disableStartTLS,
         useTLS,
         useIPv6WhenResolvingDNS,
         service,
-        onBadCertificateCallback,
+        useWebSocket,
+        wsPath,
       ]);
 
   @override
@@ -539,13 +385,13 @@ class ConnectionConfiguration {
     return other is ConnectionConfiguration &&
         other.host == host &&
         other.port == port &&
-        other.securityContext == securityContext &&
         other.connectionTimeout == connectionTimeout &&
-        other.socketOptions == socketOptions &&
+        other.createNativeTransport == createNativeTransport &&
         other.disableStartTLS == disableStartTLS &&
         other.useTLS == useTLS &&
         other.useIPv6WhenResolvingDNS &&
         other.service == service &&
-        other.onBadCertificateCallback == onBadCertificateCallback;
+        other.useWebSocket == useWebSocket &&
+        other.wsPath == wsPath;
   }
 }
