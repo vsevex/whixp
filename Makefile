@@ -48,6 +48,7 @@ host-copy: host-build
 # --- macOS ---
 macos:
 	cd $(NATIVE) && cargo build --release
+	@mkdir -p $(REPO_ROOT)/macos
 	cp $(TARGET)/release/libwhixp_transport.dylib $(REPO_ROOT)/macos/
 	@echo "Copied libwhixp_transport.dylib -> macos/"
 
@@ -67,6 +68,7 @@ linux:
 		exit 1; \
 	fi
 	cd $(NATIVE) && cargo build --release
+	@mkdir -p $(REPO_ROOT)/linux
 	cp $(TARGET)/release/libwhixp_transport.so $(REPO_ROOT)/linux/
 	@echo "Copied libwhixp_transport.so -> linux/"
 
