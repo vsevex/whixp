@@ -228,11 +228,11 @@ ios-xcframework: ios-build
 	@echo "Created ios/WhixpTransport.xcframework (device + simulator)"
 
 # --- Tests ---
-# dart_test.yaml sets concurrency: 1 to avoid OOM when many suites run in parallel.
+# Use flutter test so Flutter engine is available (path_provider etc.). dart_test.yaml sets concurrency: 1.
 # If tests are still killed (SIGKILL), run with more heap:
 #   DART_VM_OPTIONS="--old_gen_heap_size=2048" make test
 test:
-	dart test
+	flutter test
 
 # --- Clean ---
 clean:
