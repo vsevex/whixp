@@ -219,10 +219,10 @@ ios-xcframework: ios-build
 	@lipo -create \
 		$(TARGET)/$(IOS_SIM_ARM)/release/libwhixp_transport.a \
 		$(TARGET)/$(IOS_SIM_X86)/release/libwhixp_transport.a \
-		-output $(REPO_ROOT)/ios/xcframework-build/ios-arm64_x86_64-simulator/libwhixp_transport_sim.a
+		-output $(REPO_ROOT)/ios/xcframework-build/ios-arm64_x86_64-simulator/libwhixp_transport.a
 	xcodebuild -create-xcframework \
 		-library $(REPO_ROOT)/ios/xcframework-build/ios-arm64/libwhixp_transport.a -headers $(REPO_ROOT)/ios/Headers \
-		-library $(REPO_ROOT)/ios/xcframework-build/ios-arm64_x86_64-simulator/libwhixp_transport_sim.a -headers $(REPO_ROOT)/ios/Headers \
+		-library $(REPO_ROOT)/ios/xcframework-build/ios-arm64_x86_64-simulator/libwhixp_transport.a -headers $(REPO_ROOT)/ios/Headers \
 		-output $(REPO_ROOT)/ios/WhixpTransport.xcframework
 	@rm -rf $(REPO_ROOT)/ios/xcframework-build
 	@echo "Created ios/WhixpTransport.xcframework (device + simulator)"
