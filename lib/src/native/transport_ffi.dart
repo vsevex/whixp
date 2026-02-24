@@ -64,6 +64,7 @@ DynamicLibrary? _loadLib() {
       _lib = DynamicLibrary.process();
     } else if (Platform.isMacOS) {
       _lib = _openByName('libwhixp_transport.dylib') ??
+          _openFromAppBundle('libwhixp_transport.dylib') ??
           _openFromPackageRoot('macos', 'libwhixp_transport.dylib');
     } else if (Platform.isWindows) {
       _lib = _openByName('whixp_transport.dll') ??
@@ -119,6 +120,23 @@ DynamicLibrary? _openFromScriptDir(String platformDir, String libName) {
     final scriptDir = path.dirname(scriptPath);
     final candidateRoot = path.dirname(scriptDir);
     final libPath = path.join(candidateRoot, platformDir, libName);
+    if (File(libPath).existsSync()) {
+      return DynamicLibrary.open(libPath);
+    }
+  } catch (_) {}
+  return null;
+}
+
+/// On macOS, when running as a .app bundle, executable is in Contents/MacOS;
+/// dylibs in Contents/Frameworks are on the search path. Try explicit path
+/// in case the app embeds the whixp dylib there.
+DynamicLibrary? _openFromAppBundle(String libName) {
+  try {
+    final executable = Platform.resolvedExecutable;
+    final exeDir = path.dirname(executable);
+    // e.g. .../cave.app/Contents/MacOS -> .../cave.app/Contents/Frameworks
+    final frameworksDir = path.join(exeDir, '..', 'Frameworks');
+    final libPath = path.join(frameworksDir, libName);
     if (File(libPath).existsSync()) {
       return DynamicLibrary.open(libPath);
     }
