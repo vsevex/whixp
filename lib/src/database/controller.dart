@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 
 import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/log/log.dart';
@@ -154,6 +155,25 @@ class DatabaseController {
         delay = Duration(milliseconds: delay.inMilliseconds * 2);
       } catch (e) {
         lastException = e is Exception ? e : Exception(e.toString());
+        final msg = e.toString();
+        final isCantOpen = msg.contains('unable to open database file') ||
+            msg.contains('SqliteException(14)') ||
+            msg.contains('code 14');
+        if (isCantOpen && attempt == 0) {
+          final dbPath = await _getDatabasePath();
+          final dbFile = File(path.join(dbPath, _getDatabaseName()));
+          Log.instance.warning(
+            'Database file not writable at ${dbFile.path}, using in-memory DB (SM state will not persist).',
+          );
+          try {
+            final memExecutor = LazyDatabase(() => NativeDatabase.memory());
+            _database = WhixpDatabase(memExecutor);
+            await _database!.customSelect('SELECT 1', readsFrom: {}).get();
+            _initialized = true;
+            Log.instance.debug('Database initialized (in-memory fallback)');
+            return;
+          } catch (_) {}
+        }
         Log.instance
             .error('Unexpected error during database initialization: $e');
         throw DatabaseException(
@@ -173,20 +193,41 @@ class DatabaseController {
   /// Gets the database directory path.
   Future<String> _getDatabasePath() async {
     if (_path != null && _path.isNotEmpty) {
+      // On iOS/Android, relative paths are read-only. Resolve under app documents.
+      if (Platform.isIOS || Platform.isAndroid) {
+        final p = _path.replaceAll(RegExp(r'[/\\]+$'), '');
+        if (p.isEmpty) {
+          final dir = await getApplicationDocumentsDirectory();
+          return path.join(dir.path, 'whixp');
+        }
+        if (!path.isAbsolute(p)) {
+          final dir = await getApplicationDocumentsDirectory();
+          return path.join(dir.path, p);
+        }
+      }
       return _path;
     }
 
     // Use platform-specific default directory
     try {
+      if (Platform.isIOS || Platform.isAndroid) {
+        final dir = await getApplicationDocumentsDirectory();
+        return path.join(dir.path, 'whixp');
+      }
       if (Platform.isWindows) {
         final appData = Platform.environment['APPDATA'];
         if (appData != null) {
           return path.join(appData, 'whixp');
         }
       } else if (Platform.isMacOS) {
-        final home = Platform.environment['HOME'];
-        if (home != null) {
-          return path.join(home, 'Library', 'Application Support', 'whixp');
+        // Use path_provider so sandboxed apps get container path. Prefer documents
+        // so the directory is definitely writable in the sandbox.
+        try {
+          final dir = await getApplicationDocumentsDirectory();
+          return path.join(dir.path, 'whixp');
+        } catch (_) {
+          final dir = await getApplicationSupportDirectory();
+          return path.join(dir.path, 'whixp');
         }
       } else if (Platform.isLinux) {
         final home = Platform.environment['HOME'];
@@ -194,12 +235,24 @@ class DatabaseController {
           return path.join(home, '.local', 'share', 'whixp');
         }
       }
-      // Fallback to current directory
+      // Fallback: current directory (or on macOS, avoid current—may be read-only in sandbox)
+      if (Platform.isMacOS) {
+        try {
+          final dir = await getTemporaryDirectory();
+          return path.join(dir.path, 'whixp');
+        } catch (_) {}
+      }
       return path.join(Directory.current.path, 'whixp');
     } catch (e) {
       Log.instance.warning(
-        'Failed to determine application support directory: $e. Using current directory.',
+        'Failed to determine application support directory: $e. Using fallback.',
       );
+      if (Platform.isMacOS) {
+        try {
+          final dir = await getTemporaryDirectory();
+          return path.join(dir.path, 'whixp');
+        } catch (_) {}
+      }
       return path.join(Directory.current.path, 'whixp');
     }
   }
