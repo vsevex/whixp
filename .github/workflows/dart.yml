@@ -34,7 +34,7 @@ jobs:
         run: dart analyze --fatal-infos
 
       - name: Run tests with coverage
-        run: dart test --coverage=coverage
+        run: flutter test --coverage=coverage
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
