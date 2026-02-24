@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'whixp'
-  s.version          = '3.3.0'
+  s.version          = '3.3.1'
   s.summary          = 'Whixp XMPP client — native (Rust) transport for TLS, WebSocket, stanza framing.'
   s.description      = 'FFI library for TLS, polling, retry, stanza framing. DNS stays in Dart.'
   s.homepage         = 'https://github.com/vsevex/whixp'
