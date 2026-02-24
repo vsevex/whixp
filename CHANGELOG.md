@@ -1,6 +1,14 @@
-# 3.3.0
+# 3.3.1
 
 ## Changed
+
+- Version bump to 3.3.1 (pubspec, iOS podspec, Android build.gradle).
+
+---
+
+## 3.3.0
+
+## Changed (3.3.0)
 
 - **iOS build**: `make ios-xcframework` now outputs only `WhixpTransport.xcframework` into `ios/` (builds from `target/` into a temp dir, then removes it). No standalone `libwhixp_transport.a` / `libwhixp_transport_sim.a` in `ios/` when using the XCFramework path, so `ios/` stays smaller and avoids duplicate binaries.
 - **CI**: iOS job removes the two `.a` files from `ios/` after creating the XCFramework so the release zip does not ship duplicates.

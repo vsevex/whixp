@@ -3,8 +3,7 @@
 .dart_tool/
 
 # Created by `dart doc`
-doc/NATIVE_TRANSPORT.md
-doc/TLS_CONFIGURATION.md
+doc/
 dartdoc_options.yaml
 
 # Avoid committing pubspec.lock for library packages; see
@@ -48,3 +47,10 @@ whixp/
 # windows/*.dll
 # android/src/main/jniLibs/
 # ios/*.a
+
+# Rust Binaries
+windows/libwhixp_transport.dll
+linux/libwhixp_transport.so
+macos/libwhixp_transport.dylib
+android/src/main/jniLibs/
+ios/WhixpTransport.xcframework
