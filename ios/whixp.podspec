@@ -9,6 +9,14 @@ Pod::Spec.new do |s|
   s.source           = { :path => '.' }
   s.source_files     = 'Classes/**/*'
   s.ios.deployment_target = '12.0'
+  s.dependency 'Flutter'
+  s.swift_version = '5.0'
+  # Keep Rust static lib symbols so Dart FFI (DynamicLibrary.process) can find them.
+  s.pod_target_xcconfig = {
+    'DEFINES_MODULE' => 'YES',
+    'DEAD_CODE_STRIPPING' => 'NO',
+    'OTHER_LDFLAGS' => '$(inherited) -Wl,-all_load',
+  }
   # XCFramework provides correct slice for device and simulator (fixes "symbol not found" on simulator).
   # Build with: make ios-xcframework
   if File.directory?(File.join(__dir__, 'WhixpTransport.xcframework'))
