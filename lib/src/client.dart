@@ -1,3 +1,4 @@
+import 'package:whixp/src/enums.dart';
 import 'package:whixp/src/exception.dart';
 import 'package:whixp/src/handler/handler.dart';
 import 'package:whixp/src/jid/jid.dart';
@@ -144,6 +145,12 @@ class Whixp extends WhixpBase {
             'SM Answer', (packet) => session?.handleAnswer(packet, _jidKey()))
           ..packet('sm:answer'),
       )
+      ..addEventHandler<TransportState>('state', (state) {
+          if (state != TransportState.tlsSuccess) return;
+          transport.sendRaw(
+            "<stream:stream to='$host' xmlns:stream='$streamNamespace' xmlns='$defaultNamespace' xml:lang='$_language' version='1.0'>"
+          );
+      })
       ..addEventHandler('startSession', (_) => session?.enabledOut = true)
       ..addEventHandler('endSession', (_) => session?.clearSession())
       ..addEventHandler(
@@ -246,6 +253,8 @@ class Whixp extends WhixpBase {
         }
       }
     }
+
+    streamFeatureOrder.clear();
 
     Log.instance.info('Finished processing stream features.');
 

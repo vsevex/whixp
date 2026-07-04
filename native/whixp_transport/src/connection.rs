@@ -4,10 +4,9 @@
 use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::sync::Arc;
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use crate::config::{TransportConfig, TransportKind};
@@ -71,6 +70,32 @@ impl Write for StreamKind {
     }
 }
 
+impl StreamKind {
+    fn upgrade_tls(&mut self, domain: &str) -> Result<()> {
+        let new = match self {
+            StreamKind::Tcp(tcp) => {
+                let tls = tls::upgrade_tcp(
+                    std::mem::replace(tcp, unsafe {
+                        std::mem::zeroed()
+                    }),
+                    domain,
+                    false,
+                )?;
+                StreamKind::Tls(tls)
+            }
+
+            _ => {
+                return Err(HandshakeError::Connection(
+                    "cannot upgrade".into(),
+                ));
+            }
+        };
+
+        *self = new;
+        Ok(())
+    }
+}
+
 /// Events sent to Dart via channel (no callbacks from threads).
 pub enum TransportEvent {
     State(i32),
@@ -81,161 +106,413 @@ pub enum TransportEvent {
 /// Sender for events; connection threads use this instead of callbacks.
 pub type EventSender = mpsc::Sender<TransportEvent>;
 
+pub enum TransportCommand {
+    Send(Vec<u8>),
+
+    Shutdown,
+}
+
+struct TransportWorker {
+    host: String,
+    stream: StreamKind,
+    command_rx: mpsc::Receiver<TransportCommand>,
+    event_tx: EventSender,
+    framer: StreamFramer,
+}
+
+impl TransportWorker {
+    fn is_starttls_proceed(stanza: &str) -> bool {
+        stanza.contains("<proceed")
+            && stanza.contains("xmpp-tls")
+    }
+
+    fn handle_starttls(&mut self) -> Result<()> {
+
+        // 1. emit state change
+        let _ = self.event_tx.send(
+            TransportEvent::State(
+                TransportState::TlsSuccess as i32
+            )
+        );
+
+        // 2. upgrade stream IN PLACE
+        let _ = self.stream.upgrade_tls(&self.host);
+
+        // 3. IMPORTANT:
+        // XMPP requires stream restart after TLS
+        // but Rust should NOT send it automatically
+        //
+        // Dart will send:
+        // <stream:stream> after receiving TlsSuccess
+
+        Ok(())
+    }
+
+    fn run(mut self) {
+        let mut buf = [0u8; 8192];
+
+        loop {
+            //
+            // COMMAND PHASE
+            //
+            loop {
+                match self.command_rx.try_recv() {
+                    Ok(TransportCommand::Send(data)) => {
+                        if let Err(e) = self.stream.write_all(&data) {
+                            let _ = self.event_tx.send(
+                                TransportEvent::Error(1, e.to_string())
+                            );
+
+                            let _ = self.event_tx.send(
+                                TransportEvent::State(
+                                    TransportState::Disconnected as i32
+                                )
+                            );
+
+                            return;
+                        }
+
+                        let _ = self.stream.flush();
+                    }
+
+                    Ok(TransportCommand::Shutdown) => {
+                        let _ = self.event_tx.send(
+                            TransportEvent::State(
+                                TransportState::Disconnecting as i32
+                            )
+                        );
+
+                        let _ = self.event_tx.send(
+                            TransportEvent::State(
+                                TransportState::Disconnected as i32
+                            )
+                        );
+
+                        return;
+                    }
+
+                    Err(mpsc::TryRecvError::Empty) => {
+                        break;
+                    }
+
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        let _ = self.event_tx.send(
+                            TransportEvent::State(
+                                TransportState::Disconnected as i32
+                            )
+                        );
+
+                        return;
+                    }
+                }
+            }
+
+            //
+            // READ PHASE
+            //
+            match self.stream.read(&mut buf) {
+                Ok(0) => {
+                    let _ = self.event_tx.send(
+                        TransportEvent::State(
+                            TransportState::Disconnected as i32
+                        )
+                    );
+
+                    return;
+                }
+
+                Ok(n) => {
+                    match self.framer.push(&buf[..n]) {
+                        Ok(stanzas) => {
+                            for stanza in stanzas {
+                                if Self::is_starttls_proceed(&stanza) {
+                                    let _ = self.handle_starttls();
+                                    continue;
+                                }
+
+                                let _ = self.event_tx.send(
+                                    TransportEvent::Stanza(stanza)
+                                );
+                            }
+                        }
+
+                        Err(e) => {
+                            let _ = self.event_tx.send(
+                                TransportEvent::Error(
+                                    3,
+                                    format!("framing error: {}", e),
+                                )
+                            );
+                        }
+                    }
+                }
+
+                Err(e) => {
+                    match e.kind() {
+                        std::io::ErrorKind::WouldBlock
+                        | std::io::ErrorKind::TimedOut
+                        | std::io::ErrorKind::Interrupted => {}
+
+                        _ => {
+                            let _ = self.event_tx.send(
+                                TransportEvent::Error(
+                                    4,
+                                    e.to_string(),
+                                )
+                            );
+
+                            let _ = self.event_tx.send(
+                                TransportEvent::State(
+                                    TransportState::Disconnected as i32
+                                )
+                            );
+
+                            return;
+                        }
+                    }
+                }
+            }
+
+            thread::sleep(Duration::from_millis(1));
+        }
+    }
+}
+
 /// Internal connection context.
 pub struct Connection {
     config: TransportConfig,
     #[allow(dead_code)]
     retry: RetryPolicy,
-    shutdown: Arc<AtomicBool>,
-    tx: RefCell<Option<mpsc::Sender<Vec<u8>>>>,
+
+    command_tx: RefCell<Option<mpsc::Sender<TransportCommand>>>,
+
+    worker: RefCell<Option<JoinHandle<()>>>,
 }
 
 impl Connection {
-    pub fn new(config: TransportConfig, retry: RetryPolicy) -> Self {
+    pub fn new(
+        config: TransportConfig,
+        retry: RetryPolicy,
+    ) -> Self {
         Self {
             config,
             retry,
-            shutdown: Arc::new(AtomicBool::new(false)),
-            tx: RefCell::new(None),
+            command_tx: RefCell::new(None),
+            worker: RefCell::new(None),
         }
     }
 
-    /// Resolve (SRV + A/AAAA) then connect. Returns resolved host on success for TLS SNI / SASL.
-    pub fn connect_sync(&mut self, event_tx: EventSender) -> Result<String> {
+    pub fn connect_sync(
+        &mut self,
+        event_tx: EventSender,
+    ) -> Result<String> {
+        let _ = event_tx.send(
+            TransportEvent::State(
+                TransportState::Connecting as i32
+            )
+        );
+
         let (host, port) = dns::resolve_xmpp(
             &self.config.host,
             self.config.port,
             self.config.service.as_deref(),
             self.config.use_ipv6,
         )?;
-        let timeout = self.config.connect_timeout();
-        let kind = self.config.kind;
 
-        let stream: StreamKind = match kind {
+        let timeout = self.config.connect_timeout();
+
+        let stream = match self.config.kind {
             TransportKind::DirectTls => {
-                let s = tls::connect_direct(&host, port, false)?;
-                StreamKind::Tls(s)
+                let tls =
+                    tls::connect_direct(&host, port, false)?;
+
+                StreamKind::Tls(tls)
             }
+
             TransportKind::Tcp | TransportKind::TcpStartTls => {
                 let addr = format!("{}:{}", host, port);
+
                 let mut addrs = addr
                     .to_socket_addrs()
-                    .map_err(|e: std::io::Error| HandshakeError::Connection(e.to_string()))?;
-                let first = addrs
-                    .next()
-                    .ok_or_else(|| HandshakeError::Connection("no address".into()))?;
-                let tcp = TcpStream::connect_timeout(&first, timeout)
-                    .map_err(|e| HandshakeError::Connection(e.to_string()))?;
-                // Non-blocking read: we only hold the lock for one quick read() syscall, so the write
-                // thread can send (e.g. bind IQ) immediately instead of waiting for read timeout.
+                    .map_err(|e| {
+                        HandshakeError::Connection(
+                            e.to_string()
+                        )
+                    })?;
+
+                let first = addrs.next().ok_or_else(|| {
+                    HandshakeError::Connection(
+                        "no address".into()
+                    )
+                })?;
+
+                let tcp = TcpStream::connect_timeout(
+                    &first,
+                    timeout,
+                )
+                .map_err(|e| {
+                    HandshakeError::Connection(
+                        e.to_string()
+                    )
+                })?;
+
                 let _ = tcp.set_nonblocking(true);
-                let _ = tcp.set_write_timeout(Some(Duration::from_secs(10)));
+                let _ = tcp.set_write_timeout(
+                    Some(Duration::from_secs(10))
+                );
+
                 StreamKind::Tcp(tcp)
             }
+
             TransportKind::WebSocket => {
                 let addr = format!("{}:{}", host, port);
+
                 let mut addrs = addr
                     .to_socket_addrs()
-                    .map_err(|e: std::io::Error| HandshakeError::Connection(e.to_string()))?;
-                let first = addrs
-                    .next()
-                    .ok_or_else(|| HandshakeError::Connection("no address".into()))?;
-                let tcp = TcpStream::connect_timeout(&first, timeout)
-                    .map_err(|e| HandshakeError::Connection(e.to_string()))?;
-                // Keep stream blocking for WebSocket handshake (tungstenite does blocking read of 101 response).
-                let _ = tcp.set_write_timeout(Some(Duration::from_secs(10)));
-                let path = self.config.ws_path.as_deref().unwrap_or("/ws");
-                let mut ws = websocket::connect_websocket(&host, port, path, tcp)?;
-                // Non-blocking so read thread releases lock when no data; write thread can send stream header.
+                    .map_err(|e| {
+                        HandshakeError::Connection(
+                            e.to_string()
+                        )
+                    })?;
+
+                let first = addrs.next().ok_or_else(|| {
+                    HandshakeError::Connection(
+                        "no address".into()
+                    )
+                })?;
+
+                let tcp = TcpStream::connect_timeout(
+                    &first,
+                    timeout,
+                )
+                .map_err(|e| {
+                    HandshakeError::Connection(
+                        e.to_string()
+                    )
+                })?;
+
+                let path = self
+                    .config
+                    .ws_path
+                    .as_deref()
+                    .unwrap_or("/ws");
+
+                let mut ws =
+                    websocket::connect_websocket(
+                        &host,
+                        port,
+                        path,
+                        tcp,
+                    )?;
+
                 let _ = ws.set_tcp_nonblocking(true);
+
                 StreamKind::Ws(ws)
             }
+
             TransportKind::WebSocketTls => {
-                let tls_stream = tls::connect_direct(&host, port, false)?;
-                let path = self.config.ws_path.as_deref().unwrap_or("/ws");
-                let ws = websocket::connect_websocket_tls(&host, port, path, tls_stream)?;
+                let tls_stream =
+                    tls::connect_direct(
+                        &host,
+                        port,
+                        false,
+                    )?;
+
+                let path = self
+                    .config
+                    .ws_path
+                    .as_deref()
+                    .unwrap_or("/ws");
+
+                let ws =
+                    websocket::connect_websocket_tls(
+                        &host,
+                        port,
+                        path,
+                        tls_stream,
+                    )?;
+
                 StreamKind::WsTls(ws)
             }
         };
 
-        let _ = event_tx.send(TransportEvent::State(TransportState::Connected as i32));
+        let (command_tx, command_rx) =
+            mpsc::channel::<TransportCommand>();
 
-        let (send_tx, send_rx) = mpsc::channel::<Vec<u8>>();
-        let shutdown = Arc::clone(&self.shutdown);
-        let stream = Arc::new(std::sync::Mutex::new(stream));
+        let worker = TransportWorker {
+            host: host.clone(),
+            stream,
+            command_rx,
+            event_tx: event_tx.clone(),
+            framer: StreamFramer::new(),
+        };
 
-        let stream_read = Arc::clone(&stream);
-        let shutdown_read = Arc::clone(&shutdown);
-        let event_tx_read = event_tx.clone();
-        thread::spawn(move || {
-            let mut framer = StreamFramer::new();
-            let mut buf = [0u8; 8192];
-            loop {
-                if shutdown_read.load(Ordering::SeqCst) {
-                    break;
-                }
-                let n = match stream_read.lock().unwrap().read(&mut buf) {
-                    Ok(0) => {
-                        eprintln!("[Whixp] read loop exit: EOF");
-                        break;
-                    }
-                    Ok(n) => n,
-                    Err(e) => {
-                        let kind = e.kind();
-                        if kind == std::io::ErrorKind::TimedOut
-                            || kind == std::io::ErrorKind::WouldBlock
-                            || kind == std::io::ErrorKind::Interrupted
-                        {
-                            std::thread::yield_now();
-                            continue;
-                        }
-                        eprintln!("[Whixp] read loop exit: error {:?}", kind);
-                        break;
-                    }
-                };
-                if let Ok(stanzas) = framer.push(&buf[..n]) {
-                    for s in stanzas {
-                        let _ = event_tx_read.send(TransportEvent::Stanza(s));
-                    }
-                }
-            }
-            let _ = event_tx_read.send(TransportEvent::State(TransportState::Disconnected as i32));
+        let handle = thread::spawn(move || {
+            worker.run();
         });
 
-        let stream_write = Arc::clone(&stream);
-        let shutdown_write = Arc::clone(&shutdown);
-        let event_tx_write = event_tx.clone();
-        thread::spawn(move || {
-            while !shutdown_write.load(Ordering::SeqCst) {
-                match send_rx.recv() {
-                    Ok(data) => {
-                        if let Err(e) = stream_write.lock().unwrap().write_all(&data) {
-                            let _ = event_tx_write.send(TransportEvent::Error(1, e.to_string()));
-                            break;
-                        }
-                        let _ = stream_write.lock().unwrap().flush();
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
+        *self.command_tx.borrow_mut() =
+            Some(command_tx);
 
-        *self.tx.borrow_mut() = Some(send_tx);
+        *self.worker.borrow_mut() =
+            Some(handle);
+
+        let _ = event_tx.send(
+            TransportEvent::State(
+                TransportState::Connected as i32
+            )
+        );
+
         Ok(host)
     }
 
-    pub fn send(&self, data: &[u8]) -> Result<()> {
-        if let Some(ref tx) = *self.tx.borrow() {
-            tx.send(data.to_vec())
-                .map_err(|_| HandshakeError::Connection("send channel closed".into()))?;
-            Ok(())
-        } else {
-            Err(HandshakeError::Connection("not connected".into()))
+    pub fn send(
+        &self,
+        data: &[u8],
+    ) -> Result<()> {
+        match self.command_tx.borrow().as_ref() {
+            Some(tx) => {
+                tx.send(
+                    TransportCommand::Send(
+                        data.to_vec(),
+                    )
+                )
+                .map_err(|_| {
+                    HandshakeError::Connection(
+                        "transport closed".into(),
+                    )
+                })?;
+
+                Ok(())
+            }
+
+            None => Err(
+                HandshakeError::Connection(
+                    "not connected".into(),
+                )
+            ),
         }
     }
 
     pub fn shutdown(&self) {
-        self.shutdown.store(true, Ordering::SeqCst);
-        drop(self.tx.borrow_mut().take());
+        if let Some(tx) =
+            self.command_tx.borrow().as_ref()
+        {
+            let _ = tx.send(
+                TransportCommand::Shutdown
+            );
+        }
+    }
+}
+
+impl Drop for Connection {
+    fn drop(&mut self) {
+        self.shutdown();
+
+        if let Some(handle) =
+            self.worker.borrow_mut().take()
+        {
+            let _ = handle.join();
+        }
     }
 }

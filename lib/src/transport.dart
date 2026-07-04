@@ -767,6 +767,7 @@ class Transport {
           data.name.startsWith('sasl') ||
           data.name.startsWith('sm') ||
           data.name == 'proceed' ||
+          data.name == 'starttls' ||
           data.name == 'bind' ||
           data.name == 'session' ||
           data.name == 'register';

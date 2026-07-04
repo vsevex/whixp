@@ -145,6 +145,13 @@ pub fn upgrade_tcp(
         .map_err(|_| HandshakeError::Tls("invalid server name".into()))?;
     let conn = rustls::ClientConnection::new(Arc::new(config), server_name)
         .map_err(|e| HandshakeError::Tls(e.to_string()))?;
-    let stream = rustls::StreamOwned::new(conn, tcp);
+
+    let _ = tcp.set_nonblocking(false).map_err(|e| HandshakeError::Tls(e.to_string()))?;
+    let mut stream = rustls::StreamOwned::new(conn, tcp);
+    while stream.conn.is_handshaking() {
+        let _ = stream.conn.complete_io(&mut stream.sock).map_err(|e| HandshakeError::Tls(e.to_string()))?;
+    }
+    let _ = stream.sock.set_nonblocking(true).map_err(|e| HandshakeError::Tls(e.to_string()))?;
+
     Ok(TlsStreamWrapper { inner: stream })
 }

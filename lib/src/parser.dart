@@ -30,6 +30,8 @@ class XMLParser {
         return _decodeStream(node);
       case 'urn:ietf:params:xml:ns:xmpp-sasl':
         return _decodeSASL(node);
+      case 'urn:ietf:params:xml:ns:xmpp-tls':
+        return _decodeTLS(node);
       case 'urn:xmpp:sm:3':
         return StreamManagement.parse(node);
       default:
@@ -86,6 +88,22 @@ class XMLParser {
         return SASLSuccess.fromXML(node);
       case 'failure':
         return SASLFailure.fromXML(node);
+      default:
+        throw WhixpInternalException.unexpectedPacket(
+          node.namespaceUri,
+          node.localName,
+        );
+    }
+  }
+
+  static Packet _decodeTLS(xml.XmlElement node) {
+    switch (node.localName) {
+      case 'proceed':
+        return TLSProceed.fromXML(node);
+      case 'failure':
+        return TLSFailure.fromXML(node);
+      case 'starttls':
+        return StartTLS.fromXML(node);
       default:
         throw WhixpInternalException.unexpectedPacket(
           node.namespaceUri,
