@@ -28,7 +28,9 @@ class MessageBatcher {
   final int maxBatchDelay;
 
   /// Callback function that receives batched stanzas to send
-  final void Function(List<Packet> batch) onFlush;
+  // Supports both synchronous callbacks and async transport flushes.
+  // ignore: avoid_futureor_void
+  final async.FutureOr<void> Function(List<Packet> batch) onFlush;
 
   /// Current batch of stanzas waiting to be sent
   final List<Packet> _batch = [];
@@ -42,8 +44,8 @@ class MessageBatcher {
   /// Whether batching is currently enabled
   bool _enabled = true;
 
-  /// Whether the batcher is currently flushing
-  bool _isFlushing = false;
+  /// Future for the flush currently being sent, if any.
+  async.Future<void>? _flushFuture;
 
   /// Adds a packet to the current batch.
   ///
@@ -52,7 +54,8 @@ class MessageBatcher {
   Future<void> add(Packet packet) async {
     if (!_enabled) {
       // If batching is disabled, send immediately
-      onFlush([packet]);
+      await _flush();
+      await onFlush([packet]);
       return;
     }
 
@@ -61,7 +64,7 @@ class MessageBatcher {
       // Flush current batch first if it exists
       await _flushIfNeeded();
       // Send critical packet immediately
-      onFlush([packet]);
+      await onFlush([packet]);
       return;
     }
 
@@ -108,30 +111,45 @@ class MessageBatcher {
 
   /// Flushes the current batch if it contains any packets.
   Future<void> _flushIfNeeded() async {
-    if (_batch.isNotEmpty && !_isFlushing) {
-      await _flush();
-    }
+    await _flush();
   }
 
   /// Flushes the current batch, sending all accumulated packets.
   Future<void> _flush() async {
-    if (_isFlushing || _batch.isEmpty) return;
+    while (true) {
+      final activeFlush = _flushFuture;
+      if (activeFlush != null) {
+        await activeFlush;
+        if (identical(_flushFuture, activeFlush)) {
+          _flushFuture = null;
+        }
+        continue;
+      }
 
-    _isFlushing = true;
-    _flushTimer?.cancel();
-    _flushTimer = null;
+      if (_batch.isEmpty) return;
 
-    final batchToSend = List<Packet>.from(_batch);
-    _batch.clear();
+      _flushTimer?.cancel();
+      _flushTimer = null;
 
-    _isFlushing = false;
+      final batchToSend = List<Packet>.from(_batch);
+      _batch.clear();
 
-    if (batchToSend.isNotEmpty) {
-      Log.instance.debug(
-        'Flushing batch of ${batchToSend.length} stanzas',
-      );
-      onFlush(batchToSend);
+      Log.instance.debug('Flushing batch of ${batchToSend.length} stanzas');
+      final flushFuture = _sendBatch(batchToSend);
+      _flushFuture = flushFuture;
+      try {
+        await flushFuture;
+      } finally {
+        if (identical(_flushFuture, flushFuture)) {
+          _flushFuture = null;
+        }
+      }
     }
+  }
+
+  /// Sends a batch and waits for the transport to finish processing it.
+  Future<void> _sendBatch(List<Packet> batch) async {
+    await onFlush(batch);
   }
 
   /// Manually flushes the current batch.
@@ -146,7 +164,7 @@ class MessageBatcher {
     _enabled = enabled;
     if (!enabled) {
       // Flush any pending batch when disabling
-      _flush();
+      async.unawaited(_flush());
     }
   }
 

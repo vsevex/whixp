@@ -1,3 +1,5 @@
+import 'dart:async' as async;
+
 import 'package:test/test.dart';
 
 import 'package:whixp/src/log/log.dart';
@@ -106,6 +108,42 @@ void main() {
     });
 
     group('Critical Packet Handling', () {
+      test(
+        'waits for an async batch flush before sending a critical packet',
+        () async {
+          final events = <String>[];
+          final releaseBatch = async.Completer<void>();
+          final batcher = MessageBatcher(
+            maxBatchSize: 10,
+            maxBatchDelay: 1000,
+            onFlush: (batch) async {
+              final packet = batch.single;
+              events.add('${packet.name}:start');
+              if (packet is Message) {
+                await releaseBatch.future;
+              }
+              events.add('${packet.name}:end');
+            },
+          );
+
+          await batcher.add(Message(body: 'test'));
+          final criticalPacket = IQ()..type = 'get';
+          final criticalAdd = batcher.add(criticalPacket);
+
+          await async.Future<void>.delayed(Duration.zero);
+
+          expect(events, equals(['message:start']));
+
+          releaseBatch.complete();
+          await criticalAdd;
+
+          expect(
+            events,
+            equals(['message:start', 'message:end', 'iq:start', 'iq:end']),
+          );
+        },
+      );
+
       test('IQ packets are sent immediately', () async {
         final flushedBatches = <List<Packet>>[];
         final batcher = MessageBatcher(
