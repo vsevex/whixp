@@ -1,9 +1,9 @@
 import 'dart:async' as async;
 
 import 'package:test/test.dart';
+import 'package:whixp/src/performance/sequential_queue.dart';
 import 'package:whixp/src/stanza/message.dart';
 import 'package:whixp/src/stanza/mixins.dart';
-import 'package:whixp/src/transport.dart';
 
 void main() {
   group('transport queue', () {
@@ -14,11 +14,11 @@ void main() {
         final releaseMessage = async.Completer<void>();
         final processed = <String>[];
 
-        final processing = processTransportQueueSequentially<Packet>(
+        final queue = SequentialQueue<Packet>(
           stream: controller.stream,
-          processData: (packet) async {
+          process: (packet) async {
             processed.add('${packet.name}:start');
-            if (packet is Message) {
+            if (processed.length == 1) {
               await releaseMessage.future;
             }
             processed.add('${packet.name}:end');
@@ -35,7 +35,7 @@ void main() {
 
         releaseMessage.complete();
         await controller.close();
-        await processing;
+        await queue.drained;
 
         expect(
           processed,
@@ -48,5 +48,64 @@ void main() {
         );
       },
     );
+
+    test('keeps processing after a packet fails', () async {
+      final controller = async.StreamController<Packet>();
+      final processed = <String>[];
+      final errors = <Object>[];
+
+      final queue = SequentialQueue<Packet>(
+        stream: controller.stream,
+        process: (packet) async {
+          await async.Future<void>.delayed(Duration.zero);
+          final body = (packet as Message).body;
+          if (body == 'boom') throw StateError('boom');
+          processed.add(body!);
+        },
+        onError: (error, _) => errors.add(error),
+      );
+
+      controller
+        ..add(Message(body: 'first'))
+        ..add(Message(body: 'boom'))
+        ..add(Message(body: 'second'));
+
+      await controller.close();
+      await queue.drained;
+
+      expect(processed, equals(['first', 'second']));
+      expect(errors, hasLength(1));
+      expect(errors.single, isStateError);
+    });
+
+    test('stops processing packets once cancelled', () async {
+      final controller = async.StreamController<Packet>();
+      final release = async.Completer<void>();
+      final processed = <String>[];
+
+      final queue = SequentialQueue<Packet>(
+        stream: controller.stream,
+        process: (packet) async {
+          processed.add((packet as Message).body!);
+          await release.future;
+        },
+      );
+
+      controller
+        ..add(Message(body: 'first'))
+        ..add(Message(body: 'second'));
+
+      await async.Future<void>.delayed(const Duration(milliseconds: 10));
+      await queue.cancel();
+      release.complete();
+      await queue.drained;
+
+      /// `second` was already delivered to the listener when cancel() landed,
+      /// but had not started processing, so it must be dropped rather than sent
+      /// on a connection that is being torn down.
+      expect(processed, equals(['first']));
+
+      await controller.close();
+    });
   });
 }
