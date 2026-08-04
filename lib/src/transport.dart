@@ -17,6 +17,7 @@ import 'package:whixp/src/parser.dart';
 import 'package:whixp/src/performance/batcher.dart';
 import 'package:whixp/src/performance/metrics.dart';
 import 'package:whixp/src/performance/rate_limiter.dart';
+import 'package:whixp/src/performance/sequential_queue.dart';
 import 'package:whixp/src/plugins/features.dart';
 import 'package:whixp/src/reconnection.dart';
 import 'package:whixp/src/stanza/iq.dart';
@@ -216,7 +217,7 @@ class Transport {
 
         // Recreate queue controller if it was closed (e.g., on reconnection)
         if (_waitingQueueController.isClosed) {
-          _queueSubscription?.cancel();
+          await _queue?.cancel();
           _waitingQueueController = async.StreamController<Packet>();
           _run();
         }
@@ -312,8 +313,9 @@ class Transport {
   /// [async.StreamController] for stanzas to be sent.
   late async.StreamController<Packet> _waitingQueueController;
 
-  /// Stream subscription for processing outgoing stanzas.
-  async.StreamSubscription<Packet>? _queueSubscription;
+  /// Serialises processing of outgoing stanzas, so async pre-send work for one
+  /// stanza completes before the next one is processed.
+  SequentialQueue<Packet>? _queue;
 
   /// Rate limiter to control outgoing stanza rate
   late RateLimiter _rateLimiter;
@@ -605,8 +607,9 @@ class Transport {
       XMLParser.nextPacket(node, namespace: node.getAttribute('xmlns'));
 
   /// Background [Stream] that processes stanzas to send.
-  void _run() => _queueSubscription = _waitingQueueController.stream.listen(
-        (data) async {
+  void _run() => _queue = SequentialQueue<Packet>(
+        stream: _waitingQueueController.stream,
+        process: (data) async {
           for (final callback in callbacksBeforeStanzaSend) {
             await callback.call(data);
           }
@@ -614,10 +617,11 @@ class Transport {
           await _batcher.add(data);
           metrics.updateBatchSize(_batcher.currentBatchSize);
         },
-        onError: (error) {
-          Log.instance.error('Error in sending queue: $error');
-        },
-        cancelOnError: false,
+        onError: (error, stackTrace) => Log.instance.error(
+          'Error in sending queue: $error',
+          exception: error,
+          stackTrace: stackTrace,
+        ),
       );
 
   /// Flushes a batch of stanzas, applying rate limiting.
@@ -870,9 +874,11 @@ class Transport {
   }
 
   void _closeStreams() {
-    // Cancel queue subscription
-    _queueSubscription?.cancel();
-    _queueSubscription = null;
+    // Stop delivering queued stanzas. The native handle is already torn down
+    // by this point, so draining them would run the pre-send callbacks (and
+    // advance the Stream Management counter) for stanzas that can never reach
+    // the wire.
+    _queue?.cancel();
     // Flush batcher before closing
     _batcher.dispose();
     _waitingQueueController.close();

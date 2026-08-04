@@ -1,3 +1,5 @@
+import 'dart:async' as async;
+
 import 'package:test/test.dart';
 
 import 'package:whixp/src/log/log.dart';
@@ -19,7 +21,7 @@ void main() {
 
   group('MessageBatcher', () {
     test('initializes with default values', () {
-      final batcher = MessageBatcher(onFlush: (_) {});
+      final batcher = MessageBatcher(onFlush: (_) async {});
 
       expect(batcher.maxBatchSize, equals(50));
       expect(batcher.maxBatchDelay, equals(100));
@@ -31,7 +33,7 @@ void main() {
       final batcher = MessageBatcher(
         maxBatchSize: 20,
         maxBatchDelay: 50,
-        onFlush: (_) {},
+        onFlush: (_) async {},
       );
 
       expect(batcher.maxBatchSize, equals(20));
@@ -44,7 +46,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 5,
           maxBatchDelay: 1000, // Long delay to prevent auto-flush
-          onFlush: (List<Packet> batch) => flushedBatches.add(batch),
+          onFlush: (List<Packet> batch) async => flushedBatches.add(batch),
         );
 
         // Add multiple packets
@@ -72,7 +74,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 3,
           maxBatchDelay: 1000, // Long delay
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         // Add packets up to batch size
@@ -92,7 +94,7 @@ void main() {
         final flushedBatches = <List<Packet>>[];
         final batcher = MessageBatcher(
           maxBatchSize: 10, // Large batch size
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         await batcher.add(Message(body: 'test1'));
@@ -106,12 +108,88 @@ void main() {
     });
 
     group('Critical Packet Handling', () {
+      test(
+        'waits for an async batch flush before sending a critical packet',
+        () async {
+          final events = <String>[];
+          final releaseBatch = async.Completer<void>();
+          final batcher = MessageBatcher(
+            maxBatchSize: 10,
+            maxBatchDelay: 1000,
+            onFlush: (batch) async {
+              final packet = batch.single;
+              events.add('${packet.name}:start');
+              if (packet is Message) {
+                await releaseBatch.future;
+              }
+              events.add('${packet.name}:end');
+            },
+          );
+
+          await batcher.add(Message(body: 'test'));
+          final criticalPacket = IQ()..type = 'get';
+          final criticalAdd = batcher.add(criticalPacket);
+
+          await async.Future<void>.delayed(Duration.zero);
+
+          expect(events, equals(['message:start']));
+
+          releaseBatch.complete();
+          await criticalAdd;
+
+          expect(
+            events,
+            equals(['message:start', 'message:end', 'iq:start', 'iq:end']),
+          );
+        },
+      );
+
+      test(
+        'waits for an in-flight critical packet before flushing a batch',
+        () async {
+          final events = <String>[];
+          final releaseCritical = async.Completer<void>();
+          final batcher = MessageBatcher(
+            maxBatchSize: 1,
+            maxBatchDelay: 1000,
+            onFlush: (batch) async {
+              final packet = batch.single;
+              events.add('${packet.name}:start');
+              if (packet is IQ) {
+                await releaseCritical.future;
+              }
+              events.add('${packet.name}:end');
+            },
+          );
+
+          final criticalAdd = batcher.add(IQ()..type = 'get');
+          await async.Future<void>.delayed(Duration.zero);
+
+          expect(events, equals(['iq:start']));
+
+          /// Fills the batch, so this add flushes right away. It must still
+          /// queue behind the critical stanza already on the wire.
+          final batchedAdd = batcher.add(Message(body: 'later'));
+          await async.Future<void>.delayed(Duration.zero);
+
+          expect(events, equals(['iq:start']));
+
+          releaseCritical.complete();
+          await Future.wait([criticalAdd, batchedAdd]);
+
+          expect(
+            events,
+            equals(['iq:start', 'iq:end', 'message:start', 'message:end']),
+          );
+        },
+      );
+
       test('IQ packets are sent immediately', () async {
         final flushedBatches = <List<Packet>>[];
         final batcher = MessageBatcher(
           maxBatchSize: 10,
           maxBatchDelay: 1000,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         // Add a regular message
@@ -137,7 +215,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 10,
           maxBatchDelay: 1000,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         await batcher.add(Message(body: 'test'));
@@ -158,7 +236,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 10,
           maxBatchDelay: 1000,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         await batcher.add(Message(body: 'test'));
@@ -178,7 +256,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 10,
           maxBatchDelay: 1000,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         await batcher.add(Message(body: 'test'));
@@ -201,7 +279,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 10,
           maxBatchDelay: 1000,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         batcher.setEnabled(false);
@@ -221,7 +299,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 10,
           maxBatchDelay: 1000,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         await batcher.add(Message(body: 'test1'));
@@ -238,7 +316,7 @@ void main() {
       });
 
       test('isEnabled reflects current state', () {
-        final batcher = MessageBatcher(onFlush: (_) {});
+        final batcher = MessageBatcher(onFlush: (_) async {});
 
         expect(batcher.isEnabled, isTrue);
 
@@ -256,7 +334,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 10,
           maxBatchDelay: 1000,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         await batcher.add(Message(body: 'test1'));
@@ -277,7 +355,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 10,
           maxBatchDelay: 1000,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         await batcher.flush();
@@ -290,7 +368,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 10,
           maxBatchDelay: 1000,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         await batcher.add(Message(body: 'test1'));
@@ -311,7 +389,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 10,
           maxBatchDelay: 1000,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         await batcher.add(Message(body: 'test1'));
@@ -332,7 +410,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 10,
           maxBatchDelay: 1000,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         await batcher.add(Message(body: 'test'));
@@ -353,7 +431,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 20,
           maxBatchDelay: 1000,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         // Add packets concurrently
@@ -377,7 +455,7 @@ void main() {
         final flushedBatches = <List<Packet>>[];
         final batcher = MessageBatcher(
           maxBatchSize: 10,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         await batcher.flush();
@@ -389,7 +467,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 1,
           maxBatchDelay: 1000,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         await batcher.add(Message(body: 'test1'));
@@ -404,7 +482,7 @@ void main() {
         final batcher = MessageBatcher(
           maxBatchSize: 1000,
           maxBatchDelay: 50,
-          onFlush: (batch) => flushedBatches.add(batch),
+          onFlush: (batch) async => flushedBatches.add(batch),
         );
 
         await batcher.add(Message(body: 'test'));

@@ -27,8 +27,11 @@ class MessageBatcher {
   /// Maximum time in milliseconds to wait before flushing a batch
   final int maxBatchDelay;
 
-  /// Callback function that receives batched stanzas to send
-  final void Function(List<Packet> batch) onFlush;
+  /// Callback function that receives batched stanzas to send.
+  ///
+  /// Must complete only once the batch has been handed to the transport,
+  /// otherwise a later batch can overtake it on the wire.
+  final Future<void> Function(List<Packet> batch) onFlush;
 
   /// Current batch of stanzas waiting to be sent
   final List<Packet> _batch = [];
@@ -42,8 +45,9 @@ class MessageBatcher {
   /// Whether batching is currently enabled
   bool _enabled = true;
 
-  /// Whether the batcher is currently flushing
-  bool _isFlushing = false;
+  /// Tail of the send chain. Every send is appended to it so batches and
+  /// critical stanzas reach [onFlush] in the order they were handed over.
+  async.Future<void> _sendChain = async.Future<void>.value();
 
   /// Adds a packet to the current batch.
   ///
@@ -52,16 +56,17 @@ class MessageBatcher {
   Future<void> add(Packet packet) async {
     if (!_enabled) {
       // If batching is disabled, send immediately
-      onFlush([packet]);
+      await _flush();
+      await _send([packet]);
       return;
     }
 
     // Critical stanzas (IQ, SASL, SM) should not be batched
     if (_shouldSendImmediately(packet)) {
-      // Flush current batch first if it exists
-      await _flushIfNeeded();
+      // Flush current batch first so the critical stanza queues behind it
+      await _flush();
       // Send critical packet immediately
-      onFlush([packet]);
+      await _send([packet]);
       return;
     }
 
@@ -79,7 +84,7 @@ class MessageBatcher {
       // Set timer for delayed flush if not already set
       _flushTimer ??= async.Timer(
         Duration(milliseconds: maxBatchDelay),
-        _flush,
+        () => async.unawaited(_flush().catchError(_logFlushError)),
       );
     }
   }
@@ -106,33 +111,43 @@ class MessageBatcher {
     }
   }
 
-  /// Flushes the current batch if it contains any packets.
-  Future<void> _flushIfNeeded() async {
-    if (_batch.isNotEmpty && !_isFlushing) {
-      await _flush();
-    }
-  }
-
   /// Flushes the current batch, sending all accumulated packets.
+  ///
+  /// Completes once the flushed batch — and anything already queued ahead of
+  /// it — has been handed to [onFlush].
   Future<void> _flush() async {
-    if (_isFlushing || _batch.isEmpty) return;
+    if (_batch.isEmpty) {
+      // Nothing of our own to send, but an earlier send may still be running.
+      await _sendChain;
+      return;
+    }
 
-    _isFlushing = true;
     _flushTimer?.cancel();
     _flushTimer = null;
 
     final batchToSend = List<Packet>.from(_batch);
     _batch.clear();
 
-    _isFlushing = false;
-
-    if (batchToSend.isNotEmpty) {
-      Log.instance.debug(
-        'Flushing batch of ${batchToSend.length} stanzas',
-      );
-      onFlush(batchToSend);
-    }
+    Log.instance.debug('Flushing batch of ${batchToSend.length} stanzas');
+    await _send(batchToSend);
   }
+
+  /// Hands [batch] to [onFlush], strictly after every send queued before it.
+  ///
+  /// The chain is claimed synchronously so a concurrent caller cannot slip a
+  /// later batch ahead of this one.
+  Future<void> _send(List<Packet> batch) {
+    final send = _sendChain.then((_) => onFlush(batch));
+
+    /// Errors belong to the caller awaiting [send]; the chain itself must stay
+    /// usable so one failed batch does not poison every later send.
+    _sendChain = send.then<void>((_) {}, onError: (_, __) {});
+
+    return send;
+  }
+
+  void _logFlushError(Object error) =>
+      Log.instance.error('Failed to flush stanza batch', exception: error);
 
   /// Manually flushes the current batch.
   ///
@@ -146,7 +161,7 @@ class MessageBatcher {
     _enabled = enabled;
     if (!enabled) {
       // Flush any pending batch when disabling
-      _flush();
+      async.unawaited(_flush().catchError(_logFlushError));
     }
   }
 
